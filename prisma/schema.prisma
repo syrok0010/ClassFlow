@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Parent {
+  id     String @id @default(cuid())
+  userId String
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentParents StudentParents[]
+}
+
+model Teacher {
+  id     String @id @default(cuid())
+  userId String
+
+  user                        User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teacherSubjects             TeacherSubject[]
+  teacherAvailabilities       TeacherAvailability[]
+  teacherAvailabilityOverrides TeacherAvailabilityOverride[]
+  weeklyScheduleTemplates     WeeklyScheduleTemplate[]
+  scheduleEntries             ScheduleEntry[]
+}
+
+model Student {
+  id     String @id @default(cuid())
+  userId String
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentParents StudentParents[]
+  studentGroups  StudentGroups[]
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+model User {
+  id               String    @id @default(cuid())
+  name             String?
+  surname          String?
+  patronymicName   String?
+  email            String    @unique
+  emailVerified    DateTime?
+  image            String?
+  role             Role      @default(USER)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  authenticators   Authenticator[]
+  parents          Parent[]
+  teachers         Teacher[]
+  students         Student[]
+}
+
+model StudentParents {
+  parentId  String
+  studentId String
+
+  parent  Parent  @relation(fields: [parentId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@id([parentId, studentId])
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @id @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model Authenticator {
+  credentialID         String  @unique
+  userId               String
+  providerAccountId    String
+  credentialPublicKey  String
+  counter              Int
+  credentialDeviceType String
+  credentialBackedUp   Boolean
+  transports           String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, credentialID])
+}
+
+model StudentGroups {
+  studentId String
+  groupId   String
+
+  student Student @relation(fields: [studentId], references: [id])
+  group   Group   @relation(fields: [groupId], references: [id])
+
+  @@id([studentId, groupId])
+}
+
+enum GroupType {
+  CLASS
+  KINDERGARTEN_GROUP
+  SUBJECT_SUBGROUP
+  ELECTIVE_GROUP
+}
+
+model Group {
+  id        String    @id @default(cuid())
+  name      String
+  type      GroupType
+  grade     Int?
+  parentId  String?
+  subjectId String?
+
+  parentGroup              Group?                    @relation("GroupParent", fields: [parentId], references: [id])
+  subGroups                Group[]                   @relation("GroupParent")
+  subject                  Subject?                  @relation(fields: [subjectId], references: [id])
+  studentGroups            StudentGroups[]
+  groupSubjectRequirements GroupSubjectRequirement[]
+  weeklyScheduleTemplates  WeeklyScheduleTemplate[]
+  scheduleEntries          ScheduleEntry[]
+}
+
+model Building {
+  id   String @id @default(cuid())
+  name String
+  
+  rooms Room[]
+}
+
+model Room {
+  id         String  @id @default(cuid())
+  name       String
+  seatsCount Int
+  buildingId String?
+
+  building                Building?                @relation(fields: [buildingId], references: [id])
+  roomSubjects            RoomSubject[]
+  weeklyScheduleTemplates WeeklyScheduleTemplate[]
+  scheduleEntries         ScheduleEntry[]
+}
+
+model RoomSubject {
+  roomId    String
+  subjectId String
+
+  room    Room    @relation(fields: [roomId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@id([roomId, subjectId])
+}
+
+enum SubjectType {
+  ACADEMIC
+  ELECTIVE
+  REGIME
+}
+
+model Subject {
+  id   String      @id @default(cuid())
+  name String
+  type SubjectType @default(ACADEMIC)
+
+  roomSubjects             RoomSubject[]
+  teacherSubjects          TeacherSubject[]
+  groupSubjectRequirements GroupSubjectRequirement[]
+  weeklyScheduleTemplates  WeeklyScheduleTemplate[]
+  scheduleEntries          ScheduleEntry[]
+  groups                   Group[]
+}
+
+enum AvailabilityType {
+  PREFERRED
+  AVAILABLE
+  UNAVAILABLE
+}
+
+model TeacherSubject {
+  teacherId String
+  subjectId String
+  minGrade  Int?
+  maxGrade  Int?
+
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@id([teacherId, subjectId])
+}
+
+model TeacherAvailability {
+  id        String           @id @default(cuid())
+  teacherId String
+  dayOfWeek Int
+  startTime DateTime         @db.Time
+  endTime   DateTime         @db.Time
+  type      AvailabilityType @default(AVAILABLE)
+
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+
+  @@index([teacherId, dayOfWeek])
+}
+
+model TeacherAvailabilityOverride {
+  id        String           @id @default(cuid())
+  teacherId String
+  startTime DateTime
+  endTime   DateTime
+  type      AvailabilityType
+
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+
+  @@index([teacherId, startTime])
+}
+
+model WeeklyScheduleTemplate {
+  id        String @id @default(cuid())
+  dayOfWeek Int
+  startTime String
+  endTime   String
+
+  groupId   String
+  roomId    String?
+  teacherId String?
+  subjectId String
+
+  group   Group    @relation(fields: [groupId], references: [id])
+  room    Room?    @relation(fields: [roomId], references: [id])
+  teacher Teacher? @relation(fields: [teacherId], references: [id])
+  subject Subject  @relation(fields: [subjectId], references: [id])
+
+  scheduleEntries ScheduleEntry[]
+
+  @@index([groupId, dayOfWeek, startTime])
+}
+
+model ScheduleEntry {
+  id         String   @id @default(cuid())
+  templateId String?
+  date       DateTime @db.Date // to hold exact date
+  startTime  DateTime
+  endTime    DateTime
+
+  groupId   String
+  roomId    String?
+  teacherId String?
+  subjectId String
+
+  template WeeklyScheduleTemplate? @relation(fields: [templateId], references: [id])
+  group    Group                   @relation(fields: [groupId], references: [id])
+  room     Room?                   @relation(fields: [roomId], references: [id])
+  teacher  Teacher?                @relation(fields: [teacherId], references: [id])
+  subject  Subject                 @relation(fields: [subjectId], references: [id])
+
+  @@index([groupId, startTime])
+  @@index([teacherId, startTime])
+  @@index([roomId, startTime])
+}
+
+model GroupSubjectRequirement {
+  groupId           String
+  subjectId         String
+  lessonsPerWeek    Int
+  durationInMinutes Int
+  breakDuration     Int    @default(0)
+
+  group   Group   @relation(fields: [groupId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@id([groupId, subjectId])
+}
