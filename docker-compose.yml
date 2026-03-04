@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:17
+    restart: always
+    network_mode: bridge
+    environment:
+      POSTGRES_USER: prisma
+      POSTGRES_PASSWORD: prisma_password
+      POSTGRES_DB: classflow
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
