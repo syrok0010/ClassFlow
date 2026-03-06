@@ -2,7 +2,7 @@
 
 import { useSidebarStore } from "@/stores/sidebar-store";
 import { cn } from "@/lib/utils";
-import { SIDEBAR_WIDTH } from "./Sidebar";
+import { SIDEBAR_WIDTH } from "./constants";
 
 export function SidebarMainContent({ children }: { children: React.ReactNode }) {
   const isPinned = useSidebarStore((s) => s.isPinned);
