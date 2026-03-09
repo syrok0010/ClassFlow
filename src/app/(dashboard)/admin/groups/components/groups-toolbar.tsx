@@ -26,6 +26,12 @@ export function GroupsToolbar({
   onSearchQueryChange,
   onAddGroup,
 }: Props) {
+  const filterItems = [
+    { value: "ALL", label: "Все типы" },
+    { value: "CLASS", label: "Только классы" },
+    { value: "ELECTIVE_GROUP", label: "Только кружки" },
+  ] as const;
+
   return (
     <div className="flex items-center gap-3">
       <Select
@@ -33,14 +39,17 @@ export function GroupsToolbar({
         onValueChange={(v) =>
           onFilterTypeChange(v as "ALL" | "CLASS" | "ELECTIVE_GROUP")
         }
+        items={filterItems}
       >
         <SelectTrigger>
-          <SelectValue />
+          <SelectValue placeholder="Тип группы" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="ALL">Все типы</SelectItem>
-          <SelectItem value="CLASS">Только классы</SelectItem>
-          <SelectItem value="ELECTIVE_GROUP">Только кружки</SelectItem>
+          {filterItems.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
 

@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, Fragment } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import type { GroupType } from "@/generated/prisma/client";
 import type { GroupWithDetails } from "../types";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getExpandedRowModel,
+  flexRender,
+  type ColumnDef,
+  type Row,
+} from "@tanstack/react-table";
 import {
   Table,
   TableBody,
@@ -28,9 +36,18 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import {
   ChevronRight,
   MoreHorizontal,
-  Users,
   Scissors,
   Pencil,
   Trash2,
@@ -60,6 +77,13 @@ const TYPE_LABELS: Record<string, string> = {
   KINDERGARTEN_GROUP: "Детсад",
 };
 
+const TYPE_STYLES: Record<string, string> = {
+  CLASS: "bg-blue-50 text-blue-700 ring-blue-600/20",
+  ELECTIVE_GROUP: "bg-purple-50 text-purple-700 ring-purple-600/20",
+  SUBJECT_SUBGROUP: "bg-green-50 text-green-700 ring-green-600/20",
+  KINDERGARTEN_GROUP: "bg-orange-50 text-orange-700 ring-orange-600/20",
+};
+
 export function GroupsTreeTable({
   groups,
   isAddingRow,
@@ -70,55 +94,233 @@ export function GroupsTreeTable({
   onOpenTransferList,
   onOpenSplitter,
 }: Props) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
   const [confirmDeleteGroup, setConfirmDeleteGroup] =
     useState<GroupWithDetails | null>(null);
-
-  const toggleExpanded = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleStartRename = (group: GroupWithDetails) => {
     setEditingId(group.id);
-    setEditingName(group.name);
   };
 
-  const handleSaveRename = async () => {
-    if (editingId && editingName.trim()) {
-      await onRenameGroup(editingId, editingName.trim());
+  const handleSaveRename = async (newName: string) => {
+    if (editingId && newName.trim()) {
+      await onRenameGroup(editingId, newName.trim());
     }
     setEditingId(null);
-    setEditingName("");
+  };
+
+  const handleCancelRename = () => {
+    setEditingId(null);
   };
 
   const handleConfirmDelete = async () => {
     if (confirmDeleteGroup) {
-      await onDeleteGroup(confirmDeleteGroup);
-      setConfirmDeleteGroup(null);
+      setIsDeleting(true);
+      try {
+        await onDeleteGroup(confirmDeleteGroup);
+      } finally {
+        setIsDeleting(false);
+        setConfirmDeleteGroup(null);
+      }
     }
   };
+
+  // Double-click to rename handler
+  const handleDoubleClickName = (group: GroupWithDetails) => {
+    handleStartRename(group);
+  };
+
+  // ─── TanStack Table columns ────────────────────────────────────────
+
+  const columns = useMemo<ColumnDef<GroupWithDetails>[]>(
+    () => [
+      {
+        id: "expander",
+        header: () => null,
+        size: 40,
+        cell: ({ row }) => {
+          if (!row.getCanExpand()) return null;
+          return (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={row.getToggleExpandedHandler()}
+            >
+              <ChevronRight
+                className={cn(
+                  "size-4 transition-transform",
+                  row.getIsExpanded() && "rotate-90"
+                )}
+              />
+            </Button>
+          );
+        },
+      },
+      {
+        accessorKey: "name",
+        header: "Название",
+        cell: ({ row }) => {
+          const group = row.original;
+          const isSubGroup = row.depth > 0;
+
+          if (editingId === group.id) {
+            return (
+              <InlineRenameInput
+                defaultValue={group.name}
+                onSave={handleSaveRename}
+                onCancel={handleCancelRename}
+              />
+            );
+          }
+
+          return (
+            <span
+              className={cn(
+                "flex items-center gap-2 cursor-default",
+                isSubGroup && "pl-6"
+              )}
+              onDoubleClick={() => handleDoubleClickName(group)}
+              title="Двойной клик для переименования"
+            >
+              {isSubGroup && (
+                <span className="w-1 h-1 rounded-full bg-muted-foreground" />
+              )}
+              {group.name}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "type",
+        header: "Тип",
+        size: 144,
+        cell: ({ row }) => {
+          const group = row.original;
+          return (
+            <span
+              className={cn(
+                "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
+                TYPE_STYLES[group.type] ?? ""
+              )}
+            >
+              {TYPE_LABELS[group.type] ?? group.type}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "grade",
+        header: "Параллель",
+        size: 144,
+        cell: ({ row }) => {
+          const group = row.original;
+          if (row.depth > 0) return "—";
+          return group.grade ? `${group.grade} класс` : "—";
+        },
+      },
+      {
+        id: "students",
+        header: "Ученики",
+        size: 160,
+        cell: ({ row }) => {
+          const group = row.original;
+          return (
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-sm"
+              onClick={() => onOpenTransferList(group)}
+            >
+              {group._count.studentGroups} чел.
+            </Button>
+          );
+        },
+      },
+      {
+        id: "actions-split",
+        header: () => null,
+        size: 208,
+        cell: ({ row }) => {
+          const group = row.original;
+          if (row.depth > 0) {
+            // Show subject for subgroups
+            if (group.subject) {
+              return (
+                <span className="text-xs text-muted-foreground">
+                  {group.subject.name}
+                </span>
+              );
+            }
+            return null;
+          }
+          if (group.type === "CLASS") {
+            return (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenSplitter(group)}
+              >
+                <Scissors className="size-3.5" data-icon="inline-start" />
+                Разделить на подгруппы
+              </Button>
+            );
+          }
+          return null;
+        },
+      },
+      {
+        id: "actions-menu",
+        header: () => null,
+        size: 48,
+        cell: ({ row }) => {
+          const group = row.original;
+          return (
+            <GroupActionMenu
+              group={group}
+              onRename={() => handleStartRename(group)}
+              onManageStudents={() => onOpenTransferList(group)}
+              onDelete={() => setConfirmDeleteGroup(group)}
+            />
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editingId, onOpenTransferList, onOpenSplitter]
+  );
+
+  const table = useReactTable({
+    data: groups,
+    columns,
+    getSubRows: (row) => (row.subGroups?.length > 0 ? row.subGroups : undefined),
+    getCoreRowModel: getCoreRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+    getRowCanExpand: (row) => (row.original.subGroups?.length ?? 0) > 0,
+  });
 
   return (
     <>
       <div className="rounded-xl border bg-card text-card-foreground shadow">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="w-10" />
-              <TableHead>Название</TableHead>
-              <TableHead className="w-36">Тип</TableHead>
-              <TableHead className="w-36">Параллель</TableHead>
-              <TableHead className="w-40">Ученики</TableHead>
-              <TableHead className="w-52" />
-              <TableHead className="w-12" />
-            </TableRow>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
           </TableHeader>
           <TableBody>
             {isAddingRow && (
@@ -128,9 +330,9 @@ export function GroupsTreeTable({
               />
             )}
 
-            {groups.length === 0 && !isAddingRow && (
+            {table.getRowModel().rows.length === 0 && !isAddingRow && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-10">
+                <TableCell colSpan={columns.length} className="text-center py-10">
                   <p className="text-muted-foreground">
                     Нет групп. Нажмите &laquo;Добавить класс/группу&raquo; для
                     начала.
@@ -139,148 +341,78 @@ export function GroupsTreeTable({
               </TableRow>
             )}
 
-            {groups.map((group) => (
-              <Fragment key={group.id}>
-                {/* Level 1 row */}
-                <TableRow className="group/row">
-                  <TableCell>
-                    {group.subGroups.length > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => toggleExpanded(group.id)}
-                      >
-                        <ChevronRight
-                          className={cn(
-                            "size-4 transition-transform",
-                            expandedIds.has(group.id) && "rotate-90"
-                          )}
-                        />
-                      </Button>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow
+                key={row.id}
+                className={cn(
+                  row.depth > 0 && "bg-muted/30"
+                )}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell
+                    key={cell.id}
+                    className={cn(
+                      cell.column.id === "name" && "font-medium"
                     )}
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
-                  <TableCell className="font-medium">
-                    {editingId === group.id ? (
-                      <InlineRenameInput
-                        value={editingName}
-                        onChange={setEditingName}
-                        onSave={handleSaveRename}
-                        onCancel={() => setEditingId(null)}
-                      />
-                    ) : (
-                      group.name
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
-                        group.type === "CLASS"
-                          ? "bg-blue-50 text-blue-700 ring-blue-600/20"
-                          : "bg-purple-50 text-purple-700 ring-purple-600/20"
-                      )}
-                    >
-                      {TYPE_LABELS[group.type] ?? group.type}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {group.grade ? `${group.grade} класс` : "—"}
-                  </TableCell>
-                  <TableCell>
-                    <button
-                      className="text-sm text-primary hover:underline cursor-pointer"
-                      onClick={() => onOpenTransferList(group)}
-                    >
-                      {group._count.studentGroups} чел.
-                    </button>
-                  </TableCell>
-                  <TableCell>
-                    {group.type === "CLASS" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onOpenSplitter(group)}
-                      >
-                        <Scissors className="size-3.5" data-icon="inline-start" />
-                        Разделить на подгруппы
-                      </Button>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <GroupActionMenu
-                      group={group}
-                      onRename={() => handleStartRename(group)}
-                      onManageStudents={() => onOpenTransferList(group)}
-                      onDelete={() => setConfirmDeleteGroup(group)}
-                    />
-                  </TableCell>
-                </TableRow>
-
-                {/* Level 2 subgroup rows */}
-                {expandedIds.has(group.id) &&
-                  group.subGroups.map((sub) => (
-                    <TableRow key={sub.id} className="bg-muted/30">
-                      <TableCell />
-                      <TableCell className="pl-10 font-medium">
-                        {editingId === sub.id ? (
-                          <InlineRenameInput
-                            value={editingName}
-                            onChange={setEditingName}
-                            onSave={handleSaveRename}
-                            onCancel={() => setEditingId(null)}
-                          />
-                        ) : (
-                          <span className="flex items-center gap-2">
-                            <span className="w-1 h-1 rounded-full bg-muted-foreground" />
-                            {sub.name}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset bg-green-50 text-green-700 ring-green-600/20">
-                          {TYPE_LABELS[sub.type] ?? sub.type}
-                        </span>
-                      </TableCell>
-                      <TableCell>—</TableCell>
-                      <TableCell>
-                        <button
-                          className="text-sm text-primary hover:underline cursor-pointer"
-                          onClick={() => onOpenTransferList(sub)}
-                        >
-                          {sub._count.studentGroups} чел.
-                        </button>
-                      </TableCell>
-                      <TableCell>
-                        {sub.subject && (
-                          <span className="text-xs text-muted-foreground">
-                            {sub.subject.name}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <GroupActionMenu
-                          group={sub}
-                          onRename={() => handleStartRename(sub)}
-                          onManageStudents={() => onOpenTransferList(sub)}
-                          onDelete={() => setConfirmDeleteGroup(sub)}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-              </Fragment>
+                ))}
+              </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
 
-      {/* Delete confirmation dialog */}
-      {confirmDeleteGroup && (
-        <DeleteConfirmDialog
-          group={confirmDeleteGroup}
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setConfirmDeleteGroup(null)}
-        />
-      )}
+      {/* Delete confirmation AlertDialog */}
+      <AlertDialog
+        open={!!confirmDeleteGroup}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteGroup(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить группу?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы собираетесь удалить группу
+              &laquo;{confirmDeleteGroup?.name}&raquo;.
+              {(confirmDeleteGroup?._count.studentGroups ?? 0) > 0 && (
+                <>
+                  {" "}
+                  Из этой группы будут отчислены{" "}
+                  <strong>
+                    {confirmDeleteGroup?._count.studentGroups} учеников
+                  </strong>
+                  .
+                </>
+              )}
+              {(confirmDeleteGroup?.subGroups?.length ?? 0) > 0 && (
+                <>
+                  {" "}
+                  Также будут удалены{" "}
+                  <strong>
+                    {confirmDeleteGroup?.subGroups.length} подгрупп
+                  </strong>
+                  .
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>
+              Отмена
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -348,6 +480,10 @@ function InlineCreateRow({
         <Select
           value={type}
           onValueChange={(v) => setType(v as GroupType)}
+          items={{
+            CLASS: "Класс",
+            ELECTIVE_GROUP: "Кружок",
+          }}
         >
           <SelectTrigger size="sm">
             <SelectValue />
@@ -386,34 +522,37 @@ function InlineCreateRow({
 // ─── Inline Rename Input ─────────────────────────────────────────────────────
 
 function InlineRenameInput({
-  value,
-  onChange,
+  defaultValue,
   onSave,
   onCancel,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  onSave: () => void;
+  defaultValue: string;
+  onSave: (newName: string) => void;
   onCancel: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState(defaultValue);
 
   useEffect(() => {
     ref.current?.focus();
     ref.current?.select();
   }, []);
 
+  const handleSave = () => {
+    onSave(value);
+  };
+
   return (
     <Input
       ref={ref}
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => setValue(e.target.value)}
       onKeyDown={(e) => {
-        if (e.key === "Enter") onSave();
+        if (e.key === "Enter") handleSave();
         if (e.key === "Escape") onCancel();
       }}
-      onBlur={onSave}
-      className="h-7 w-40"
+      onBlur={handleSave}
+      className="h-7 min-w-[8rem] max-w-xs"
     />
   );
 }
@@ -456,53 +595,5 @@ function GroupActionMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-// ─── Delete Confirm Dialog ───────────────────────────────────────────────────
-
-function DeleteConfirmDialog({
-  group,
-  onConfirm,
-  onCancel,
-}: {
-  group: GroupWithDetails;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const studentCount = group._count.studentGroups;
-  const subGroupCount = group.subGroups?.length ?? 0;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/10 backdrop-blur-xs" onClick={onCancel} />
-      <div className="relative z-10 w-full max-w-sm rounded-xl bg-background p-4 ring-1 ring-foreground/10 shadow-lg">
-        <h3 className="text-base font-medium mb-2">Удалить группу?</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Вы собираетесь удалить группу &laquo;{group.name}&raquo;.
-          {studentCount > 0 && (
-            <>
-              {" "}
-              Из этой группы будут отчислены{" "}
-              <strong>{studentCount} учеников</strong>.
-            </>
-          )}
-          {subGroupCount > 0 && (
-            <>
-              {" "}
-              Также будут удалены <strong>{subGroupCount} подгрупп</strong>.
-            </>
-          )}
-        </p>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={onCancel}>
-            Отмена
-          </Button>
-          <Button variant="destructive" size="sm" onClick={onConfirm}>
-            Удалить
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
