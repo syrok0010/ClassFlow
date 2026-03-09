@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectTrigger,
@@ -189,6 +190,13 @@ export function StudentAssignmentDialog({
 
   const hasChanges = movedToRight.size > 0 || movedToLeft.size > 0;
 
+  // Items map for class filter select
+  const classFilterItems = useMemo(() => {
+    const map: Record<string, string> = { ALL: "Все" };
+    availableClasses.forEach((cls) => { map[cls] = cls; });
+    return map;
+  }, [availableClasses]);
+
   const isElective = group?.type === "ELECTIVE_GROUP";
 
   return (
@@ -236,6 +244,7 @@ export function StudentAssignmentDialog({
                   <Select
                     value={leftClassFilter}
                     onValueChange={(v) => setLeftClassFilter(v ?? "ALL")}
+                    items={classFilterItems}
                   >
                     <SelectTrigger size="sm" className="w-24">
                       <SelectValue />
@@ -390,12 +399,11 @@ function StudentRow({
       )}
       onClick={onToggle}
     >
-      <input
-        type="checkbox"
+      <Checkbox
         checked={selected}
-        onChange={onToggle}
-        className="size-3.5 rounded border-input accent-primary"
+        onCheckedChange={onToggle}
         onClick={(e) => e.stopPropagation()}
+        className="size-3.5"
       />
       <span className="flex-1 truncate">
         {getStudentDisplayName(student)}

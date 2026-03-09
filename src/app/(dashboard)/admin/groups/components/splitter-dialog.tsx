@@ -75,6 +75,11 @@ export function SplitterDialog({
   const [buckets, setBuckets] = useState<BucketMap>({});
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  const subjectItems = useMemo(
+    () => Object.fromEntries(subjects.map((s) => [s.id, s.name])),
+    [subjects]
+  );
+
   const subjectName = subjects.find((s) => s.id === subjectId)?.name ?? "";
 
   // Generate bucket keys
@@ -237,6 +242,7 @@ export function SplitterDialog({
               <Select
                 value={subjectId}
                 onValueChange={(v) => setSubjectId(v ?? "")}
+                items={subjectItems}
               >
                 <SelectTrigger className="w-64">
                   <SelectValue placeholder="Выберите предмет" />

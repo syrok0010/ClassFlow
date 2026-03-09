@@ -2,8 +2,45 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { z } from "zod/v4";
 import type { GroupType } from "@/generated/prisma/client";
 import type { GroupWithDetails, StudentForAssignment, SubjectOption } from "./types";
+
+// ─── Zod Schemas ────────────────────────────────────────────────────────────
+
+const GroupTypeEnum = z.enum(["CLASS", "KINDERGARTEN_GROUP", "SUBJECT_SUBGROUP", "ELECTIVE_GROUP"]);
+
+const createGroupSchema = z.object({
+  name: z.string().min(1, "Название обязательно").max(100),
+  type: GroupTypeEnum,
+  grade: z.number().int().min(1).max(11).nullable().optional(),
+  parentId: z.string().nullable().optional(),
+  subjectId: z.string().nullable().optional(),
+});
+
+const updateGroupSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  type: GroupTypeEnum.optional(),
+  grade: z.number().int().min(1).max(11).nullable().optional(),
+});
+
+const idSchema = z.string().min(1, "ID обязателен");
+
+const assignStudentsSchema = z.object({
+  groupId: z.string().min(1),
+  studentIds: z.array(z.string().min(1)).min(1),
+});
+
+const splitSchema = z.object({
+  parentGroupId: z.string().min(1),
+  subjectId: z.string().min(1),
+  subgroups: z.array(
+    z.object({
+      name: z.string().min(1),
+      studentIds: z.array(z.string()),
+    })
+  ).min(1),
+});
 
 // ─── Fetch Groups (Tree structure) ──────────────────────────────────────────
 
@@ -37,18 +74,20 @@ export async function getGroupsTree(): Promise<GroupWithDetails[]> {
 
 export async function createGroupAction(data: {
   name: string;
-  type: GroupType;
+  type: string;
   grade?: number | null;
   parentId?: string | null;
   subjectId?: string | null;
 }) {
+  const validated = createGroupSchema.parse(data);
+
   const group = await prisma.group.create({
     data: {
-      name: data.name,
-      type: data.type,
-      grade: data.grade ?? null,
-      parentId: data.parentId ?? null,
-      subjectId: data.subjectId ?? null,
+      name: validated.name,
+      type: validated.type,
+      grade: validated.grade ?? null,
+      parentId: validated.parentId ?? null,
+      subjectId: validated.subjectId ?? null,
     },
   });
 
@@ -60,44 +99,61 @@ export async function createGroupAction(data: {
 
 export async function updateGroupAction(
   id: string,
-  data: { name?: string; type?: GroupType; grade?: number | null }
+  data: { name?: string; type?: string; grade?: number | null }
 ) {
+  idSchema.parse(id);
+  const validated = updateGroupSchema.parse(data);
+
   const group = await prisma.group.update({
     where: { id },
-    data,
+    data: validated,
   });
 
   revalidatePath("/admin/groups");
   return group;
 }
 
-// ─── Delete Group (cascading subGroups) ─────────────────────────────────────
+// ─── Delete Group (optimized: collect all IDs then batch delete) ────────────
 
-export async function deleteGroupAction(id: string) {
-  // First, recursively delete subgroups and their student assignments
-  const subGroups = await prisma.group.findMany({
-    where: { parentId: id },
+async function collectGroupIds(parentId: string): Promise<string[]> {
+  const children = await prisma.group.findMany({
+    where: { parentId },
     select: { id: true },
   });
 
-  for (const sub of subGroups) {
-    await deleteGroupAction(sub.id);
+  const allIds: string[] = [parentId];
+  for (const child of children) {
+    const childIds = await collectGroupIds(child.id);
+    allIds.push(...childIds);
   }
 
-  // Delete student assignments for this group
-  await prisma.studentGroups.deleteMany({
-    where: { groupId: id },
-  });
+  return allIds;
+}
 
-  // Delete group subject requirements
-  await prisma.groupSubjectRequirement.deleteMany({
-    where: { groupId: id },
-  });
+export async function deleteGroupAction(id: string) {
+  idSchema.parse(id);
 
-  // Delete the group itself
-  await prisma.group.delete({
-    where: { id },
-  });
+  // Collect all group IDs (the group + all descendants)
+  const allGroupIds = await collectGroupIds(id);
+
+  // Batch delete all related records, then all groups
+  await prisma.$transaction([
+    prisma.studentGroups.deleteMany({
+      where: { groupId: { in: allGroupIds } },
+    }),
+    prisma.groupSubjectRequirement.deleteMany({
+      where: { groupId: { in: allGroupIds } },
+    }),
+    // Delete in reverse order (children first) by deleting all non-root, then root
+    // Actually, since we have no FK cascade, we must delete children before parents.
+    // Delete all children (non-root) first, then the root
+    ...allGroupIds
+      .slice()
+      .reverse()
+      .map((gid) =>
+        prisma.group.delete({ where: { id: gid } })
+      ),
+  ]);
 
   revalidatePath("/admin/groups");
 }
@@ -106,23 +162,23 @@ export async function deleteGroupAction(id: string) {
 
 export async function getStudentsForAssignment(
   groupId: string,
-  groupType: GroupType
+  groupType: string
 ): Promise<{
   assigned: StudentForAssignment[];
   available: StudentForAssignment[];
 }> {
-  // Get students already in the group
+  idSchema.parse(groupId);
+  GroupTypeEnum.parse(groupType);
+
   const assignedStudentIds = await prisma.studentGroups.findMany({
     where: { groupId },
     select: { studentId: true },
   });
   const assignedIds = new Set(assignedStudentIds.map((s) => s.studentId));
 
-  // Determine the available pool based on group type
   let availableWhere: Record<string, unknown> = {};
 
   if (groupType === "CLASS") {
-    // For a class: show students not in any CLASS group
     const studentsInClasses = await prisma.studentGroups.findMany({
       where: {
         group: { type: "CLASS" },
@@ -138,7 +194,6 @@ export async function getStudentsForAssignment(
       },
     };
   } else if (groupType === "ELECTIVE_GROUP") {
-    // For elective: show all students not already in this group
     availableWhere = {
       id: { notIn: [...assignedIds] },
     };
@@ -153,25 +208,24 @@ export async function getStudentsForAssignment(
         group: { select: { name: true, type: true } },
       },
     },
-  };
+  } as const;
 
-  const [assigned, available] = await Promise.all([
-    prisma.student.findMany({
-      where: { id: { in: [...assignedIds] } },
-      include: studentInclude,
-      orderBy: { user: { surname: "asc" } },
-    }),
-    prisma.student.findMany({
-      where: availableWhere,
-      include: studentInclude,
-      orderBy: { user: { surname: "asc" } },
-    }),
-  ]);
+  const assigned = await prisma.student.findMany({
+    where: { id: { in: [...assignedIds] } },
+    include: studentInclude,
+    orderBy: { user: { surname: "asc" } },
+  });
 
-  const mapStudent = (s: typeof assigned[0]): StudentForAssignment => ({
+  const available = await prisma.student.findMany({
+    where: availableWhere,
+    include: studentInclude,
+    orderBy: { user: { surname: "asc" } },
+  });
+
+  const mapStudent = (s: (typeof assigned)[0]): StudentForAssignment => ({
     id: s.id,
     user: s.user,
-    currentGroups: s.studentGroups.map((sg) => ({
+    currentGroups: s.studentGroups.map((sg: { groupId: string; group: { name: string; type: GroupType } }) => ({
       groupId: sg.groupId,
       group: sg.group,
     })),
@@ -189,8 +243,13 @@ export async function assignStudentsToGroupAction(
   groupId: string,
   studentIds: string[]
 ) {
+  const validated = assignStudentsSchema.parse({ groupId, studentIds });
+
   await prisma.studentGroups.createMany({
-    data: studentIds.map((studentId) => ({ studentId, groupId })),
+    data: validated.studentIds.map((studentId) => ({
+      studentId,
+      groupId: validated.groupId,
+    })),
     skipDuplicates: true,
   });
 
@@ -203,10 +262,12 @@ export async function removeStudentsFromGroupAction(
   groupId: string,
   studentIds: string[]
 ) {
+  const validated = assignStudentsSchema.parse({ groupId, studentIds });
+
   await prisma.studentGroups.deleteMany({
     where: {
-      groupId,
-      studentId: { in: studentIds },
+      groupId: validated.groupId,
+      studentId: { in: validated.studentIds },
     },
   });
 
@@ -216,6 +277,8 @@ export async function removeStudentsFromGroupAction(
 // ─── Get Students of a Parent Group (for Splitter) ──────────────────────────
 
 export async function getGroupStudents(groupId: string): Promise<StudentForAssignment[]> {
+  idSchema.parse(groupId);
+
   const students = await prisma.student.findMany({
     where: {
       studentGroups: { some: { groupId } },
@@ -236,7 +299,7 @@ export async function getGroupStudents(groupId: string): Promise<StudentForAssig
   return students.map((s) => ({
     id: s.id,
     user: s.user,
-    currentGroups: s.studentGroups.map((sg) => ({
+    currentGroups: s.studentGroups.map((sg: { groupId: string; group: { name: string; type: GroupType } }) => ({
       groupId: sg.groupId,
       group: sg.group,
     })),
@@ -250,15 +313,17 @@ export async function createSubgroupsFromSplit(data: {
   subjectId: string;
   subgroups: { name: string; studentIds: string[] }[];
 }) {
+  const validated = splitSchema.parse(data);
+
   const results = [];
 
-  for (const subgroup of data.subgroups) {
+  for (const subgroup of validated.subgroups) {
     const group = await prisma.group.create({
       data: {
         name: subgroup.name,
         type: "SUBJECT_SUBGROUP",
-        parentId: data.parentGroupId,
-        subjectId: data.subjectId,
+        parentId: validated.parentGroupId,
+        subjectId: validated.subjectId,
       },
     });
 
