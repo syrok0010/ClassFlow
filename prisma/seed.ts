@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, GroupType, SubjectType, AvailabilityType, Role } from '../src/generated/prisma/client.js';
+import { PrismaClient, GroupType, SubjectType, AvailabilityType, Role, UserStatus } from '../src/generated/prisma/client.js';
 
 const connectionString = `${process.env.DATABASE_URL}`;
 const adapter = new PrismaPg({ connectionString });
@@ -28,27 +28,29 @@ async function main() {
 
     console.log('Creating mock data...');
 
-    // 1. Users (10 total: 5 students, 3 teachers, 2 admins)
+    // 1. Users — Admins
     const admin1 = await prisma.user.create({
-        data: { email: 'admin1@classflow.local', role: 'ADMIN', name: 'Admin', surname: 'One' }
+        data: { email: 'admin1@classflow.local', role: 'ADMIN', status: 'ACTIVE', name: 'Сергей', surname: 'Сироткин', patronymicName: 'Владимирович' }
     });
     const admin2 = await prisma.user.create({
-        data: { email: 'admin2@classflow.local', role: 'ADMIN', name: 'Admin', surname: 'Two' }
+        data: { email: 'admin2@classflow.local', role: 'ADMIN', status: 'ACTIVE', name: 'Елена', surname: 'Директорова', patronymicName: 'Петровна' }
     });
 
-    const t1User = await prisma.user.create({ data: { email: 'teacher1@classflow.local', role: 'USER', name: 'Ivan', surname: 'Ivanov', patronymicName: 'Ivanovich' } });
-    const t2User = await prisma.user.create({ data: { email: 'teacher2@classflow.local', role: 'USER', name: 'Petr', surname: 'Petrov', patronymicName: 'Petrovich' } });
-    const t3User = await prisma.user.create({ data: { email: 'teacher3@classflow.local', role: 'USER', name: 'Anna', surname: 'Smirnova', patronymicName: 'Ivanovna' } });
+    // 2. Users — Teachers (ACTIVE)
+    const t1User = await prisma.user.create({ data: { email: 'teacher1@classflow.local', role: 'USER', status: 'ACTIVE', name: 'Иван', surname: 'Иванов', patronymicName: 'Иванович' } });
+    const t2User = await prisma.user.create({ data: { email: 'teacher2@classflow.local', role: 'USER', status: 'ACTIVE', name: 'Пётр', surname: 'Петров', patronymicName: 'Петрович' } });
+    const t3User = await prisma.user.create({ data: { email: 'teacher3@classflow.local', role: 'USER', status: 'ACTIVE', name: 'Анна', surname: 'Смирнова', patronymicName: 'Ивановна' } });
 
     const teacher1 = await prisma.teacher.create({ data: { userId: t1User.id } });
     const teacher2 = await prisma.teacher.create({ data: { userId: t2User.id } });
     const teacher3 = await prisma.teacher.create({ data: { userId: t3User.id } });
 
-    const s1User = await prisma.user.create({ data: { email: 'student1@classflow.local', role: 'USER', name: 'Misha' } });
-    const s2User = await prisma.user.create({ data: { email: 'student2@classflow.local', role: 'USER', name: 'Sasha' } });
-    const s3User = await prisma.user.create({ data: { email: 'student3@classflow.local', role: 'USER', name: 'Masha' } });
-    const s4User = await prisma.user.create({ data: { email: 'student4@classflow.local', role: 'USER', name: 'Dasha' } });
-    const s5User = await prisma.user.create({ data: { email: 'student5@classflow.local', role: 'USER', name: 'Pasha' } });
+    // 3. Users — Students (mix of ACTIVE and PENDING_INVITE)
+    const s1User = await prisma.user.create({ data: { email: 'student1@classflow.local', role: 'USER', status: 'ACTIVE', name: 'Михаил', surname: 'Кузнецов' } });
+    const s2User = await prisma.user.create({ data: { role: 'USER', status: 'PENDING_INVITE', name: 'Александр', surname: 'Соколов' } });
+    const s3User = await prisma.user.create({ data: { email: 'student3@classflow.local', role: 'USER', status: 'ACTIVE', name: 'Мария', surname: 'Попова' } });
+    const s4User = await prisma.user.create({ data: { role: 'USER', status: 'PENDING_INVITE', name: 'Дарья', surname: 'Волкова' } });
+    const s5User = await prisma.user.create({ data: { email: 'student5@classflow.local', role: 'USER', status: 'ACTIVE', name: 'Павел', surname: 'Козлов' } });
 
     const student1 = await prisma.student.create({ data: { userId: s1User.id } });
     const student2 = await prisma.student.create({ data: { userId: s2User.id } });
@@ -56,14 +58,35 @@ async function main() {
     const student4 = await prisma.student.create({ data: { userId: s4User.id } });
     const student5 = await prisma.student.create({ data: { userId: s5User.id } });
 
-    // 2. Subjects (5)
+    // 4. Users — Parents
+    const p1User = await prisma.user.create({ data: { email: 'parent1@classflow.local', role: 'USER', status: 'ACTIVE', name: 'Ольга', surname: 'Кузнецова', patronymicName: 'Сергеевна' } });
+    const p2User = await prisma.user.create({ data: { role: 'USER', status: 'PENDING_INVITE', name: 'Андрей', surname: 'Соколов', patronymicName: 'Викторович' } });
+
+    const parent1 = await prisma.parent.create({ data: { userId: p1User.id } });
+    const parent2 = await prisma.parent.create({ data: { userId: p2User.id } });
+
+    // Link parents to students
+    await prisma.studentParents.createMany({
+        data: [
+            { parentId: parent1.id, studentId: student1.id }, // Ольга Кузнецова -> Михаил Кузнецов
+            { parentId: parent2.id, studentId: student2.id }, // Андрей Соколов -> Александр Соколов
+        ]
+    });
+
+    // 5. Teacher who is also a Parent (cross-role: Анна Смирнова is parent of Мария Попова)
+    const teacherAsParent = await prisma.parent.create({ data: { userId: t3User.id } });
+    await prisma.studentParents.create({
+        data: { parentId: teacherAsParent.id, studentId: student3.id }
+    });
+
+    // 6. Subjects
     const math = await prisma.subject.create({ data: { name: 'Алгебра', type: 'ACADEMIC' } });
     const pe = await prisma.subject.create({ data: { name: 'Физкультура', type: 'ACADEMIC' } });
     const english = await prisma.subject.create({ data: { name: 'Английский', type: 'ACADEMIC' } });
     const physics = await prisma.subject.create({ data: { name: 'Физика', type: 'ACADEMIC' } });
     const lunch = await prisma.subject.create({ data: { name: 'Обед', type: 'REGIME' } });
 
-    // 3. Buildings & Rooms (2 buildings, 5 rooms)
+    // 7. Buildings & Rooms
     const mainBldg = await prisma.building.create({ data: { name: 'Главное Здание' } });
     const sportBldg = await prisma.building.create({ data: { name: 'Спортивный Корпус' } });
 
@@ -73,7 +96,6 @@ async function main() {
     const gym = await prisma.room.create({ data: { name: 'Спортивный Зал', seatsCount: 50, buildingId: sportBldg.id } });
     const canteen = await prisma.room.create({ data: { name: 'Столовая', seatsCount: 100, buildingId: mainBldg.id } });
 
-    // Room compatibility
     await prisma.roomSubject.createMany({
         data: [
             { roomId: room101.id, subjectId: math.id },
@@ -86,7 +108,6 @@ async function main() {
         ]
     });
 
-    // Assign teachers to subjects
     await prisma.teacherSubject.createMany({
         data: [
             { teacherId: teacher1.id, subjectId: math.id, minGrade: 5, maxGrade: 11 },
@@ -96,11 +117,10 @@ async function main() {
         ]
     });
 
-    // 4. Groups
+    // 8. Groups
     const class10A = await prisma.group.create({ data: { name: '10 А', type: 'CLASS', grade: 10 } });
     const class10B = await prisma.group.create({ data: { name: '10 Б', type: 'CLASS', grade: 10 } });
 
-    // Assign students to classes
     await prisma.studentGroups.createMany({
         data: [
             { studentId: student1.id, groupId: class10A.id },
