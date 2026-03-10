@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { getUsersAction } from "./_actions/user-actions";
 import { UsersTableClient } from "./_components/users-table-client";
 import type { DomainRole } from "./_lib/types";
@@ -12,14 +11,13 @@ export default async function UsersPage(props: {
   const search = typeof searchParams.search === "string" ? searchParams.search : undefined;
   const domainRoleParam = typeof searchParams.role === "string" ? searchParams.role : undefined;
   const statusParam = typeof searchParams.status === "string" ? searchParams.status : undefined;
-  const domainRole = domainRoleParam && domainRoleParam !== "all" ? (domainRoleParam as DomainRole) : undefined;
+  const VALID_DOMAIN_ROLES: DomainRole[] = ["teacher", "student", "parent"];
+  const domainRole = VALID_DOMAIN_ROLES.includes(domainRoleParam as DomainRole)
+      ? (domainRoleParam as DomainRole)
+      : undefined;
   const status = statusParam && statusParam !== "all" ? (statusParam as UserStatus) : undefined;
 
   const users = await getUsersAction({ search, domainRole, status });
 
-  return (
-    <Suspense fallback={<div className="p-8 text-center text-muted-foreground animate-pulse">Загрузка таблицы...</div>}>
-      <UsersTableClient users={users} />
-    </Suspense>
-  );
+  return <UsersTableClient users={users} />;
 }

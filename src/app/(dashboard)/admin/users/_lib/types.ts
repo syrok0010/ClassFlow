@@ -1,5 +1,13 @@
 import { Prisma } from "@/generated/prisma/client";
 import type { UserStatus } from "@/generated/prisma/enums";
+import type { RowData } from "@tanstack/react-table";
+
+declare module "@tanstack/react-table" {
+  interface ColumnMeta<TData extends RowData, TValue> {
+    headerClassName?: string;
+    cellClassName?: string;
+  }
+}
 
 export const userInclude = {
   teachers: { select: { id: true } },

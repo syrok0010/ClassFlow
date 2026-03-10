@@ -21,6 +21,28 @@ function generateInviteToken(): string {
     .replace(/(.{4})(.{4})/, "$1-$2");
 }
 
+const STAFF_INVITE_TTL_DAYS = 7;
+const PARENT_INVITE_TTL_DAYS = 30;
+
+async function createInviteToken(
+  tx: Prisma.TransactionClient | typeof prisma,
+  userId: string,
+  ttlDays: number
+) {
+  const token = generateInviteToken();
+  const expires = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
+
+  await tx.verificationToken.create({
+    data: {
+      identifier: userId,
+      token,
+      expires,
+    },
+  });
+
+  return token;
+}
+
 const USERS_PATH = "/admin/users";
 
 export async function getUsersAction(filters?: Partial<UsersFilterState>) {
@@ -78,25 +100,13 @@ export async function createUserAction(input: CreateUserInput) {
           email: data.email || null,
           role: data.domainRole === "admin" ? "ADMIN" : "USER",
           status: "PENDING_INVITE",
+          ...(data.domainRole === "student" ? { students: { create: {} } } : {}),
+          ...(data.domainRole === "teacher" ? { teachers: { create: {} } } : {}),
         },
+        include: userInclude,
       });
 
-      if (data.domainRole === "student") {
-        await tx.student.create({ data: { userId: newUser.id } });
-      } else if (data.domainRole === "teacher") {
-        await tx.teacher.create({ data: { userId: newUser.id } });
-      }
-
-      const newToken = generateInviteToken();
-      const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-      await tx.verificationToken.create({
-        data: {
-          identifier: newUser.id,
-          token: newToken,
-          expires,
-        },
-      });
+      const newToken = await createInviteToken(tx, newUser.id, STAFF_INVITE_TTL_DAYS);
 
       return { user: newUser, token: newToken };
     });
@@ -104,10 +114,7 @@ export async function createUserAction(input: CreateUserInput) {
     revalidatePath(USERS_PATH);
 
     return {
-      user: await prisma.user.findUnique({
-        where: { id: user.id },
-        include: userInclude,
-      }),
+      user,
       inviteToken: data.email ? null : token,
     };
   } catch (e: unknown) {
@@ -157,16 +164,7 @@ export async function generateParentInviteAction(studentId: string) {
       },
     });
 
-    const token = generateInviteToken();
-    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-    await tx.verificationToken.create({
-      data: {
-        identifier: parentUser.id,
-        token,
-        expires,
-      },
-    });
+    const token = await createInviteToken(tx, parentUser.id, PARENT_INVITE_TTL_DAYS);
 
     return { token, parentUserId: parentUser.id };
   });
@@ -220,7 +218,6 @@ export async function updateUserAction(input: {
   isTeacher: boolean;
   isStudent: boolean;
   isParent: boolean;
-  childrenIds?: string[];
 }) {
   const parsed = updateUserSchema.safeParse(input);
   if (!parsed.success) {
@@ -263,34 +260,12 @@ export async function updateUserAction(input: {
       where: { userId: data.id },
     });
     if (data.isParent && !existingParent) {
-      const parent = await tx.parent.create({ data: { userId: data.id } });
-      if (data.childrenIds && data.childrenIds.length > 0) {
-        await tx.studentParents.createMany({
-          data: data.childrenIds.map((sid) => ({
-            parentId: parent.id,
-            studentId: sid,
-          })),
-          skipDuplicates: true,
-        });
-      }
+      await tx.parent.create({ data: { userId: data.id } });
     } else if (!data.isParent && existingParent) {
       await tx.studentParents.deleteMany({
         where: { parentId: existingParent.id },
       });
       await tx.parent.delete({ where: { id: existingParent.id } });
-    } else if (data.isParent && existingParent && data.childrenIds) {
-      await tx.studentParents.deleteMany({
-        where: { parentId: existingParent.id },
-      });
-      if (data.childrenIds.length > 0) {
-        await tx.studentParents.createMany({
-          data: data.childrenIds.map((sid) => ({
-            parentId: existingParent.id,
-            studentId: sid,
-          })),
-          skipDuplicates: true,
-        });
-      }
     }
   });
 
@@ -298,13 +273,18 @@ export async function updateUserAction(input: {
   return { success: true };
 }
 
-export async function toggleUserStatusAction(
-  id: string,
-  status: "ACTIVE" | "DISABLED",
-) {
+export async function toggleUserStatusAction(id: string) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id }, select: { status: true } });
+
+  if (user.status === "PENDING_INVITE") {
+    return { error: "Невозможно заблокировать ожидающего пользователя" };
+  }
+
+  const newStatus = user.status === "DISABLED" ? "ACTIVE" : "DISABLED";
+
   await prisma.user.update({
     where: { id },
-    data: { status },
+    data: { status: newStatus },
   });
 
   revalidatePath(USERS_PATH);
@@ -369,24 +349,29 @@ export async function searchParentsAction(query: string) {
 }
 
 export async function getInviteTokenAction(userId: string) {
-  const token = await prisma.verificationToken.findFirst({
-    where: {
-      identifier: userId,
-      expires: { gt: new Date() },
-    },
-    orderBy: { expires: "desc" },
-  });
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return { error: "Пользователь не найден" };
+    }
 
-  if (!token) {
-    const newToken = generateInviteToken();
-    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    await prisma.verificationToken.create({
-      data: { identifier: userId, token: newToken, expires },
+    const token = await prisma.verificationToken.findFirst({
+      where: {
+        identifier: userId,
+        expires: { gt: new Date() },
+      },
+      orderBy: { expires: "desc" },
     });
 
-    return { token: newToken };
-  }
+    if (token) {
+      return { token: token.token };
+    }
 
-  return { token: token.token };
+    const newToken = await createInviteToken(prisma, userId, STAFF_INVITE_TTL_DAYS);
+
+    return { token: newToken };
+  } catch (error) {
+    console.error("Ошибка при получении инвайт-токена:", error);
+    return { error: "Не удалось получить инвайт-ссылку" };
+  }
 }

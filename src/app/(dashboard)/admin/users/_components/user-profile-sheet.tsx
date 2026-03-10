@@ -51,7 +51,6 @@ export function UserProfileSheet({ open, onOpenChange, user }: UserProfileSheetP
       isTeacher: user.teachers.length > 0,
       isStudent: user.students.length > 0,
       isParent: user.parents.length > 0,
-      childrenIds: [] as string[],
     } as z.input<typeof updateUserSchema>,
     validators: {
       onChange: updateUserSchema,
@@ -68,7 +67,6 @@ export function UserProfileSheet({ open, onOpenChange, user }: UserProfileSheetP
           isTeacher: value.isTeacher,
           isStudent: value.isStudent,
           isParent: value.isParent,
-          childrenIds: value.childrenIds,
         });
         if ("error" in result) {
           toast.error(result.error);
@@ -84,16 +82,17 @@ export function UserProfileSheet({ open, onOpenChange, user }: UserProfileSheetP
 
   useEffect(() => {
     if (open) {
-      form.setFieldValue("id", user.id);
-      form.setFieldValue("surname", user.surname ?? "");
-      form.setFieldValue("name", user.name ?? "");
-      form.setFieldValue("patronymicName", user.patronymicName ?? "");
-      form.setFieldValue("email", user.email ?? "");
-      form.setFieldValue("systemRole", user.role);
-      form.setFieldValue("isTeacher", user.teachers.length > 0);
-      form.setFieldValue("isStudent", user.students.length > 0);
-      form.setFieldValue("isParent", user.parents.length > 0);
-      form.setFieldValue("childrenIds", []);
+      form.reset({
+        id: user.id,
+        surname: user.surname ?? "",
+        name: user.name ?? "",
+        patronymicName: user.patronymicName ?? "",
+        email: user.email ?? "",
+        systemRole: user.role as "ADMIN" | "USER",
+        isTeacher: user.teachers.length > 0,
+        isStudent: user.students.length > 0,
+        isParent: user.parents.length > 0,
+      });
     }
   }, [user, open, form]);
 
@@ -218,7 +217,7 @@ export function UserProfileSheet({ open, onOpenChange, user }: UserProfileSheetP
                     <Checkbox
                       checked={field.state.value}
                       onBlur={field.handleBlur}
-                      onCheckedChange={(checked) => field.handleChange(!!checked)}
+                      onCheckedChange={(checked) => field.handleChange(checked)}
                     />
                     <div>
                       <span className="text-sm font-medium">Учитель</span>
@@ -233,7 +232,7 @@ export function UserProfileSheet({ open, onOpenChange, user }: UserProfileSheetP
                     <Checkbox
                       checked={field.state.value}
                       onBlur={field.handleBlur}
-                      onCheckedChange={(checked) => field.handleChange(!!checked)}
+                      onCheckedChange={(checked) => field.handleChange(checked)}
                     />
                     <div>
                       <span className="text-sm font-medium">Ученик</span>
@@ -248,7 +247,7 @@ export function UserProfileSheet({ open, onOpenChange, user }: UserProfileSheetP
                     <Checkbox
                       checked={field.state.value}
                       onBlur={field.handleBlur}
-                      onCheckedChange={(checked) => field.handleChange(!!checked)}
+                      onCheckedChange={(checked) => field.handleChange(checked)}
                     />
                     <div>
                       <span className="text-sm font-medium">Родитель</span>

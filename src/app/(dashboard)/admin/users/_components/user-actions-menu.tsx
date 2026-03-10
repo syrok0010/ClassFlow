@@ -26,6 +26,10 @@ export function UserActionsMenu({ user, table }: { user: UserWithRoles; table: T
   const handleCopyInvite = async () => {
     try {
       const result = await getInviteTokenAction(user.id);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
       if (result.token) {
         const inviteUrl = `${window.location.origin}/invite/${result.token}`;
         await navigator.clipboard.writeText(inviteUrl);
@@ -37,9 +41,12 @@ export function UserActionsMenu({ user, table }: { user: UserWithRoles; table: T
   };
 
   const handleToggleStatus = async () => {
-    const newStatus = isDisabled ? "ACTIVE" : "DISABLED";
     try {
-      await toggleUserStatusAction(user.id, newStatus);
+      const result = await toggleUserStatusAction(user.id);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
       toast.success(isDisabled ? "Доступ восстановлен" : "Доступ заблокирован");
     } catch {
       toast.error("Ошибка при изменении статуса");

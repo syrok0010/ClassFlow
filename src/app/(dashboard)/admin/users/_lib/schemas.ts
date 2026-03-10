@@ -20,17 +20,12 @@ export const updateUserSchema = z.object({
   isTeacher: z.boolean(),
   isStudent: z.boolean(),
   isParent: z.boolean(),
-  childrenIds: z.array(z.string()),
 });
-
-export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
 export const deleteUserSchema = z.object({
   id: z.string(),
   confirmName: z.string().min(1, "Введите имя для подтверждения"),
 });
-
-export type DeleteUserInput = z.infer<typeof deleteUserSchema>;
 
 export const generateParentInviteSchema = z.object({
   studentId: z.string(),

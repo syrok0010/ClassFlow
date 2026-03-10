@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useCallback, useEffect, useState, KeyboardEvent } from "react";
+import { flushSync } from "react-dom";
 import { useForm } from "@tanstack/react-form";
 import { Input } from "@/components/ui/input";
 import {
@@ -63,12 +64,16 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
           const fullName = `${value.surname} ${value.name}`;
           toast.success(`${fullName} добавлен`);
 
-          if (result.inviteToken) {
-            setLastInviteToken(result.inviteToken);
-          }
-
-          form.reset();
-          setTimeout(() => surnameRef.current?.focus(), 50);
+          flushSync(() => {
+            if (result.inviteToken) {
+              setLastInviteToken(result.inviteToken);
+            }
+            form.reset();
+          });
+          
+          requestAnimationFrame(() => {
+            surnameRef.current?.focus();
+          });
         }
       } catch {
         toast.error("Ошибка при создании пользователя");
@@ -78,11 +83,11 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
 
   useEffect(() => {
     if (active) {
-      const timer = setTimeout(() => {
+      const frame = requestAnimationFrame(() => {
         surnameRef.current?.focus();
         rowRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 50);
-      return () => clearTimeout(timer);
+      });
+      return () => cancelAnimationFrame(frame);
     }
   }, [active]);
 
@@ -181,7 +186,7 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Отч."
+                    placeholder="Отчество"
                     className="h-8 text-sm w-32"
                     disabled={form.state.isSubmitting}
                   />
@@ -256,14 +261,14 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => { form.reset(); onDeactivate(); }}
+                onClick={() => { form.reset(); setLastInviteToken(null); onDeactivate(); }}
                 className="h-7 px-2.5"
               >
                 <X className="mr-1 h-3 w-3" />
                 Отмена
               </Button>
             </div>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
                Enter / Esc
             </span>
           </div>

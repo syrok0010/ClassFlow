@@ -4,8 +4,9 @@ import { useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
-  getFilteredRowModel,
+  getSortedRowModel,
   flexRender,
+  type SortingState,
 } from "@tanstack/react-table";
 import { useQueryState } from "nuqs";
 import { Search, UserPlus, X } from "lucide-react";
@@ -56,20 +57,27 @@ export function UsersTableClient({ users }: UsersTableClientProps) {
     user: UserWithRoles;
   } | null>(null);
 
+  const [sorting, setSorting] = useState<SortingState>([]);
+
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: users,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSorting,
+    state: {
+      sorting,
+    },
     meta: { setModal, setInviteId } as UserTableMeta,
   });
 
   const hasActiveFilters = search || domainRoleFilter !== "all" || statusFilter !== "all";
 
   const clearFilters = () => {
-    setSearch(null);
-    setDomainRoleFilter(null);
-    setStatusFilter(null);
+    void setSearch(null);
+    void setDomainRoleFilter(null);
+    void setStatusFilter(null);
   };
 
   const handleActivateSmartRow = () => setSmartRowActive(true);
@@ -89,7 +97,7 @@ export function UsersTableClient({ users }: UsersTableClientProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px] max-w-sm">
+        <div className="relative flex-1 min-w-60 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -122,7 +130,10 @@ export function UsersTableClient({ users }: UsersTableClientProps) {
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} style={{ width: header.getSize() }}>
+                  <TableHead 
+                    key={header.id}
+                    className={header.column.columnDef.meta?.headerClassName}
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -147,7 +158,10 @@ export function UsersTableClient({ users }: UsersTableClientProps) {
                   }
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell 
+                      key={cell.id}
+                      className={cell.column.columnDef.meta?.cellClassName}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
