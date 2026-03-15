@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { nextCookies } from "better-auth/next-js";
 import { prisma } from "./prisma";
 
 export const auth = betterAuth({
@@ -11,6 +12,14 @@ export const auth = betterAuth({
   },
   user: {
     additionalFields: {
+      surname: {
+        type: "string",
+        required: false,
+      },
+      patronymicName: {
+        type: "string",
+        required: false,
+      },
       role: {
         type: "string",
         required: true,
@@ -23,4 +32,5 @@ export const auth = betterAuth({
       },
     },
   },
+  plugins: [nextCookies()],
 });
