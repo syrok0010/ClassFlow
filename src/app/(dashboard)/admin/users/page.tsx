@@ -18,6 +18,7 @@ export default async function UsersPage(props: {
   const status = statusParam && statusParam !== "all" ? (statusParam as UserStatus) : undefined;
 
   const users = await getUsersAction({ search, domainRole, status });
+  const now = new Date();
 
-  return <UsersTableClient users={users} />;
+  return <UsersTableClient users={users} now={now} />;
 }

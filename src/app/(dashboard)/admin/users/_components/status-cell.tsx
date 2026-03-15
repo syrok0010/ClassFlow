@@ -1,6 +1,10 @@
 import type { UserWithRoles } from "../_lib/types";
 
-export function StatusCell({ user }: { user: UserWithRoles }) {
+export function StatusCell({ user, now }: { user: UserWithRoles; now?: Date }) {
+  const daysSince = now
+    ? Math.floor((now.getTime() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+
   if (user.status === "ACTIVE") {
     return (
       <div className="flex items-center gap-2">
@@ -14,9 +18,6 @@ export function StatusCell({ user }: { user: UserWithRoles }) {
   }
 
   if (user.status === "PENDING_INVITE") {
-    const daysSince = Math.floor(
-      (Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24)
-    );
     return (
       <div className="flex items-center gap-2">
         <span className="relative flex h-2.5 w-2.5">

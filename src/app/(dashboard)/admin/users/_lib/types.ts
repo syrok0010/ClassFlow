@@ -3,6 +3,7 @@ import type { UserStatus } from "@/generated/prisma/enums";
 import type { RowData } from "@tanstack/react-table";
 
 declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
     headerClassName?: string;
     cellClassName?: string;
@@ -55,4 +56,5 @@ export type UserTableMeta = {
     } | null
   ) => void;
   setInviteId: (id: string | null) => void;
+  now: Date;
 };

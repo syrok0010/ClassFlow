@@ -3,7 +3,7 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { UserWithRoles } from "../_lib/types";
+import type { UserWithRoles, UserTableMeta } from "../_lib/types";
 import { UserCell } from "./user-cell";
 import { RoleBadge, DomainRoleBadges } from "./role-badges";
 import { StatusCell } from "./status-cell";
@@ -74,7 +74,9 @@ export const columns: ColumnDef<UserWithRoles>[] = [
         </Button>
       );
     },
-    cell: ({ row }) => <StatusCell user={row.original} />,
+    cell: ({ row, table }) => (
+      <StatusCell user={row.original} now={(table.options.meta as UserTableMeta)?.now} />
+    ),
     meta: {
       headerClassName: "w-[20%]",
       cellClassName: "w-[20%]",

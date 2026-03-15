@@ -30,6 +30,7 @@ import type { UserWithRoles, UserTableMeta } from "../_lib/types";
 
 interface UsersTableClientProps {
   users: UserWithRoles[];
+  now: Date;
 }
 
 const DOMAIN_ROLE_OPTIONS = [
@@ -46,7 +47,7 @@ const STATUS_OPTIONS = [
   { value: "DISABLED", label: "Заблокированные" },
 ] as const;
 
-export function UsersTableClient({ users }: UsersTableClientProps) {
+export function UsersTableClient({ users, now }: UsersTableClientProps) {
   const [search, setSearch] = useQueryState("search", { defaultValue: "", shallow: false });
   const [domainRoleFilter, setDomainRoleFilter] = useQueryState("role", { defaultValue: "all", shallow: false });
   const [statusFilter, setStatusFilter] = useQueryState("status", { defaultValue: "all", shallow: false });
@@ -69,7 +70,7 @@ export function UsersTableClient({ users }: UsersTableClientProps) {
     state: {
       sorting,
     },
-    meta: { setModal, setInviteId } as UserTableMeta,
+    meta: { setModal, setInviteId, now } as UserTableMeta,
   });
 
   const hasActiveFilters = search || domainRoleFilter !== "all" || statusFilter !== "all";
