@@ -131,6 +131,7 @@ export function GroupsClient({ initialGroups, subjects }: Props) {
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
         onAddGroup={() => setIsAddingRow(true)}
+        isAddingRow={isAddingRow}
       />
 
       <GroupsTreeTable

@@ -9,7 +9,6 @@ import {
   getExpandedRowModel,
   flexRender,
   type ColumnDef,
-  type Row,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -52,6 +51,7 @@ import {
   Pencil,
   Trash2,
   UserPlus,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -473,7 +473,7 @@ function InlineCreateRow({
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="h-7 w-40"
+          className="h-7"
         />
       </TableCell>
       <TableCell>
@@ -501,7 +501,7 @@ function InlineCreateRow({
           value={grade}
           onChange={(e) => setGrade(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="h-7 w-20"
+          className="h-7"
         />
       </TableCell>
       <TableCell colSpan={2}>
@@ -530,37 +530,68 @@ function InlineRenameInput({
   onSave: (newName: string) => void;
   onCancel: () => void;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(false);
   const [value, setValue] = useState(defaultValue);
 
   useEffect(() => {
-    ref.current?.focus();
-    ref.current?.select();
+    // Skip the very first blur that fires when the dropdown menu closes
+    // and focus hasn't settled yet on our input.
+    requestAnimationFrame(() => {
+      mountedRef.current = true;
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
   }, []);
 
   const handleSave = () => {
-    onSave(value);
+    const trimmed = value.trim();
+    // If the name didn't change, just close the editor — no server call or toast
+    if (!trimmed || trimmed === defaultValue) {
+      onCancel();
+      return;
+    }
+    onSave(trimmed);
+  };
+
+  const handleBlur = (e: React.FocusEvent) => {
+    // Skip blur during initial mount (fixes subgroup rename instantly disappearing)
+    if (!mountedRef.current) return;
+    // If focus moved to the save button inside the same container, don't fire save
+    // (the button's onClick will handle it)
+    if (containerRef.current?.contains(e.relatedTarget as Node)) return;
+    handleSave();
   };
 
   return (
-    <Input
-      ref={ref}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") handleSave();
-        if (e.key === "Escape") onCancel();
-      }}
-      onBlur={handleSave}
-      className="h-7 min-w-[8rem] max-w-xs"
-    />
+    <div ref={containerRef} className="flex items-center gap-1">
+      <Input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") handleSave();
+          if (e.key === "Escape") onCancel();
+        }}
+        onBlur={handleBlur}
+        className="h-7 min-w-[8rem] max-w-xs"
+      />
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={handleSave}
+        title="Сохранить"
+      >
+        <Check className="size-3.5" />
+      </Button>
+    </div>
   );
 }
 
 // ─── Action Menu ─────────────────────────────────────────────────────────────
 
 function GroupActionMenu({
-  group,
   onRename,
   onManageStudents,
   onDelete,

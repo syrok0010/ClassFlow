@@ -11,7 +11,7 @@ import type { GroupWithDetails, StudentForAssignment, SubjectOption } from "./ty
 const GroupTypeEnum = z.enum(["CLASS", "KINDERGARTEN_GROUP", "SUBJECT_SUBGROUP", "ELECTIVE_GROUP"]);
 
 const createGroupSchema = z.object({
-  name: z.string().min(1, "Название обязательно").max(100),
+  name: z.string().min(1, "Название обязательно").max(512),
   type: GroupTypeEnum,
   grade: z.number().int().min(1).max(11).nullable().optional(),
   parentId: z.string().nullable().optional(),
@@ -19,7 +19,7 @@ const createGroupSchema = z.object({
 });
 
 const updateGroupSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name: z.string().min(1).max(512).optional(),
   type: GroupTypeEnum.optional(),
   grade: z.number().int().min(1).max(11).nullable().optional(),
 });
@@ -36,7 +36,7 @@ const splitSchema = z.object({
   subjectId: z.string().min(1),
   subgroups: z.array(
     z.object({
-      name: z.string().min(1),
+      name: z.string().min(1).max(512),
       studentIds: z.array(z.string()),
     })
   ).min(1),
@@ -197,6 +197,53 @@ export async function getStudentsForAssignment(
     availableWhere = {
       id: { notIn: [...assignedIds] },
     };
+  } else if (groupType === "SUBJECT_SUBGROUP") {
+    // For subgroups: available = parent class students not in THIS subgroup
+    // AND not in any sibling subgroup (same parent + same subject).
+    const subgroup = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: { parentId: true, subjectId: true },
+    });
+
+    if (subgroup?.parentId) {
+      // Get parent class students
+      const parentStudentRows = await prisma.studentGroups.findMany({
+        where: { groupId: subgroup.parentId },
+        select: { studentId: true },
+      });
+      const parentStudentIds = parentStudentRows.map((r) => r.studentId);
+
+      // Find sibling subgroups (same parent + same subject, excluding self)
+      const siblingSubgroups = await prisma.group.findMany({
+        where: {
+          parentId: subgroup.parentId,
+          subjectId: subgroup.subjectId,
+          id: { not: groupId },
+          type: "SUBJECT_SUBGROUP",
+        },
+        select: { id: true },
+      });
+      const siblingIds = siblingSubgroups.map((s) => s.id);
+
+      // Get students already assigned to sibling subgroups
+      const siblingStudentRows = siblingIds.length > 0
+        ? await prisma.studentGroups.findMany({
+            where: { groupId: { in: siblingIds } },
+            select: { studentId: true },
+          })
+        : [];
+      const siblingStudentIds = siblingStudentRows.map((r) => r.studentId);
+
+      availableWhere = {
+        id: {
+          in: parentStudentIds,
+          notIn: [...assignedIds, ...siblingStudentIds],
+        },
+      };
+    } else {
+      // Fallback: no parent — show nothing as available
+      availableWhere = { id: { in: [] } };
+    }
   }
 
   const studentInclude = {
@@ -351,4 +398,127 @@ export async function getSubjects(): Promise<SubjectOption[]> {
     orderBy: { name: "asc" },
   });
   return subjects;
+}
+
+// ─── Get Subgroup Editor Data (for editing subgroup student distribution) ────
+
+export type SubgroupEditorData = {
+  parentGroupId: string;
+  parentGroupName: string;
+  subjectId: string;
+  subjectName: string;
+  /** All students in the parent class */
+  students: StudentForAssignment[];
+  /** Sibling subgroups (same parent + same subject), each with assigned student IDs */
+  sibling: { id: string; name: string; studentIds: string[] }[];
+};
+
+export async function getSubgroupEditorData(
+  subgroupId: string
+): Promise<SubgroupEditorData> {
+  idSchema.parse(subgroupId);
+
+  // Load the subgroup to find parentId + subjectId
+  const subgroup = await prisma.group.findUniqueOrThrow({
+    where: { id: subgroupId },
+    include: {
+      parentGroup: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true } },
+    },
+  });
+
+  if (!subgroup.parentId || !subgroup.subjectId) {
+    throw new Error("Subgroup must have a parent and subject");
+  }
+
+  // Load all sibling subgroups (same parent + same subject)
+  const siblings = await prisma.group.findMany({
+    where: {
+      parentId: subgroup.parentId,
+      subjectId: subgroup.subjectId,
+      type: "SUBJECT_SUBGROUP",
+    },
+    select: {
+      id: true,
+      name: true,
+      studentGroups: { select: { studentId: true } },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  // Load all students in the parent class
+  const parentStudents = await prisma.student.findMany({
+    where: {
+      studentGroups: { some: { groupId: subgroup.parentId } },
+    },
+    include: {
+      user: {
+        select: { id: true, name: true, surname: true, patronymicName: true },
+      },
+      studentGroups: {
+        include: {
+          group: { select: { name: true, type: true } },
+        },
+      },
+    },
+    orderBy: { user: { surname: "asc" } },
+  });
+
+  const students: StudentForAssignment[] = parentStudents.map((s) => ({
+    id: s.id,
+    user: s.user,
+    currentGroups: s.studentGroups.map(
+      (sg: { groupId: string; group: { name: string; type: GroupType } }) => ({
+        groupId: sg.groupId,
+        group: sg.group,
+      })
+    ),
+  }));
+
+  return {
+    parentGroupId: subgroup.parentId,
+    parentGroupName: subgroup.parentGroup?.name ?? "",
+    subjectId: subgroup.subjectId,
+    subjectName: subgroup.subject?.name ?? "",
+    students,
+    sibling: siblings.map((s) => ({
+      id: s.id,
+      name: s.name,
+      studentIds: s.studentGroups.map((sg) => sg.studentId),
+    })),
+  };
+}
+
+// ─── Save Subgroup Redistribution ───────────────────────────────────────────
+
+const redistributeSchema = z.object({
+  /** Map of subgroupId -> studentIds */
+  assignments: z.record(z.string(), z.array(z.string())),
+});
+
+export async function saveSubgroupRedistribution(
+  assignments: Record<string, string[]>
+) {
+  const validated = redistributeSchema.parse({ assignments });
+
+  const subgroupIds = Object.keys(validated.assignments);
+
+  await prisma.$transaction([
+    // Remove all existing student assignments from these subgroups
+    prisma.studentGroups.deleteMany({
+      where: { groupId: { in: subgroupIds } },
+    }),
+    // Create new assignments
+    prisma.studentGroups.createMany({
+      data: subgroupIds.flatMap((groupId) =>
+        (validated.assignments[groupId] ?? []).map((studentId) => ({
+          studentId,
+          groupId,
+        }))
+      ),
+      skipDuplicates: true,
+    }),
+  ]);
+
+  revalidatePath("/admin/groups");
 }

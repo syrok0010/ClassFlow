@@ -17,6 +17,7 @@ type Props = {
   searchQuery: string;
   onSearchQueryChange: (v: string) => void;
   onAddGroup: () => void;
+  isAddingRow: boolean;
 };
 
 export function GroupsToolbar({
@@ -25,6 +26,7 @@ export function GroupsToolbar({
   searchQuery,
   onSearchQueryChange,
   onAddGroup,
+  isAddingRow,
 }: Props) {
   const filterItems = [
     { value: "ALL", label: "Все типы" },
@@ -64,10 +66,12 @@ export function GroupsToolbar({
       </div>
 
       <div className="ml-auto">
-        <Button onClick={onAddGroup}>
-          <Plus className="size-4" data-icon="inline-start" />
-          Добавить класс/группу
-        </Button>
+        {!isAddingRow && (
+          <Button onClick={onAddGroup}>
+            <Plus className="size-4" data-icon="inline-start" />
+            Добавить класс/группу
+          </Button>
+        )}
       </div>
     </div>
   );

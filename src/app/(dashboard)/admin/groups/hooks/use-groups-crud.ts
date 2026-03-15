@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { GroupType } from "@/generated/prisma/client";
-import type { GroupWithDetails, StudentForAssignment } from "../types";
+import type { GroupWithDetails } from "../types";
 import {
   createGroupAction,
   updateGroupAction,
