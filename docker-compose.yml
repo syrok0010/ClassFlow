@@ -3,6 +3,7 @@ services:
     image: postgres:17
     restart: always
     network_mode: bridge
+    user: "1000:1000"
     environment:
       POSTGRES_USER: prisma
       POSTGRES_PASSWORD: prisma_password
