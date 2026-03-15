@@ -45,10 +45,6 @@ async function main() {
         }
     });
 
-    const admin2 = await prisma.user.create({
-        data: { email: 'admin2@classflow.local', role: 'ADMIN', status: 'ACTIVE', name: 'Елена', surname: 'Директорова', patronymicName: 'Петровна' }
-    });
-
     // 2. Users — Teachers (ACTIVE)
     const t1User = await prisma.user.create({ data: { email: 'teacher1@classflow.local', role: 'USER', status: 'ACTIVE', name: 'Иван', surname: 'Иванов', patronymicName: 'Иванович' } });
     const t2User = await prisma.user.create({ data: { email: 'teacher2@classflow.local', role: 'USER', status: 'ACTIVE', name: 'Пётр', surname: 'Петров', patronymicName: 'Петрович' } });
