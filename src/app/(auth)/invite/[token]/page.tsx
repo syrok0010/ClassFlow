@@ -50,8 +50,8 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           }}
         >
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold tracking-tight text-center">Активация аккаунта</CardTitle>
-            <CardDescription className="text-center">
+            <CardTitle className="text-2xl font-bold tracking-tight">Активация аккаунта</CardTitle>
+            <CardDescription>
               Заполните свои данные и установите пароль для входа.
             </CardDescription>
           </CardHeader>

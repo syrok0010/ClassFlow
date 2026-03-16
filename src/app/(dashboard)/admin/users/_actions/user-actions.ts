@@ -11,6 +11,7 @@ import {
   generateParentInviteSchema,
   linkExistingParentSchema,
   updateUserSchema,
+  UpdateUserInput,
 } from "../_lib/schemas";
 import { userInclude, type UsersFilterState } from "../_lib/types";
 
@@ -209,17 +210,7 @@ export async function linkExistingParentAction(
   return { success: true };
 }
 
-export async function updateUserAction(input: {
-  id: string;
-  surname: string;
-  name: string;
-  patronymicName?: string;
-  email?: string;
-  systemRole: "ADMIN" | "USER";
-  isTeacher: boolean;
-  isStudent: boolean;
-  isParent: boolean;
-}) {
+export async function updateUserAction(input: UpdateUserInput) {
   const parsed = updateUserSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Ошибка валидации" };

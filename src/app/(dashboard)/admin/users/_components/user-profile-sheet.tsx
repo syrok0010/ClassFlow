@@ -11,13 +11,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { toast } from "sonner";
 import { updateUserAction } from "../_actions/user-actions";
 import { updateUserSchema } from "../_lib/schemas";
-import type { z } from "zod/v4";
+import { FormField } from "@/components/ui/form-field";
 import type { UserWithRoles } from "../_lib/types";
 
 interface UserProfileSheetProps {
@@ -31,14 +30,6 @@ const SYSTEM_ROLE_OPTIONS = [
   { value: "ADMIN", label: "Администратор" }
 ] as const;
 
-const getErrorMessage = (error: unknown) => {
-  if (typeof error === "string") return error;
-  if (error && typeof error === "object" && "message" in error) {
-    return String(error.message);
-  }
-  return null;
-};
-
 export function UserProfileSheet({ open, onOpenChange, user }: UserProfileSheetProps) {
   const form = useForm({
     defaultValues: {
@@ -51,23 +42,13 @@ export function UserProfileSheet({ open, onOpenChange, user }: UserProfileSheetP
       isTeacher: user.teachers.length > 0,
       isStudent: user.students.length > 0,
       isParent: user.parents.length > 0,
-    } as z.input<typeof updateUserSchema>,
+    },
     validators: {
       onChange: updateUserSchema,
     },
     onSubmit: async ({ value }) => {
       try {
-        const result = await updateUserAction({
-          id: value.id,
-          surname: value.surname,
-          name: value.name,
-          patronymicName: value.patronymicName,
-          email: value.email,
-          systemRole: value.systemRole,
-          isTeacher: value.isTeacher,
-          isStudent: value.isStudent,
-          isParent: value.isParent,
-        });
+        const result = await updateUserAction(value);
         if ("error" in result) {
           toast.error(result.error);
         } else {
@@ -121,67 +102,37 @@ export function UserProfileSheet({ open, onOpenChange, user }: UserProfileSheetP
             <div className="space-y-3">
               <form.Field name="surname">
                 {(field) => (
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Фамилия</label>
-                    <Input 
-                      name={field.name}
-                      value={field.state.value} 
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)} 
-                      className={field.state.meta.errors.length ? "border-destructive text-destructive" : ""}
-                    />
-                    {field.state.meta.errors.length ? (
-                      <p className="text-[10px] text-destructive mt-1">{getErrorMessage(field.state.meta.errors[0])}</p>
-                    ) : null}
-                  </div>
+                  <FormField
+                    field={field}
+                    label="Фамилия"
+                    required
+                  />
                 )}
               </form.Field>
               <form.Field name="name">
                 {(field) => (
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Имя</label>
-                    <Input 
-                      name={field.name}
-                      value={field.state.value} 
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)} 
-                      className={field.state.meta.errors.length ? "border-destructive text-destructive" : ""}
-                    />
-                    {field.state.meta.errors.length ? (
-                      <p className="text-[10px] text-destructive mt-1">{getErrorMessage(field.state.meta.errors[0])}</p>
-                    ) : null}
-                  </div>
+                  <FormField
+                    field={field}
+                    label="Имя"
+                    required
+                  />
                 )}
               </form.Field>
               <form.Field name="patronymicName">
                 {(field) => (
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Отчество</label>
-                    <Input 
-                      name={field.name}
-                      value={field.state.value} 
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)} 
-                    />
-                  </div>
+                  <FormField
+                    field={field}
+                    label="Отчество"
+                  />
                 )}
               </form.Field>
               <form.Field name="email">
                 {(field) => (
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">E-mail</label>
-                    <Input 
-                      name={field.name}
-                      type="email"
-                      value={field.state.value} 
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)} 
-                      className={field.state.meta.errors.length ? "border-destructive text-destructive" : ""}
-                    />
-                    {field.state.meta.errors.length ? (
-                      <p className="text-[10px] text-destructive mt-1">{getErrorMessage(field.state.meta.errors[0])}</p>
-                    ) : null}
-                  </div>
+                  <FormField
+                    field={field}
+                    label="E-mail"
+                    type="email"
+                  />
                 )}
               </form.Field>
             </div>
@@ -320,14 +271,19 @@ export function UserProfileSheet({ open, onOpenChange, user }: UserProfileSheetP
           <Button variant="ghost" onClick={() => handleOpenChange(false)}>
             Отмена
           </Button>
-          <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting, state.isValid]}>
-            {([canSubmit, isSubmitting, isValid]) => (
+          <form.Subscribe selector={(state) => ({ 
+            canSubmit: state.canSubmit, 
+            isSubmitting: state.isSubmitting, 
+            isValid: state.isValid, 
+            isPristine: state.isPristine 
+          })}>
+            {({ canSubmit, isSubmitting, isValid, isPristine }) => (
               <Button 
                 onClick={(e) => {
                   e.preventDefault();
                   void form.handleSubmit();
                 }} 
-                disabled={!canSubmit || isSubmitting || !isValid}
+                disabled={!canSubmit || isSubmitting || !isValid || isPristine}
               >
                 {isSubmitting ? "Сохранение..." : "Сохранить"}
               </Button>
