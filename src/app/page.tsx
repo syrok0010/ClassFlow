@@ -12,7 +12,7 @@ export default async function Home() {
   }
 
   const REDIRECT_ROUTES: Record<string, string> = {
-    ADMIN: "/admin/users",
+    ADMIN: "/admin",
     TEACHER: "/teacher",
     STUDENT: "/student",
     PARENT: "/parent",

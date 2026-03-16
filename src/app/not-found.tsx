@@ -1,19 +1,10 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { FileQuestion, Home } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/back-button";
-import { auth } from "@/lib/auth";
 
 export default async function NotFound() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  const homeURL = session?.user?.role === "ADMIN" ? "/admin" : "/";
-  const homeLabel = session?.user?.role === "ADMIN" ? "В панель управления" : "На главную";
-
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4 text-center font-sans">
       <div className="relative mb-8">
@@ -33,10 +24,10 @@ export default async function NotFound() {
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <BackButton />
-        <Link href={homeURL}>
+        <Link href="/">
           <Button size="lg" className="gap-2 shadow-lg shadow-primary/20 px-6">
             <Home className="h-4 w-4" />
-            {homeLabel}
+            На главную
           </Button>
         </Link>
       </div>

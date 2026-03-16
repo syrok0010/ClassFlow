@@ -4,11 +4,11 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useForm } from "@tanstack/react-form";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
+import { loginSchema } from "@/lib/validations/auth";
+import { FormField } from "@/components/ui/form-field";
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +18,9 @@ export default function LoginPage() {
     defaultValues: {
       email: "",
       password: "",
+    },
+    validators: {
+      onChange: loginSchema,
     },
     onSubmit: async ({ value }) => {
       setError(null);
@@ -29,7 +32,7 @@ export default function LoginPage() {
       if (authError) {
         setError(authError.message || "Неверный email или пароль");
       } else {
-        router.push("/admin");
+        router.push("/");
         router.refresh();
       }
     },
@@ -51,45 +54,32 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5 py-6">
-            <div className="grid gap-2">
-              <Label htmlFor="email">Электронная почта</Label>
-              <form.Field name="email">
-                {(field) => (
-                  <Input
-                    id="email"
-                    type="email"
-                    required
-                    placeholder="name@example.com"
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    disabled={form.state.isSubmitting}
-                    className="focus-visible:ring-primary"
-                  />
-                )}
-              </form.Field>
-            </div>
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Пароль</Label>
-              </div>
-              <form.Field name="password">
-                {(field) => (
-                  <Input
-                    id="password"
-                    type="password"
-                    required
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    disabled={form.state.isSubmitting}
-                    className="focus-visible:ring-primary"
-                  />
-                )}
-              </form.Field>
-            </div>
+            <form.Field name="email">
+              {(field) => (
+                <FormField
+                  field={field}
+                  label="Электронная почта"
+                  type="email"
+                  placeholder="name@example.com"
+                  required
+                />
+              )}
+            </form.Field>
+
+            <form.Field name="password">
+              {(field) => (
+                <FormField
+                  field={field}
+                  label="Пароль"
+                  type="password"
+                  required
+                />
+              )}
+            </form.Field>
+
             {error && (
-              <div className="rounded-md bg-destructive/15 p-3">
+              <div className="rounded-md bg-destructive/15 p-3 flex items-start gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
                 <p className="text-sm text-destructive font-medium">{error}</p>
               </div>
             )}
@@ -97,14 +87,14 @@ export default function LoginPage() {
           <CardFooter>
             <form.Subscribe selector={(state) => ({ 
               isSubmitting: state.isSubmitting, 
-              email: state.values.email, 
-              password: state.values.password 
+              canSubmit: state.canSubmit,
+              isPristine: state.isPristine
             })}>
               {(state) => (
                 <Button 
                   type="submit" 
                   className="w-full font-semibold" 
-                  disabled={state.isSubmitting || !state.email || !state.password}
+                  disabled={state.isSubmitting || !state.canSubmit || state.isPristine}
                 >
                   {state.isSubmitting ? (
                     <>

@@ -3,16 +3,18 @@
 import { prisma } from "@/lib/prisma"
 import { hashPassword } from "better-auth/crypto"
 
+import { activateInviteSchema, type ActivateInviteInput } from "@/lib/validations/auth"
+
 export async function activateInviteAction(
   token: string,
-  data: {
-    name?: string;
-    surname?: string;
-    patronymicName?: string;
-    email?: string;
-    password: string;
-  }
+  data: ActivateInviteInput
 ) {
+  const validation = activateInviteSchema.safeParse(data);
+  if (!validation.success) {
+    return { success: false, error: "Некорректные данные формы" };
+  }
+
+  const validatedData = validation.data;
   const verification = await prisma.verification.findFirst({
     where: { value: token, expiresAt: { gt: new Date() } }
   });
@@ -29,15 +31,15 @@ export async function activateInviteAction(
   }
 
   try {
-     const hashedPassword = await hashPassword(data.password);
+     const hashedPassword = await hashPassword(validatedData.password);
      
      await prisma.user.update({
        where: { id: userId },
        data: {
-         name: data.name || user.name,
-         surname: data.surname || user.surname,
-         patronymicName: data.patronymicName || user.patronymicName,
-         email: data.email || user.email,
+         name: validatedData.name,
+         surname: validatedData.surname,
+         patronymicName: validatedData.patronymicName,
+         email: validatedData.email,
          status: "ACTIVE"
        }
      });
