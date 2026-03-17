@@ -56,5 +56,4 @@ export type UserTableMeta = {
     } | null
   ) => void;
   setInviteId: (id: string | null) => void;
-  now: Date;
 };
