@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, GroupType, SubjectType, AvailabilityType, Role, UserStatus } from '../src/generated/prisma/client.js';
+import { PrismaClient } from '../src/generated/prisma/client.js';
+import { hashPassword } from "better-auth/crypto";
 
 const connectionString = `${process.env.DATABASE_URL}`;
 const adapter = new PrismaPg({ connectionString });
@@ -32,8 +33,16 @@ async function main() {
     const admin1 = await prisma.user.create({
         data: { email: 'admin1@classflow.local', role: 'ADMIN', status: 'ACTIVE', name: 'Сергей', surname: 'Сироткин', patronymicName: 'Владимирович' }
     });
-    const admin2 = await prisma.user.create({
-        data: { email: 'admin2@classflow.local', role: 'ADMIN', status: 'ACTIVE', name: 'Елена', surname: 'Директорова', patronymicName: 'Петровна' }
+
+    // We need to create an Account for Better Auth to allow password login
+    const password = await hashPassword('admin1234');
+    await prisma.account.create({
+        data: {
+            userId: admin1.id,
+            accountId: admin1.id,
+            providerId: 'credential',
+            password: password
+        }
     });
 
     // 2. Users — Teachers (ACTIVE)
@@ -68,12 +77,12 @@ async function main() {
     // Link parents to students
     await prisma.studentParents.createMany({
         data: [
-            { parentId: parent1.id, studentId: student1.id }, // Ольга Кузнецова -> Михаил Кузнецов
-            { parentId: parent2.id, studentId: student2.id }, // Андрей Соколов -> Александр Соколов
+            { parentId: parent1.id, studentId: student1.id },
+            { parentId: parent2.id, studentId: student2.id },
         ]
     });
 
-    // 5. Teacher who is also a Parent (cross-role: Анна Смирнова is parent of Мария Попова)
+    // 5. Teacher who is also a Parent
     const teacherAsParent = await prisma.parent.create({ data: { userId: t3User.id } });
     await prisma.studentParents.create({
         data: { parentId: teacherAsParent.id, studentId: student3.id }

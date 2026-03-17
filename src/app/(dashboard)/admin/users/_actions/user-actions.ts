@@ -11,6 +11,7 @@ import {
   generateParentInviteSchema,
   linkExistingParentSchema,
   updateUserSchema,
+  UpdateUserInput,
 } from "../_lib/schemas";
 import { userInclude, type UsersFilterState } from "../_lib/types";
 
@@ -30,13 +31,13 @@ async function createInviteToken(
   ttlDays: number
 ) {
   const token = generateInviteToken();
-  const expires = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
 
-  await tx.verificationToken.create({
+  await tx.verification.create({
     data: {
       identifier: userId,
-      token,
-      expires,
+      value: token,
+      expiresAt,
     },
   });
 
@@ -97,7 +98,7 @@ export async function createUserAction(input: CreateUserInput) {
           surname: data.surname,
           name: data.name,
           patronymicName: data.patronymicName || null,
-          email: data.email || null,
+          email: data.email || `pending-${randomBytes(4).toString("hex")}@classflow.local`,
           role: data.domainRole === "admin" ? "ADMIN" : "USER",
           status: "PENDING_INVITE",
           ...(data.domainRole === "student" ? { students: { create: {} } } : {}),
@@ -148,6 +149,7 @@ export async function generateParentInviteAction(studentId: string) {
   const result = await prisma.$transaction(async (tx) => {
     const parentUser = await tx.user.create({
       data: {
+        email: `parent-pending-${randomBytes(4).toString("hex")}@classflow.local`,
         status: "PENDING_INVITE",
         role: "USER",
       },
@@ -208,17 +210,7 @@ export async function linkExistingParentAction(
   return { success: true };
 }
 
-export async function updateUserAction(input: {
-  id: string;
-  surname: string;
-  name: string;
-  patronymicName?: string;
-  email?: string;
-  systemRole: "ADMIN" | "USER";
-  isTeacher: boolean;
-  isStudent: boolean;
-  isParent: boolean;
-}) {
+export async function updateUserAction(input: UpdateUserInput) {
   const parsed = updateUserSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Ошибка валидации" };
@@ -355,16 +347,16 @@ export async function getInviteTokenAction(userId: string) {
       return { error: "Пользователь не найден" };
     }
 
-    const token = await prisma.verificationToken.findFirst({
+    const verification = await prisma.verification.findFirst({
       where: {
         identifier: userId,
-        expires: { gt: new Date() },
+        expiresAt: { gt: new Date() },
       },
-      orderBy: { expires: "desc" },
+      orderBy: { expiresAt: "desc" },
     });
 
-    if (token) {
-      return { token: token.token };
+    if (verification) {
+      return { token: verification.value };
     }
 
     const newToken = await createInviteToken(prisma, userId, STAFF_INVITE_TTL_DAYS);

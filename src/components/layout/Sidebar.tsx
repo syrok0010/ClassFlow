@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart,
   Building2,
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/popover";
 import { useSidebarStore } from "@/stores/sidebar-store";
 import { SIDEBAR_WIDTH } from "./constants";
+import { authClient, useSession } from "@/lib/auth-client";
 
 const ADMIN_LINKS = [
   { name: "Дашборд", href: "/admin", icon: LayoutDashboard },
@@ -38,10 +39,28 @@ const ADMIN_LINKS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);
   const { isPinned, togglePin, setPin } = useSidebarStore();
+  const { data: session, isPending } = useSession();
 
   const isExpanded = isHovered || isPinned;
+
+  const handleLogout = async () => {
+    await authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/login");
+          router.refresh();
+        },
+      },
+    });
+  };
+
+  const user = session?.user;
+  const initials = user?.name ? `${user.surname?.[0] || ""}${user.name?.[0] || ""}`.toUpperCase() : "CF";
+  const fullName = user ? [user.surname, user.name].filter(Boolean).join(" ") : "Загрузка...";
+  const roleDisplay = user?.role === "ADMIN" ? "Администратор" : "Пользователь";
 
   return (
     <aside
@@ -146,11 +165,11 @@ export function Sidebar() {
       <div className="border-t p-3">
         <Popover>
           <PopoverTrigger
-            className="w-full h-12 flex items-center justify-start overflow-hidden rounded-md hover:bg-muted transition-colors cursor-pointer text-foreground"
+            className="w-full h-12 flex items-center justify-start overflow-hidden rounded-md hover:bg-muted transition-colors cursor-pointer text-left text-foreground px-0"
           >
               <div className="flex w-10 shrink-0 items-center justify-center h-full ml-1">
                 <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-medium text-xs">
-                  AD
+                  {isPending ? "..." : initials}
                 </div>
               </div>
               <div
@@ -159,11 +178,11 @@ export function Sidebar() {
                   isExpanded ? "max-w-40 opacity-100 ml-2" : "max-w-0 opacity-0 ml-0",
                 )}
               >
-                <span className="text-sm font-medium whitespace-nowrap truncate w-35 text-left">
-                  Admin User
+                <span className="text-sm font-medium whitespace-nowrap truncate w-35">
+                  {fullName}
                 </span>
-                <span className="text-xs text-muted-foreground whitespace-nowrap truncate w-35 text-left leading-none mt-0.5">
-                  Administrator
+                <span className="text-xs text-muted-foreground whitespace-nowrap truncate w-35 leading-none mt-0.5">
+                  {roleDisplay}
                 </span>
               </div>
           </PopoverTrigger>
@@ -177,6 +196,7 @@ export function Sidebar() {
               </Button>
               <Button
                 variant="ghost"
+                onClick={handleLogout}
                 className="w-full justify-start h-9 px-2 text-sm font-normal text-destructive hover:text-destructive hover:bg-destructive/10"
               >
                 <LogOut className="mr-2 h-4 w-4" />
