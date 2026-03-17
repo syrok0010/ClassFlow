@@ -3,17 +3,22 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
+  SegmentedControl,
+  type SegmentedControlOption,
+} from "@/components/ui/segmented-control";
 import { Plus, Search } from "lucide-react";
 
+type FilterType = "ALL" | "CLASS" | "ELECTIVE_GROUP";
+
+const FILTER_OPTIONS: readonly SegmentedControlOption<FilterType>[] = [
+  { value: "ALL", label: "Все" },
+  { value: "CLASS", label: "Классы" },
+  { value: "ELECTIVE_GROUP", label: "Кружки" },
+] as const;
+
 type Props = {
-  filterType: "ALL" | "CLASS" | "ELECTIVE_GROUP";
-  onFilterTypeChange: (v: "ALL" | "CLASS" | "ELECTIVE_GROUP") => void;
+  filterType: FilterType;
+  onFilterTypeChange: (v: FilterType) => void;
   searchQuery: string;
   onSearchQueryChange: (v: string) => void;
   onAddGroup: () => void;
@@ -28,32 +33,14 @@ export function GroupsToolbar({
   onAddGroup,
   isAddingRow,
 }: Props) {
-  const filterItems = [
-    { value: "ALL", label: "Все типы" },
-    { value: "CLASS", label: "Только классы" },
-    { value: "ELECTIVE_GROUP", label: "Только кружки" },
-  ] as const;
-
   return (
     <div className="flex items-center gap-3">
-      <Select
+      <SegmentedControl
         value={filterType}
-        onValueChange={(v) =>
-          onFilterTypeChange(v as "ALL" | "CLASS" | "ELECTIVE_GROUP")
-        }
-        items={filterItems}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="Тип группы" />
-        </SelectTrigger>
-        <SelectContent>
-          {filterItems.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        onChange={onFilterTypeChange}
+        options={FILTER_OPTIONS}
+        size="sm"
+      />
 
       <div className="relative flex-1 max-w-sm">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />

@@ -30,7 +30,6 @@ export function GroupsClient({ initialGroups, subjects }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddingRow, setIsAddingRow] = useState(false);
 
-  // Transfer list state
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferGroup, setTransferGroup] = useState<GroupWithDetails | null>(null);
   const [transferStudents, setTransferStudents] = useState<{
@@ -39,12 +38,9 @@ export function GroupsClient({ initialGroups, subjects }: Props) {
   } | null>(null);
   const [transferLoading, setTransferLoading] = useState(false);
 
-  // Splitter state
   const [splitterOpen, setSplitterOpen] = useState(false);
   const [splitterGroup, setSplitterGroup] = useState<GroupWithDetails | null>(null);
   const [splitterStudents, setSplitterStudents] = useState<StudentForAssignment[]>([]);
-
-  // ─── Filter groups ──────────────────────────────────────────────────
 
   const filteredGroups = groups.filter((g) => {
     if (filterType === "CLASS" && g.type !== "CLASS") return false;
@@ -59,8 +55,6 @@ export function GroupsClient({ initialGroups, subjects }: Props) {
     }
     return true;
   });
-
-  // ─── Open Transfer List ────────────────────────────────────────────
 
   const handleOpenTransferList = useCallback(
     async (group: GroupWithDetails) => {
@@ -88,8 +82,6 @@ export function GroupsClient({ initialGroups, subjects }: Props) {
     },
     [transferGroup, transferStudents, handleTransferSave]
   );
-
-  // ─── Open Splitter ─────────────────────────────────────────────────
 
   const handleOpenSplitter = useCallback(
     async (group: GroupWithDetails) => {

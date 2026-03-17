@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { Shuffle, ArrowRight, Loader2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useForm } from "@tanstack/react-form";
+import { z } from "zod/v4";
 import {
   DndContext,
   closestCenter,
@@ -31,7 +33,6 @@ import {
   DragOverlay,
   type DragStartEvent,
   type DragEndEvent,
-  type DragOverEvent,
   useDroppable,
 } from "@dnd-kit/core";
 import {
@@ -56,7 +57,7 @@ type Props = {
 
 type SplitterStep = "settings" | "distribute";
 
-type BucketMap = Record<string, string[]>; // bucketId -> studentIds
+type BucketMap = Record<string, string[]>;
 
 export function SplitterDialog({
   open,
@@ -67,29 +68,44 @@ export function SplitterDialog({
   onSave,
 }: Props) {
   const [step, setStep] = useState<SplitterStep>("settings");
-  const [subjectId, setSubjectId] = useState<string>("");
-  const [subgroupCount, setSubgroupCount] = useState(2);
   const [saving, setSaving] = useState(false);
 
-  // Step 2 state
   const [buckets, setBuckets] = useState<BucketMap>({});
   const [activeId, setActiveId] = useState<string | null>(null);
+
+
+  const settingsForm = useForm({
+    defaultValues: {
+      subjectId: "",
+      subgroupCount: 2,
+    },
+    onSubmit: ({ value }) => {
+      const keys = Array.from(
+        { length: value.subgroupCount },
+        (_, i) => `group-${i + 1}`
+      );
+      const initial: BucketMap = {};
+      keys.forEach((key) => (initial[key] = []));
+      setBuckets(initial);
+      setStep("distribute");
+    },
+  });
 
   const subjectItems = useMemo(
     () => Object.fromEntries(subjects.map((s) => [s.id, s.name])),
     [subjects]
   );
 
+  const subjectId = settingsForm.state.values.subjectId;
+  const subgroupCount = settingsForm.state.values.subgroupCount;
   const subjectName = subjects.find((s) => s.id === subjectId)?.name ?? "";
 
-  // Generate bucket keys
   const bucketKeys = useMemo(
     () =>
       Array.from({ length: subgroupCount }, (_, i) => `group-${i + 1}`),
     [subgroupCount]
   );
 
-  // Unassigned students = those not in any bucket
   const assignedIds = useMemo(() => {
     const set = new Set<string>();
     Object.values(buckets).forEach((ids) => ids.forEach((id) => set.add(id)));
@@ -103,7 +119,6 @@ export function SplitterDialog({
 
   const allAssigned = unassignedStudents.length === 0 && students.length > 0;
 
-  // ─── DnD Sensors ────────────────────────────────────────────────────
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -132,21 +147,27 @@ export function SplitterDialog({
 
     const studentId = active.id as string;
     const targetBucket = (over.data.current?.bucketId as string) ?? (over.id as string);
-
-    // Only handle if dropping onto a bucket
-    if (!bucketKeys.includes(targetBucket)) return;
-
     const sourceBucket = findBucketOfStudent(studentId);
+
+    if (targetBucket === "unassigned") {
+      if (sourceBucket) {
+        setBuckets((prev) => ({
+          ...prev,
+          [sourceBucket]: prev[sourceBucket].filter((id) => id !== studentId),
+        }));
+      }
+      return;
+    }
+
+    if (!bucketKeys.includes(targetBucket)) return;
 
     setBuckets((prev) => {
       const next = { ...prev };
 
-      // Remove from source if it was in a bucket
       if (sourceBucket) {
         next[sourceBucket] = next[sourceBucket].filter((id) => id !== studentId);
       }
 
-      // Add to target
       if (!next[targetBucket]) next[targetBucket] = [];
       if (!next[targetBucket].includes(studentId)) {
         next[targetBucket] = [...next[targetBucket], studentId];
@@ -155,8 +176,6 @@ export function SplitterDialog({
       return next;
     });
   };
-
-  // ─── Auto-split ─────────────────────────────────────────────────────
 
   const handleAutoSplit = () => {
     const shuffled = [...students].sort(() => Math.random() - 0.5);
@@ -167,16 +186,6 @@ export function SplitterDialog({
       newBuckets[bucketKey].push(s.id);
     });
     setBuckets(newBuckets);
-  };
-
-  // ─── Steps ──────────────────────────────────────────────────────────
-
-  const handleNextStep = () => {
-    // Initialize empty buckets
-    const initial: BucketMap = {};
-    bucketKeys.forEach((key) => (initial[key] = []));
-    setBuckets(initial);
-    setStep("distribute");
   };
 
   const handleBack = () => {
@@ -197,11 +206,9 @@ export function SplitterDialog({
         subjectId,
         subgroups: subgroupsData,
       });
-      // Reset
       setStep("settings");
       setBuckets({});
-      setSubjectId("");
-      setSubgroupCount(2);
+      settingsForm.reset();
     } finally {
       setSaving(false);
     }
@@ -211,8 +218,7 @@ export function SplitterDialog({
     if (!v) {
       setStep("settings");
       setBuckets({});
-      setSubjectId("");
-      setSubgroupCount(2);
+      settingsForm.reset();
     }
     onOpenChange(v);
   };
@@ -237,43 +243,74 @@ export function SplitterDialog({
 
         {step === "settings" ? (
           <div className="flex flex-col gap-4 py-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Предмет</label>
-              <Select
-                value={subjectId}
-                onValueChange={(v) => setSubjectId(v ?? "")}
-                items={subjectItems}
-              >
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Выберите предмет" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <settingsForm.Field
+              name="subjectId"
+              validators={{
+                onBlur: z.string().min(1, "Выберите предмет"),
+              }}
+            >
+              {(field) => (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Предмет</label>
+                  <Select
+                    value={field.state.value}
+                    onValueChange={(v) => {
+                      field.handleChange(v ?? "");
+                      field.handleBlur();
+                    }}
+                    items={subjectItems}
+                  >
+                    <SelectTrigger className="w-64">
+                      <SelectValue placeholder="Выберите предмет" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subjects.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
+                    <p className="text-xs text-destructive">
+                      {field.state.meta.errors.flatMap((e) => e ? [e.message] : []).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+            </settingsForm.Field>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">
-                Количество подгрупп
-              </label>
-              <Input
-                type="number"
-                min={2}
-                max={10}
-                value={subgroupCount}
-                onChange={(e) =>
-                  setSubgroupCount(
-                    Math.max(2, Math.min(10, parseInt(e.target.value) || 2))
-                  )
-                }
-                className="w-24"
-              />
-            </div>
+            <settingsForm.Field
+              name="subgroupCount"
+              validators={{
+                onChange: z.number().int().min(2, "Минимум 2").max(10, "Максимум 10"),
+              }}
+            >
+              {(field) => (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">
+                    Количество подгрупп
+                  </label>
+                  <Input
+                    type="number"
+                    min={2}
+                    max={10}
+                    value={field.state.value}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      field.handleChange(isNaN(v) ? 2 : Math.max(2, Math.min(10, v)));
+                    }}
+                    onBlur={field.handleBlur}
+                    className="w-24"
+                  />
+                  {field.state.meta.errors.length > 0 && (
+                    <p className="text-xs text-destructive">
+                      {field.state.meta.errors.flatMap((e) => e ? [e.message] : []).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+            </settingsForm.Field>
 
             <DialogFooter>
               <Button
@@ -282,13 +319,17 @@ export function SplitterDialog({
               >
                 Отмена
               </Button>
-              <Button
-                disabled={!subjectId}
-                onClick={handleNextStep}
-              >
-                Далее
-                <ArrowRight className="size-4" data-icon="inline-end" />
-              </Button>
+              <settingsForm.Subscribe selector={(s) => s.canSubmit}>
+                {(canSubmit) => (
+                  <Button
+                    disabled={!canSubmit}
+                    onClick={() => settingsForm.handleSubmit()}
+                  >
+                    Далее
+                    <ArrowRight className="size-4" data-icon="inline-end" />
+                  </Button>
+                )}
+              </settingsForm.Subscribe>
             </DialogFooter>
           </div>
         ) : (
@@ -319,7 +360,6 @@ export function SplitterDialog({
                   gridTemplateColumns: `1fr repeat(${subgroupCount}, 1fr)`,
                 }}
               >
-                {/* Unassigned column */}
                 <DroppableBucket
                   id="unassigned"
                   title={`Нераспределенные (${unassignedStudents.length})`}
@@ -340,7 +380,6 @@ export function SplitterDialog({
                   )}
                 </DroppableBucket>
 
-                {/* Target group columns */}
                 {bucketKeys.map((key, i) => {
                   const bucketStudents = (buckets[key] ?? [])
                     .map((id) => students.find((s) => s.id === id))
@@ -408,14 +447,10 @@ export function SplitterDialog({
   );
 }
 
-// ─── Helper ──────────────────────────────────────────────────────────────────
-
 function getDisplayName(s: StudentForAssignment) {
   const parts = [s.user.surname, s.user.name].filter(Boolean);
   return parts.length > 0 ? parts.join(" ") : "Без имени";
 }
-
-// ─── Droppable Bucket ────────────────────────────────────────────────────────
 
 function DroppableBucket({
   id,
@@ -458,8 +493,6 @@ function DroppableBucket({
     </div>
   );
 }
-
-// ─── Draggable Student Card ──────────────────────────────────────────────────
 
 function DraggableStudent({
   student,

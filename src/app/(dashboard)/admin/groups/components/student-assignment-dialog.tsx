@@ -67,11 +67,9 @@ export function StudentAssignmentDialog({
   const [leftClassFilter, setLeftClassFilter] = useState("ALL");
   const [saving, setSaving] = useState(false);
 
-  // Track local moves (added / removed from the group)
   const [movedToRight, setMovedToRight] = useState<Set<string>>(new Set());
   const [movedToLeft, setMovedToLeft] = useState<Set<string>>(new Set());
 
-  // Compute current left/right lists based on initial data + local moves
   const leftStudents = useMemo(() => {
     if (!students) return [];
     const all = [
@@ -90,7 +88,6 @@ export function StudentAssignmentDialog({
     return all;
   }, [students, movedToRight, movedToLeft]);
 
-  // Filter left students
   const filteredLeftStudents = useMemo(() => {
     return leftStudents.filter((s) => {
       if (leftSearch) {
@@ -105,7 +102,6 @@ export function StudentAssignmentDialog({
     });
   }, [leftStudents, leftSearch, leftClassFilter]);
 
-  // Available classes for filter dropdown
   const availableClasses = useMemo(() => {
     const classes = new Set<string>();
     leftStudents.forEach((s) => {
@@ -164,7 +160,6 @@ export function StudentAssignmentDialog({
     setSaving(true);
     try {
       await onSave([...movedToRight], [...movedToLeft]);
-      // Reset local state
       setMovedToRight(new Set());
       setMovedToLeft(new Set());
       setLeftSelected(new Set());
@@ -190,7 +185,6 @@ export function StudentAssignmentDialog({
 
   const hasChanges = movedToRight.size > 0 || movedToLeft.size > 0;
 
-  // Items map for class filter select
   const classFilterItems = useMemo(() => {
     const map: Record<string, string> = { ALL: "Все" };
     availableClasses.forEach((cls) => { map[cls] = cls; });
@@ -220,7 +214,6 @@ export function StudentAssignmentDialog({
           </div>
         ) : (
           <div className="grid grid-cols-[1fr_auto_1fr] gap-3 min-h-[350px]">
-            {/* Left column - Available */}
             <div className="flex flex-col gap-2">
               <p className="text-sm font-medium">
                 {isElective ? "Все ученики" : "Свободные ученики"}{" "}
@@ -229,7 +222,6 @@ export function StudentAssignmentDialog({
                 </span>
               </p>
 
-              {/* Filters */}
               <div className="flex gap-1.5">
                 <div className="relative flex-1">
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
@@ -261,7 +253,6 @@ export function StudentAssignmentDialog({
                 )}
               </div>
 
-              {/* Student List */}
               <div className="flex-1 overflow-y-auto rounded-lg border max-h-[280px]">
                 {filteredLeftStudents.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">
@@ -288,7 +279,6 @@ export function StudentAssignmentDialog({
               </div>
             </div>
 
-            {/* Transfer buttons */}
             <div className="flex flex-col items-center justify-center gap-2">
               <Button
                 variant="outline"
@@ -319,7 +309,6 @@ export function StudentAssignmentDialog({
               </Button>
             </div>
 
-            {/* Right column - Assigned */}
             <div className="flex flex-col gap-2">
               <p className="text-sm font-medium">
                 Состав {group?.name ?? ""}{" "}
@@ -327,7 +316,7 @@ export function StudentAssignmentDialog({
                   ({rightStudents.length})
                 </span>
               </p>
-              <div className="h-7" /> {/* Spacer for alignment */}
+              <div className="h-7" />
               <div className="flex-1 overflow-y-auto rounded-lg border max-h-[280px]">
                 {rightStudents.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">
@@ -376,8 +365,6 @@ export function StudentAssignmentDialog({
   );
 }
 
-// ─── Student Row ─────────────────────────────────────────────────────────────
-
 function StudentRow({
   student,
   selected,
@@ -401,9 +388,8 @@ function StudentRow({
     >
       <Checkbox
         checked={selected}
-        onCheckedChange={onToggle}
-        onClick={(e) => e.stopPropagation()}
-        className="size-3.5"
+        tabIndex={-1}
+        className="size-3.5 pointer-events-none"
       />
       <span className="flex-1 truncate">
         {getStudentDisplayName(student)}

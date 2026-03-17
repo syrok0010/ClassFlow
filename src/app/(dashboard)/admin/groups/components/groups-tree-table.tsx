@@ -10,6 +10,8 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
+import { useForm } from "@tanstack/react-form";
+import { z } from "zod/v4";
 import {
   Table,
   TableBody,
@@ -126,12 +128,9 @@ export function GroupsTreeTable({
     }
   };
 
-  // Double-click to rename handler
   const handleDoubleClickName = (group: GroupWithDetails) => {
     handleStartRename(group);
   };
-
-  // ─── TanStack Table columns ────────────────────────────────────────
 
   const columns = useMemo<ColumnDef<GroupWithDetails>[]>(
     () => [
@@ -244,7 +243,6 @@ export function GroupsTreeTable({
         cell: ({ row }) => {
           const group = row.original;
           if (row.depth > 0) {
-            // Show subject for subgroups
             if (group.subject) {
               return (
                 <span className="text-xs text-muted-foreground">
@@ -277,7 +275,6 @@ export function GroupsTreeTable({
           const group = row.original;
           return (
             <GroupActionMenu
-              group={group}
               onRename={() => handleStartRename(group)}
               onManageStudents={() => onOpenTransferList(group)}
               onDelete={() => setConfirmDeleteGroup(group)}
@@ -286,7 +283,6 @@ export function GroupsTreeTable({
         },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [editingId, onOpenTransferList, onOpenSplitter]
   );
 
@@ -364,7 +360,6 @@ export function GroupsTreeTable({
         </Table>
       </div>
 
-      {/* Delete confirmation AlertDialog */}
       <AlertDialog
         open={!!confirmDeleteGroup}
         onOpenChange={(open) => {
@@ -417,8 +412,6 @@ export function GroupsTreeTable({
   );
 }
 
-// ─── Inline Create Row ───────────────────────────────────────────────────────
-
 function InlineCreateRow({
   onSave,
   onCancel,
@@ -430,33 +423,34 @@ function InlineCreateRow({
   }) => Promise<boolean>;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState<GroupType>("CLASS");
-  const [grade, setGrade] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
+
+  const form = useForm({
+    defaultValues: {
+      name: "",
+      type: "CLASS" as GroupType,
+      grade: "" as string,
+    },
+    onSubmit: async ({ value }) => {
+      const success = await onSave({
+        name: value.name.trim(),
+        type: value.type,
+        grade: value.grade ? parseInt(value.grade, 10) : null,
+      });
+      if (success) {
+        onCancel();
+      }
+    },
+  });
 
   useEffect(() => {
     nameRef.current?.focus();
   }, []);
 
-  const handleSubmit = async () => {
-    if (!name.trim()) return;
-    const success = await onSave({
-      name: name.trim(),
-      type,
-      grade: grade ? parseInt(grade, 10) : null,
-    });
-    if (success) {
-      setName("");
-      setGrade("");
-      nameRef.current?.focus();
-    }
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      handleSubmit();
+      form.handleSubmit();
     }
     if (e.key === "Escape") {
       onCancel();
@@ -467,59 +461,106 @@ function InlineCreateRow({
     <TableRow className="bg-primary/5 animate-in fade-in-0 slide-in-from-top-1">
       <TableCell />
       <TableCell>
-        <Input
-          ref={nameRef}
-          placeholder="Название (напр. 10А)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="h-7"
-        />
-      </TableCell>
-      <TableCell>
-        <Select
-          value={type}
-          onValueChange={(v) => setType(v as GroupType)}
-          items={{
-            CLASS: "Класс",
-            ELECTIVE_GROUP: "Кружок",
+        <form.Field
+          name="name"
+          validators={{
+            onBlur: z.string().min(1, "Название обязательно").max(512),
           }}
         >
-          <SelectTrigger size="sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="CLASS">Класс</SelectItem>
-            <SelectItem value="ELECTIVE_GROUP">Кружок</SelectItem>
-          </SelectContent>
-        </Select>
+          {(field) => (
+            <div>
+              <Input
+                ref={nameRef}
+                placeholder="Название (напр. 10А)"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                onKeyDown={handleKeyDown}
+                className={cn("h-7", field.state.meta.errors.length > 0 && "border-destructive")}
+              />
+              {field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
+                <p className="text-xs text-destructive mt-1">
+                  {field.state.meta.errors.flatMap((e) => e ? [e.message] : []).join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+        </form.Field>
       </TableCell>
       <TableCell>
-        <Input
-          placeholder="Параллель"
-          type="number"
-          value={grade}
-          onChange={(e) => setGrade(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="h-7"
-        />
+        <form.Field name="type">
+          {(field) => (
+            <Select
+              value={field.state.value}
+              onValueChange={(v) => field.handleChange(v as GroupType)}
+              items={{
+                CLASS: "Класс",
+                ELECTIVE_GROUP: "Кружок",
+              }}
+            >
+              <SelectTrigger size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CLASS">Класс</SelectItem>
+                <SelectItem value="ELECTIVE_GROUP">Кружок</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </form.Field>
+      </TableCell>
+      <TableCell>
+        <form.Field
+          name="grade"
+          validators={{
+            onBlur: z.string().refine(
+              (v) => v === "" || (/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 11),
+              "1–11"
+            ),
+          }}
+        >
+          {(field) => (
+            <div>
+              <Input
+                placeholder="Параллель"
+                type="number"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                onKeyDown={handleKeyDown}
+                className={cn("h-7", field.state.meta.errors.length > 0 && "border-destructive")}
+              />
+              {field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
+                <p className="text-xs text-destructive mt-1">
+                  {field.state.meta.errors.flatMap((e) => e ? [e.message] : []).join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+        </form.Field>
       </TableCell>
       <TableCell colSpan={2}>
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={handleSubmit} disabled={!name.trim()}>
-            Сохранить
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onCancel}>
-            Отмена
-          </Button>
-        </div>
+        <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting, s.values.name] as const}>
+          {([canSubmit, isSubmitting, name]) => (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => form.handleSubmit()}
+                disabled={!name.trim() || isSubmitting}
+              >
+                Сохранить
+              </Button>
+              <Button size="sm" variant="ghost" onClick={onCancel}>
+                Отмена
+              </Button>
+            </div>
+          )}
+        </form.Subscribe>
       </TableCell>
       <TableCell />
     </TableRow>
   );
 }
-
-// ─── Inline Rename Input ─────────────────────────────────────────────────────
 
 function InlineRenameInput({
   defaultValue,
@@ -536,8 +577,6 @@ function InlineRenameInput({
   const [value, setValue] = useState(defaultValue);
 
   useEffect(() => {
-    // Skip the very first blur that fires when the dropdown menu closes
-    // and focus hasn't settled yet on our input.
     requestAnimationFrame(() => {
       mountedRef.current = true;
       inputRef.current?.focus();
@@ -547,7 +586,6 @@ function InlineRenameInput({
 
   const handleSave = () => {
     const trimmed = value.trim();
-    // If the name didn't change, just close the editor — no server call or toast
     if (!trimmed || trimmed === defaultValue) {
       onCancel();
       return;
@@ -556,10 +594,7 @@ function InlineRenameInput({
   };
 
   const handleBlur = (e: React.FocusEvent) => {
-    // Skip blur during initial mount (fixes subgroup rename instantly disappearing)
     if (!mountedRef.current) return;
-    // If focus moved to the save button inside the same container, don't fire save
-    // (the button's onClick will handle it)
     if (containerRef.current?.contains(e.relatedTarget as Node)) return;
     handleSave();
   };
@@ -589,14 +624,11 @@ function InlineRenameInput({
   );
 }
 
-// ─── Action Menu ─────────────────────────────────────────────────────────────
-
 function GroupActionMenu({
   onRename,
   onManageStudents,
   onDelete,
 }: {
-  group: GroupWithDetails;
   onRename: () => void;
   onManageStudents: () => void;
   onDelete: () => void;

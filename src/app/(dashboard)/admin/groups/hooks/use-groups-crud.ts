@@ -13,14 +13,13 @@ import {
   getStudentsForAssignment,
   getGroupStudents,
   createSubgroupsFromSplit,
+  getGroupsTree,
 } from "../actions";
 import { toast } from "sonner";
 
 export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
   const router = useRouter();
   const [groups, setGroups] = useState<GroupWithDetails[]>(initialGroups);
-
-  // ─── Create group (inline) ─────────────────────────────────────────
 
   const handleCreateGroup = useCallback(
     async (data: { name: string; type: GroupType; grade?: number | null }) => {
@@ -43,23 +42,19 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     []
   );
 
-  // ─── Rename group ──────────────────────────────────────────────────
-
   const handleRenameGroup = useCallback(
     async (id: string, name: string) => {
       try {
         await updateGroupAction(id, { name });
-        setGroups((prev) =>
-          prev.map((g) => {
-            if (g.id === id) return { ...g, name };
-            return {
-              ...g,
-              subGroups: g.subGroups.map((s) =>
-                s.id === id ? { ...s, name } : s
-              ),
-            };
-          })
-        );
+
+        const renameInTree = (groups: GroupWithDetails[]): GroupWithDetails[] =>
+          groups.map((g) => ({
+            ...g,
+            ...(g.id === id ? { name } : {}),
+            subGroups: renameInTree(g.subGroups),
+          }));
+
+        setGroups(renameInTree);
         toast.success("Группа переименована");
       } catch {
         toast.error("Ошибка при переименовании");
@@ -67,8 +62,6 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     },
     []
   );
-
-  // ─── Delete group ──────────────────────────────────────────────────
 
   const handleDeleteGroup = useCallback(
     async (group: GroupWithDetails) => {
@@ -89,8 +82,6 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     []
   );
 
-  // ─── Transfer List ─────────────────────────────────────────────────
-
   const handleTransferSave = useCallback(
     async (
       transferGroup: GroupWithDetails,
@@ -102,25 +93,45 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
         if (toAssign.length > 0) {
           await assignStudentsToGroupAction(transferGroup.id, toAssign);
         }
+
+        let updatedCounts: Record<string, number> | null = null;
         if (toRemove.length > 0) {
-          await removeStudentsFromGroupAction(transferGroup.id, toRemove);
+          updatedCounts = await removeStudentsFromGroupAction(
+            transferGroup.id,
+            toRemove
+          );
         }
-        const newCount = currentAssignedCount + toAssign.length - toRemove.length;
-        setGroups((prev) =>
-          prev.map((g) => {
-            if (g.id === transferGroup.id) {
-              return { ...g, _count: { studentGroups: newCount } };
+
+        setGroups((prev) => {
+          const applyCount = (g: GroupWithDetails): GroupWithDetails => {
+            if (updatedCounts && g.id in updatedCounts) {
+              const serverCount = updatedCounts[g.id];
+              const assignDelta =
+                g.id === transferGroup.id ? toAssign.length : 0;
+              return {
+                ...g,
+                _count: { studentGroups: serverCount + assignDelta },
+                subGroups: g.subGroups.map(applyCount),
+              };
             }
-            return {
-              ...g,
-              subGroups: g.subGroups.map((s) =>
-                s.id === transferGroup.id
-                  ? { ...s, _count: { studentGroups: newCount } }
-                  : s
-              ),
-            };
-          })
-        );
+
+            if (g.id === transferGroup.id) {
+              return {
+                ...g,
+                _count: {
+                  studentGroups:
+                    currentAssignedCount + toAssign.length - toRemove.length,
+                },
+                subGroups: g.subGroups.map(applyCount),
+              };
+            }
+
+            return { ...g, subGroups: g.subGroups.map(applyCount) };
+          };
+
+          return prev.map(applyCount);
+        });
+
         toast.success("Состав группы обновлен");
       } catch {
         toast.error("Ошибка при обновлении состава");
@@ -136,8 +147,6 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     []
   );
 
-  // ─── Splitter ──────────────────────────────────────────────────────
-
   const loadGroupStudents = useCallback(async (groupId: string) => {
     return getGroupStudents(groupId);
   }, []);
@@ -150,11 +159,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     }) => {
       try {
         await createSubgroupsFromSplit(data);
-        // Use router.refresh() instead of window.location.reload()
-        // to update server data without breaking SPA navigation
         router.refresh();
-        // Also update local state by refetching
-        const { getGroupsTree } = await import("../actions");
         const freshGroups = await getGroupsTree();
         setGroups(freshGroups);
         toast.success("Подгруппы созданы");

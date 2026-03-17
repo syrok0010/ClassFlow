@@ -41,7 +41,7 @@ type Props = {
   onSave: (assignments: Record<string, string[]>) => Promise<void>;
 };
 
-type BucketMap = Record<string, string[]>; // subgroupId -> studentIds
+type BucketMap = Record<string, string[]>;
 
 export function SubgroupEditorDialog({
   open,
@@ -53,15 +53,10 @@ export function SubgroupEditorDialog({
   const [saving, setSaving] = useState(false);
   const [buckets, setBuckets] = useState<BucketMap>({});
   const [activeId, setActiveId] = useState<string | null>(null);
-  // Track which data object was used to initialize buckets, so we
-  // re-initialize when fresh data arrives (not just on first load).
   const [initializedFrom, setInitializedFrom] = useState<SubgroupEditorData | null>(null);
-
-  // Initialize buckets from server data when it arrives
   const students = useMemo(() => data?.students ?? [], [data]);
   const siblings = useMemo(() => data?.sibling ?? [], [data]);
 
-  // When data changes (dialog opens with new data), initialize buckets
   useEffect(() => {
     if (data && data !== initializedFrom) {
       const initial: BucketMap = {};
@@ -73,7 +68,6 @@ export function SubgroupEditorDialog({
     }
   }, [data, initializedFrom]);
 
-  // Compute assigned set
   const assignedIds = useMemo(() => {
     const set = new Set<string>();
     Object.values(buckets).forEach((ids) => ids.forEach((id) => set.add(id)));
@@ -86,8 +80,6 @@ export function SubgroupEditorDialog({
   );
 
   const siblingIds = useMemo(() => siblings.map((s) => s.id), [siblings]);
-
-  // ─── DnD ──────────────────────────────────────────────────────────────
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -118,7 +110,6 @@ export function SubgroupEditorDialog({
     const targetBucket =
       (over.data.current?.bucketId as string) ?? (over.id as string);
 
-    // Handle dropping back to unassigned
     if (targetBucket === "unassigned") {
       const sourceBucket = findBucketOfStudent(studentId);
       if (sourceBucket) {
@@ -130,7 +121,6 @@ export function SubgroupEditorDialog({
       return;
     }
 
-    // Only handle if dropping onto a valid sibling subgroup bucket
     if (!siblingIds.includes(targetBucket)) return;
 
     const sourceBucket = findBucketOfStudent(studentId);
@@ -153,8 +143,6 @@ export function SubgroupEditorDialog({
     });
   };
 
-  // ─── Auto-split ─────────────────────────────────────────────────────
-
   const handleAutoSplit = () => {
     const shuffled = [...students].sort(() => Math.random() - 0.5);
     const newBuckets: BucketMap = {};
@@ -165,8 +153,6 @@ export function SubgroupEditorDialog({
     });
     setBuckets(newBuckets);
   };
-
-  // ─── Save ───────────────────────────────────────────────────────────
 
   const handleSave = async () => {
     setSaving(true);
@@ -185,7 +171,6 @@ export function SubgroupEditorDialog({
     onOpenChange(v);
   };
 
-  // Check if anything changed from the original data
   const hasChanges = useMemo(() => {
     if (!data) return false;
     for (const sib of data.sibling) {
@@ -248,7 +233,6 @@ export function SubgroupEditorDialog({
                   gridTemplateColumns: `1fr repeat(${siblings.length}, 1fr)`,
                 }}
               >
-                {/* Unassigned column */}
                 <DroppableBucket
                   id="unassigned"
                   title={`Нераспределённые (${unassignedStudents.length})`}
@@ -269,7 +253,6 @@ export function SubgroupEditorDialog({
                   )}
                 </DroppableBucket>
 
-                {/* Subgroup columns */}
                 {siblings.map((sib) => {
                   const bucketStudents = (buckets[sib.id] ?? [])
                     .map((id) => students.find((s) => s.id === id))
@@ -335,14 +318,10 @@ export function SubgroupEditorDialog({
   );
 }
 
-// ─── Helper ──────────────────────────────────────────────────────────────────
-
 function getDisplayName(s: StudentForAssignment) {
   const parts = [s.user.surname, s.user.name].filter(Boolean);
   return parts.length > 0 ? parts.join(" ") : "Без имени";
 }
-
-// ─── Droppable Bucket ────────────────────────────────────────────────────────
 
 function DroppableBucket({
   id,
@@ -385,8 +364,6 @@ function DroppableBucket({
     </div>
   );
 }
-
-// ─── Draggable Student Card ──────────────────────────────────────────────────
 
 function DraggableStudent({
   student,
