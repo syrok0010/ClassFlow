@@ -9,6 +9,8 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      BETTER_AUTH_SECRET: ci-e2e-not-for-production-secret-32chars
     services:
       postgres:
         image: postgres:17
