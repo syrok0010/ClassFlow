@@ -143,6 +143,7 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
                 {(field) => (
                   <div className="relative group">
                     <Input
+                      data-testid="smart-row-surname"
                       ref={surnameRef}
                       name={field.name}
                       value={field.state.value}
@@ -174,6 +175,7 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
                         field.state.meta.errors.length ? "border-destructive ring-destructive/20 ring-2" : "group-hover:border-primary/50"
                       )}
                       disabled={form.state.isSubmitting}
+                      data-testid="smart-row-name"
                     />
                   </div>
                 )}
@@ -235,6 +237,7 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
                 )}
                 disabled={form.state.isSubmitting}
                 type="email"
+                data-testid="smart-row-email"
               />
             )}
           </form.Field>

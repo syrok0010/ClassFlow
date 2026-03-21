@@ -1,0 +1,72 @@
+name: E2E Playwright
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BETTER_AUTH_SECRET: ci-e2e-not-for-production-secret-32chars
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: prisma
+          POSTGRES_PASSWORD: prisma_password
+          POSTGRES_DB: classflow_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prisma -d classflow_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: postgresql://prisma:prisma_password@127.0.0.1:5432/classflow_e2e
+
+      - name: Run E2E tests (prod mode)
+        run: pnpm test:e2e:prod
+        env:
+          CI: true
+          NODE_ENV: test
+          DATABASE_URL: postgresql://prisma:prisma_password@127.0.0.1:5432/classflow_e2e
+          DATABASE_URL_E2E: postgresql://prisma:prisma_password@127.0.0.1:5432/classflow_e2e
+          BETTER_AUTH_URL: http://127.0.0.1:3000
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
