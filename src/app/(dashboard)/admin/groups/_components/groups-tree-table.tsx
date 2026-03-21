@@ -1,8 +1,6 @@
-"use client";
-
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import type { GroupType } from "@/generated/prisma/client";
-import type { GroupWithDetails } from "../types";
+import type { GroupWithDetails } from "../_lib/types";
 import {
   useReactTable,
   getCoreRowModel,
@@ -57,7 +55,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Props = {
+interface GroupsTreeTableProps {
   groups: GroupWithDetails[];
   isAddingRow: boolean;
   onCancelAddRow: () => void;
@@ -70,7 +68,7 @@ type Props = {
   onDeleteGroup: (group: GroupWithDetails) => Promise<void>;
   onOpenTransferList: (group: GroupWithDetails) => void;
   onOpenSplitter: (group: GroupWithDetails) => void;
-};
+}
 
 const TYPE_LABELS: Record<string, string> = {
   CLASS: "Класс",
@@ -95,26 +93,29 @@ export function GroupsTreeTable({
   onDeleteGroup,
   onOpenTransferList,
   onOpenSplitter,
-}: Props) {
+}: GroupsTreeTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteGroup, setConfirmDeleteGroup] =
     useState<GroupWithDetails | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleStartRename = (group: GroupWithDetails) => {
+  const handleStartRename = useCallback((group: GroupWithDetails) => {
     setEditingId(group.id);
-  };
+  }, []);
 
-  const handleSaveRename = async (newName: string) => {
-    if (editingId && newName.trim()) {
-      await onRenameGroup(editingId, newName.trim());
-    }
-    setEditingId(null);
-  };
+  const handleSaveRename = useCallback(
+    async (newName: string) => {
+      if (editingId && newName.trim()) {
+        await onRenameGroup(editingId, newName.trim());
+      }
+      setEditingId(null);
+    },
+    [editingId, onRenameGroup]
+  );
 
-  const handleCancelRename = () => {
+  const handleCancelRename = useCallback(() => {
     setEditingId(null);
-  };
+  }, []);
 
   const handleConfirmDelete = async () => {
     if (confirmDeleteGroup) {
@@ -128,9 +129,9 @@ export function GroupsTreeTable({
     }
   };
 
-  const handleDoubleClickName = (group: GroupWithDetails) => {
+  const handleDoubleClickName = useCallback((group: GroupWithDetails) => {
     handleStartRename(group);
-  };
+  }, [handleStartRename]);
 
   const columns = useMemo<ColumnDef<GroupWithDetails>[]>(
     () => [
@@ -283,7 +284,15 @@ export function GroupsTreeTable({
         },
       },
     ],
-    [editingId, onOpenTransferList, onOpenSplitter]
+    [
+      editingId,
+      handleCancelRename,
+      handleDoubleClickName,
+      handleSaveRename,
+      handleStartRename,
+      onOpenTransferList,
+      onOpenSplitter,
+    ]
   );
 
   const table = useReactTable({
@@ -540,8 +549,8 @@ function InlineCreateRow({
         </form.Field>
       </TableCell>
       <TableCell colSpan={2}>
-        <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting, s.values.name] as const}>
-          {([canSubmit, isSubmitting, name]) => (
+          <form.Subscribe selector={(s) => [s.isSubmitting, s.values.name] as const}>
+          {([isSubmitting, name]) => (
             <div className="flex items-center gap-2">
               <Button
                 size="sm"

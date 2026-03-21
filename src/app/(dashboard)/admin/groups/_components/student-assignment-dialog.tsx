@@ -1,35 +1,21 @@
-"use client";
-
-import { useState, useMemo } from "react";
-import type { GroupWithDetails, StudentForAssignment } from "../types";
+import {useMemo, useState} from "react";
+import type {GroupWithDetails, StudentForAssignment} from "../_lib/types";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
-import {
-  ChevronRight,
-  ChevronLeft,
-  ChevronsRight,
-  Search,
-  Loader2,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import {Button} from "@/components/ui/button";
+import {Input} from "@/components/ui/input";
+import {Checkbox} from "@/components/ui/checkbox";
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from "@/components/ui/select";
+import {ChevronLeft, ChevronRight, ChevronsRight, Loader2, Search,} from "lucide-react";
+import {cn} from "@/lib/utils";
 
-type Props = {
+interface StudentAssignmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   group: GroupWithDetails | null;
@@ -39,7 +25,7 @@ type Props = {
   } | null;
   loading: boolean;
   onSave: (toAssign: string[], toRemove: string[]) => Promise<void>;
-};
+}
 
 function getStudentDisplayName(s: StudentForAssignment) {
   const parts = [s.user.surname, s.user.name, s.user.patronymicName].filter(
@@ -60,7 +46,7 @@ export function StudentAssignmentDialog({
   students,
   loading,
   onSave,
-}: Props) {
+}: StudentAssignmentDialogProps) {
   const [leftSelected, setLeftSelected] = useState<Set<string>>(new Set());
   const [rightSelected, setRightSelected] = useState<Set<string>>(new Set());
   const [leftSearch, setLeftSearch] = useState("");
@@ -71,21 +57,17 @@ export function StudentAssignmentDialog({
   const [movedToLeft, setMovedToLeft] = useState<Set<string>>(new Set());
 
   const leftStudents = useMemo(() => {
-    if (!students) return [];
-    const all = [
+    return !students ? [] : [
       ...students.available.filter((s) => !movedToRight.has(s.id)),
       ...students.assigned.filter((s) => movedToLeft.has(s.id)),
     ];
-    return all;
   }, [students, movedToRight, movedToLeft]);
 
   const rightStudents = useMemo(() => {
-    if (!students) return [];
-    const all = [
+    return !students ? [] : [
       ...students.assigned.filter((s) => !movedToLeft.has(s.id)),
       ...students.available.filter((s) => movedToRight.has(s.id)),
     ];
-    return all;
   }, [students, movedToRight, movedToLeft]);
 
   const filteredLeftStudents = useMemo(() => {

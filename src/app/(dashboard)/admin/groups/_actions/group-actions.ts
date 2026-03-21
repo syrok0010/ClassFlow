@@ -1,10 +1,10 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
-import { z } from "zod/v4";
-import type { GroupType } from "@/generated/prisma/client";
-import type { GroupWithDetails, StudentForAssignment, SubjectOption } from "./types";
+import {prisma} from "@/lib/prisma";
+import {revalidatePath} from "next/cache";
+import {z} from "zod/v4";
+import type {GroupType} from "@/generated/prisma/client";
+import type {GroupWithDetails, StudentForAssignment, SubjectOption,} from "../_lib/types";
 
 const GroupTypeEnum = z.enum(["CLASS", "KINDERGARTEN_GROUP", "SUBJECT_SUBGROUP", "ELECTIVE_GROUP"]);
 
@@ -40,7 +40,46 @@ const splitSchema = z.object({
   ).min(1),
 });
 
-export async function getGroupsTree(): Promise<GroupWithDetails[]> {
+type GroupsTreeFilters = {
+  search?: string;
+  type?: GroupType;
+};
+
+function filterGroupsTree(
+  groups: GroupWithDetails[],
+  filters: GroupsTreeFilters
+): GroupWithDetails[] {
+  const search = filters.search?.trim().toLowerCase();
+
+  const filterNode = (node: GroupWithDetails): GroupWithDetails | null => {
+    const filteredSubGroups = node.subGroups
+      .map(filterNode)
+      .filter((group): group is GroupWithDetails => group !== null);
+
+    const matchesSearch =
+      !search ||
+      node.name.toLowerCase().includes(search) ||
+      filteredSubGroups.length > 0;
+    const matchesType = !filters.type || node.type === filters.type;
+
+    if (!matchesSearch || !matchesType) {
+      return null;
+    }
+
+    return {
+      ...node,
+      subGroups: filteredSubGroups,
+    };
+  };
+
+  return groups
+    .map(filterNode)
+    .filter((group): group is GroupWithDetails => group !== null);
+}
+
+export async function getGroupsTree(
+  filters: GroupsTreeFilters = {}
+): Promise<GroupWithDetails[]> {
   const groups = await prisma.group.findMany({
     where: { parentId: null },
     include: {
@@ -63,7 +102,7 @@ export async function getGroupsTree(): Promise<GroupWithDetails[]> {
     orderBy: [{ type: "asc" }, { grade: "asc" }, { name: "asc" }],
   });
 
-  return groups as GroupWithDetails[];
+  return filterGroupsTree(groups as GroupWithDetails[], filters);
 }
 
 export async function createGroupAction(data: {
@@ -409,11 +448,10 @@ export async function createSubgroupsFromSplit(data: {
 }
 
 export async function getSubjects(): Promise<SubjectOption[]> {
-  const subjects = await prisma.subject.findMany({
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
+  return prisma.subject.findMany({
+    select: {id: true, name: true},
+    orderBy: {name: "asc"},
   });
-  return subjects;
 }
 
 export type SubgroupEditorData = {

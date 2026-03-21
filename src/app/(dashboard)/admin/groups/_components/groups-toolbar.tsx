@@ -1,5 +1,3 @@
-"use client";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -8,22 +6,22 @@ import {
 } from "@/components/ui/segmented-control";
 import { Plus, Search } from "lucide-react";
 
-type FilterType = "ALL" | "CLASS" | "ELECTIVE_GROUP";
+type FilterType = "all" | "CLASS" | "ELECTIVE_GROUP";
 
 const FILTER_OPTIONS: readonly SegmentedControlOption<FilterType>[] = [
-  { value: "ALL", label: "Все" },
+  { value: "all", label: "Все" },
   { value: "CLASS", label: "Классы" },
   { value: "ELECTIVE_GROUP", label: "Кружки" },
 ] as const;
 
-type Props = {
+interface GroupsToolbarProps {
   filterType: FilterType;
   onFilterTypeChange: (v: FilterType) => void;
   searchQuery: string;
   onSearchQueryChange: (v: string) => void;
   onAddGroup: () => void;
   isAddingRow: boolean;
-};
+}
 
 export function GroupsToolbar({
   filterType,
@@ -32,7 +30,7 @@ export function GroupsToolbar({
   onSearchQueryChange,
   onAddGroup,
   isAddingRow,
-}: Props) {
+}: GroupsToolbarProps) {
   return (
     <div className="flex items-center gap-3">
       <SegmentedControl

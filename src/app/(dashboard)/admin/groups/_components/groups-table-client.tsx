@@ -1,20 +1,21 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { GroupWithDetails, StudentForAssignment, SubjectOption } from "./types";
-import { GroupsToolbar } from "./components/groups-toolbar";
-import { GroupsTreeTable } from "./components/groups-tree-table";
-import { StudentAssignmentDialog } from "./components/student-assignment-dialog";
-import { SplitterDialog } from "./components/splitter-dialog";
-import { useGroupsCrud } from "./hooks/use-groups-crud";
+import { useQueryState } from "nuqs";
+import type { GroupWithDetails, StudentForAssignment, SubjectOption } from "../_lib/types";
+import { GroupsToolbar } from "./groups-toolbar";
+import { GroupsTreeTable } from "./groups-tree-table";
+import { StudentAssignmentDialog } from "./student-assignment-dialog";
+import { SplitterDialog } from "./splitter-dialog";
+import { useGroupsCrud } from "../_hooks/use-groups-crud";
 import { toast } from "sonner";
 
-type Props = {
+interface GroupsTableClientProps {
   initialGroups: GroupWithDetails[];
   subjects: SubjectOption[];
-};
+}
 
-export function GroupsClient({ initialGroups, subjects }: Props) {
+export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClientProps) {
   const {
     groups,
     handleCreateGroup,
@@ -26,8 +27,14 @@ export function GroupsClient({ initialGroups, subjects }: Props) {
     handleSplitterSave,
   } = useGroupsCrud(initialGroups);
 
-  const [filterType, setFilterType] = useState<"ALL" | "CLASS" | "ELECTIVE_GROUP">("ALL");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useQueryState("search", {
+    defaultValue: "",
+    shallow: false,
+  });
+  const [filterType, setFilterType] = useQueryState("type", {
+    defaultValue: "all",
+    shallow: false,
+  });
   const [isAddingRow, setIsAddingRow] = useState(false);
 
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
@@ -41,20 +48,6 @@ export function GroupsClient({ initialGroups, subjects }: Props) {
   const [splitterOpen, setSplitterOpen] = useState(false);
   const [splitterGroup, setSplitterGroup] = useState<GroupWithDetails | null>(null);
   const [splitterStudents, setSplitterStudents] = useState<StudentForAssignment[]>([]);
-
-  const filteredGroups = groups.filter((g) => {
-    if (filterType === "CLASS" && g.type !== "CLASS") return false;
-    if (filterType === "ELECTIVE_GROUP" && g.type !== "ELECTIVE_GROUP") return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const nameMatch = g.name.toLowerCase().includes(q);
-      const subMatch = g.subGroups?.some((s) =>
-        s.name.toLowerCase().includes(q)
-      );
-      if (!nameMatch && !subMatch) return false;
-    }
-    return true;
-  });
 
   const handleOpenTransferList = useCallback(
     async (group: GroupWithDetails) => {
@@ -118,16 +111,20 @@ export function GroupsClient({ initialGroups, subjects }: Props) {
       </div>
 
       <GroupsToolbar
-        filterType={filterType}
-        onFilterTypeChange={setFilterType}
+        filterType={filterType === "CLASS" || filterType === "ELECTIVE_GROUP" ? filterType : "all"}
+        onFilterTypeChange={(value) => {
+          void setFilterType(value === "all" ? null : value);
+        }}
         searchQuery={searchQuery}
-        onSearchQueryChange={setSearchQuery}
+        onSearchQueryChange={(value) => {
+          void setSearchQuery(value || null);
+        }}
         onAddGroup={() => setIsAddingRow(true)}
         isAddingRow={isAddingRow}
       />
 
       <GroupsTreeTable
-        groups={filteredGroups}
+        groups={groups}
         isAddingRow={isAddingRow}
         onCancelAddRow={() => setIsAddingRow(false)}
         onCreateGroup={handleCreateGroup}

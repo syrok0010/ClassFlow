@@ -1,13 +1,27 @@
-import { getGroupsTree, getSubjects } from "./actions";
-import { GroupsClient } from "./groups-client";
+import type { GroupType } from "@/generated/prisma/client";
+import { getGroupsTree, getSubjects } from "./_actions/group-actions";
+import { GroupsTableClient } from "./_components/groups-table-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function GroupsPage() {
+const VALID_TYPES: GroupType[] = ["CLASS", "ELECTIVE_GROUP"];
+
+export default async function GroupsPage(props: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const searchParams = await props.searchParams;
+  const search =
+    typeof searchParams.search === "string" ? searchParams.search : undefined;
+  const typeParam =
+    typeof searchParams.type === "string" ? searchParams.type : undefined;
+  const type = VALID_TYPES.includes(typeParam as GroupType)
+    ? (typeParam as GroupType)
+    : undefined;
+
   const [groups, subjects] = await Promise.all([
-    getGroupsTree(),
+    getGroupsTree({ search, type }),
     getSubjects(),
   ]);
 
-  return <GroupsClient initialGroups={groups} subjects={subjects} />;
+  return <GroupsTableClient initialGroups={groups} subjects={subjects} />;
 }
