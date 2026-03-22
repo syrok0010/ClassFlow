@@ -1,5 +1,5 @@
-import {useMemo, useState} from "react";
-import type {GroupWithDetails, StudentForAssignment} from "../_lib/types";
+import { useMemo, useState, useEffect, useCallback, Children } from "react";
+import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
 import {
   Dialog,
   DialogContent,
@@ -8,12 +8,35 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
-import {Checkbox} from "@/components/ui/checkbox";
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from "@/components/ui/select";
-import {ChevronLeft, ChevronRight, ChevronsRight, Loader2, Search,} from "lucide-react";
-import {cn} from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2, Search, GripVertical } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  type DragStartEvent,
+  type DragEndEvent,
+  useDroppable,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface StudentAssignmentDialogProps {
   open: boolean;
@@ -47,28 +70,45 @@ export function StudentAssignmentDialog({
   loading,
   onSave,
 }: StudentAssignmentDialogProps) {
-  const [leftSelected, setLeftSelected] = useState<Set<string>>(new Set());
-  const [rightSelected, setRightSelected] = useState<Set<string>>(new Set());
+  const [buckets, setBuckets] = useState<Record<"unassigned" | "assigned", string[]>>({
+    unassigned: [],
+    assigned: [],
+  });
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [initializedFrom, setInitializedFrom] = useState<string | null>(null);
   const [leftSearch, setLeftSearch] = useState("");
   const [leftClassFilter, setLeftClassFilter] = useState("ALL");
   const [saving, setSaving] = useState(false);
 
-  const [movedToRight, setMovedToRight] = useState<Set<string>>(new Set());
-  const [movedToLeft, setMovedToLeft] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!open || !group || !students) return;
+    const assignedKey = students.assigned.map((s) => s.id).join("|");
+    const availableKey = students.available.map((s) => s.id).join("|");
+    const nextKey = `${group.id}:${assignedKey}:${availableKey}`;
+    if (initializedFrom === nextKey) return;
+    setBuckets({
+      unassigned: students.available.map((s) => s.id),
+      assigned: students.assigned.map((s) => s.id),
+    });
+    setInitializedFrom(nextKey);
+  }, [open, group, students, initializedFrom]);
 
-  const leftStudents = useMemo(() => {
-    return !students ? [] : [
-      ...students.available.filter((s) => !movedToRight.has(s.id)),
-      ...students.assigned.filter((s) => movedToLeft.has(s.id)),
-    ];
-  }, [students, movedToRight, movedToLeft]);
+  const studentById = useMemo(() => {
+    if (!students) return new Map<string, StudentForAssignment>();
+    return new Map(
+      [...students.available, ...students.assigned].map((s) => [s.id, s])
+    );
+  }, [students]);
 
-  const rightStudents = useMemo(() => {
-    return !students ? [] : [
-      ...students.assigned.filter((s) => !movedToLeft.has(s.id)),
-      ...students.available.filter((s) => movedToRight.has(s.id)),
-    ];
-  }, [students, movedToRight, movedToLeft]);
+  const leftStudents = useMemo(
+    () => buckets.unassigned.map((id) => studentById.get(id)).filter(Boolean) as StudentForAssignment[],
+    [buckets.unassigned, studentById]
+  );
+
+  const rightStudents = useMemo(
+    () => buckets.assigned.map((id) => studentById.get(id)).filter(Boolean) as StudentForAssignment[],
+    [buckets.assigned, studentById]
+  );
 
   const filteredLeftStudents = useMemo(() => {
     return leftStudents.filter((s) => {
@@ -93,59 +133,67 @@ export function StudentAssignmentDialog({
     return Array.from(classes).sort();
   }, [leftStudents]);
 
-  const handleMoveRight = () => {
-    leftSelected.forEach((id) => {
-      if (movedToLeft.has(id)) {
-        setMovedToLeft((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      } else {
-        setMovedToRight((prev) => new Set(prev).add(id));
-      }
-    });
-    setLeftSelected(new Set());
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const findBucketOfStudent = useCallback(
+    (studentId: string): "unassigned" | "assigned" | null => {
+      if (buckets.unassigned.includes(studentId)) return "unassigned";
+      if (buckets.assigned.includes(studentId)) return "assigned";
+      return null;
+    },
+    [buckets]
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
   };
 
-  const handleMoveLeft = () => {
-    rightSelected.forEach((id) => {
-      if (movedToRight.has(id)) {
-        setMovedToRight((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      } else {
-        setMovedToLeft((prev) => new Set(prev).add(id));
-      }
-    });
-    setRightSelected(new Set());
-  };
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
 
-  const handleMoveAllRight = () => {
-    filteredLeftStudents.forEach((s) => {
-      if (movedToLeft.has(s.id)) {
-        setMovedToLeft((prev) => {
-          const next = new Set(prev);
-          next.delete(s.id);
-          return next;
-        });
-      } else {
-        setMovedToRight((prev) => new Set(prev).add(s.id));
+    if (!over) return;
+
+    const studentId = active.id as string;
+    const targetBucket =
+      ((over.data.current?.bucketId as string) ?? (over.id as string)) as
+        | "unassigned"
+        | "assigned";
+    const sourceBucket = findBucketOfStudent(studentId);
+
+    if (!sourceBucket) return;
+    if (targetBucket !== "unassigned" && targetBucket !== "assigned") return;
+
+    setBuckets((prev) => {
+      const next = {
+        unassigned: [...prev.unassigned],
+        assigned: [...prev.assigned],
+      };
+
+      next[sourceBucket] = next[sourceBucket].filter((id) => id !== studentId);
+      if (!next[targetBucket].includes(studentId)) {
+        next[targetBucket] = [...next[targetBucket], studentId];
       }
+
+      return next;
     });
-    setLeftSelected(new Set());
   };
 
   const handleSave = async () => {
+    if (!students) return;
+
+    const initialAssigned = new Set(students.assigned.map((s) => s.id));
+    const currentAssigned = new Set(buckets.assigned);
+
+    const toAssign = Array.from(currentAssigned).filter((id) => !initialAssigned.has(id));
+    const toRemove = Array.from(initialAssigned).filter((id) => !currentAssigned.has(id));
+
     setSaving(true);
     try {
-      await onSave([...movedToRight], [...movedToLeft]);
-      setMovedToRight(new Set());
-      setMovedToLeft(new Set());
-      setLeftSelected(new Set());
-      setRightSelected(new Set());
+      await onSave(toAssign, toRemove);
       setLeftSearch("");
       setLeftClassFilter("ALL");
     } finally {
@@ -155,17 +203,22 @@ export function StudentAssignmentDialog({
 
   const handleOpenChange = (v: boolean) => {
     if (!v) {
-      setMovedToRight(new Set());
-      setMovedToLeft(new Set());
-      setLeftSelected(new Set());
-      setRightSelected(new Set());
+      setBuckets({ unassigned: [], assigned: [] });
+      setActiveId(null);
+      setInitializedFrom(null);
       setLeftSearch("");
       setLeftClassFilter("ALL");
     }
     onOpenChange(v);
   };
 
-  const hasChanges = movedToRight.size > 0 || movedToLeft.size > 0;
+  const hasChanges = useMemo(() => {
+    if (!students) return false;
+    const initial = students.assigned.map((s) => s.id);
+    if (initial.length !== buckets.assigned.length) return true;
+    const currentSet = new Set(buckets.assigned);
+    return initial.some((id) => !currentSet.has(id));
+  }, [students, buckets.assigned]);
 
   const classFilterItems = useMemo(() => {
     const map: Record<string, string> = { ALL: "Все" };
@@ -174,6 +227,7 @@ export function StudentAssignmentDialog({
   }, [availableClasses]);
 
   const isElective = group?.type === "ELECTIVE_GROUP";
+  const activeStudent = activeId ? studentById.get(activeId) ?? null : null;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -195,136 +249,106 @@ export function StudentAssignmentDialog({
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="grid grid-cols-[1fr_auto_1fr] gap-3 min-h-[350px]">
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">
-                {isElective ? "Все ученики" : "Свободные ученики"}{" "}
-                <span className="text-muted-foreground">
-                  ({filteredLeftStudents.length})
-                </span>
-              </p>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex flex-col gap-3 min-h-[350px]">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm font-medium">
+                    {isElective ? "Все ученики" : "Свободные ученики"}{" "}
+                    <span className="text-muted-foreground">
+                      ({filteredLeftStudents.length})
+                    </span>
+                  </p>
 
-              <div className="flex gap-1.5">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                  <Input
-                    placeholder="Поиск..."
-                    value={leftSearch}
-                    onChange={(e) => setLeftSearch(e.target.value)}
-                    className="h-7 pl-7 text-xs"
-                  />
-                </div>
-                {isElective && availableClasses.length > 0 && (
-                  <Select
-                    value={leftClassFilter}
-                    onValueChange={(v) => setLeftClassFilter(v ?? "ALL")}
-                    items={classFilterItems}
-                  >
-                    <SelectTrigger size="sm" className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Все</SelectItem>
-                      {availableClasses.map((cls) => (
-                        <SelectItem key={cls} value={cls}>
-                          {cls}
-                        </SelectItem>
+                  <div className="flex gap-1.5">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Поиск..."
+                        value={leftSearch}
+                        onChange={(e) => setLeftSearch(e.target.value)}
+                        className="h-7 pl-7 text-xs"
+                      />
+                    </div>
+                    {isElective && availableClasses.length > 0 && (
+                      <Select
+                        value={leftClassFilter}
+                        onValueChange={(v) => setLeftClassFilter(v ?? "ALL")}
+                        items={classFilterItems}
+                      >
+                        <SelectTrigger size="sm" className="w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ALL">Все</SelectItem>
+                          {availableClasses.map((cls) => (
+                            <SelectItem key={cls} value={cls}>
+                              {cls}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+
+                  <DroppableBucket id="unassigned" emptyMessage="Нет учеников">
+                    <SortableContext
+                      items={filteredLeftStudents.map((s) => s.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {filteredLeftStudents.map((s) => (
+                        <DraggableStudentCard
+                          key={s.id}
+                          student={s}
+                          showClass={isElective}
+                          bucketId="unassigned"
+                        />
                       ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
+                    </SortableContext>
+                  </DroppableBucket>
+                </div>
 
-              <div className="flex-1 overflow-y-auto rounded-lg border max-h-[280px]">
-                {filteredLeftStudents.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-6">
-                    Нет учеников
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm font-medium">
+                    Состав {group?.name ?? ""}{" "}
+                    <span className="text-muted-foreground">
+                      ({rightStudents.length})
+                    </span>
                   </p>
-                ) : (
-                  filteredLeftStudents.map((s) => (
-                    <StudentRow
-                      key={s.id}
-                      student={s}
-                      selected={leftSelected.has(s.id)}
-                      showClass={isElective}
-                      onToggle={() =>
-                        setLeftSelected((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(s.id)) next.delete(s.id);
-                          else next.add(s.id);
-                          return next;
-                        })
-                      }
-                    />
-                  ))
-                )}
+                  <div className="h-7" />
+
+                  <DroppableBucket id="assigned" emptyMessage="Пусто">
+                    <SortableContext
+                      items={rightStudents.map((s) => s.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {rightStudents.map((s) => (
+                        <DraggableStudentCard
+                          key={s.id}
+                          student={s}
+                          showClass={false}
+                          bucketId="assigned"
+                        />
+                      ))}
+                    </SortableContext>
+                  </DroppableBucket>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col items-center justify-center gap-2">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                disabled={leftSelected.size === 0}
-                onClick={handleMoveRight}
-                title="Перенести выбранных"
-              >
-                <ChevronRight className="size-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                disabled={filteredLeftStudents.length === 0}
-                onClick={handleMoveAllRight}
-                title="Перенести всех"
-              >
-                <ChevronsRight className="size-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                disabled={rightSelected.size === 0}
-                onClick={handleMoveLeft}
-                title="Убрать выбранных"
-              >
-                <ChevronLeft className="size-4" />
-              </Button>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">
-                Состав {group?.name ?? ""}{" "}
-                <span className="text-muted-foreground">
-                  ({rightStudents.length})
-                </span>
-              </p>
-              <div className="h-7" />
-              <div className="flex-1 overflow-y-auto rounded-lg border max-h-[280px]">
-                {rightStudents.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-6">
-                    Пусто
-                  </p>
-                ) : (
-                  rightStudents.map((s) => (
-                    <StudentRow
-                      key={s.id}
-                      student={s}
-                      selected={rightSelected.has(s.id)}
-                      showClass={false}
-                      onToggle={() =>
-                        setRightSelected((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(s.id)) next.delete(s.id);
-                          else next.add(s.id);
-                          return next;
-                        })
-                      }
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
+            <DragOverlay>
+              {activeStudent && (
+                <div className="rounded-md border bg-background px-3 py-1.5 text-sm shadow-lg">
+                  {getStudentDisplayName(activeStudent)}
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
         )}
 
         <DialogFooter>
@@ -347,32 +371,79 @@ export function StudentAssignmentDialog({
   );
 }
 
-function StudentRow({
+function DroppableBucket({
+  id,
+  children,
+  emptyMessage,
+}: {
+  id: "unassigned" | "assigned";
+  children: React.ReactNode;
+  emptyMessage: string;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id,
+    data: { bucketId: id },
+  });
+
+  const childCount = Children.count(children);
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex-1 overflow-y-auto rounded-lg border max-h-[280px] min-h-[280px] p-1.5 flex flex-col gap-0.5 transition-colors",
+        isOver && "ring-2 ring-primary/50 bg-primary/5"
+      )}
+    >
+      {childCount > 0 ? (
+        children
+      ) : (
+        <p className="text-xs text-muted-foreground text-center py-6">{emptyMessage}</p>
+      )}
+    </div>
+  );
+}
+
+function DraggableStudentCard({
   student,
-  selected,
   showClass,
-  onToggle,
+  bucketId,
 }: {
   student: StudentForAssignment;
-  selected: boolean;
   showClass: boolean;
-  onToggle: () => void;
+  bucketId: "unassigned" | "assigned";
 }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: student.id,
+    data: { bucketId },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   const classInfo = getStudentClassInfo(student);
 
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       className={cn(
-        "flex items-center gap-2 px-2.5 py-1.5 cursor-pointer border-b last:border-b-0 transition-colors text-sm",
-        selected ? "bg-primary/10" : "hover:bg-muted/50"
+        "flex items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-sm cursor-grab active:cursor-grabbing",
+        isDragging && "opacity-50"
       )}
-      onClick={onToggle}
+      {...attributes}
+      {...listeners}
     >
-      <Checkbox
-        checked={selected}
-        tabIndex={-1}
-        className="size-3.5 pointer-events-none"
-      />
+      <GripVertical className="size-3.5 text-muted-foreground shrink-0" />
       <span className="flex-1 truncate">
         {getStudentDisplayName(student)}
       </span>

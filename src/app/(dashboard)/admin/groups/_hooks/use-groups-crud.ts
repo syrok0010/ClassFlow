@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useOptimistic } from "react";
+import { startTransition, useCallback, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
 import type { GroupType } from "@/generated/prisma/client";
 import type { GroupWithDetails } from "../_lib/types";
@@ -111,7 +111,9 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
           subGroups: [],
         };
 
-        dispatchOptimistic({ type: "add", group: optimisticGroup });
+        startTransition(() => {
+          dispatchOptimistic({ type: "add", group: optimisticGroup });
+        });
         await createGroupAction(data);
         router.refresh();
         toast.success(`Группа "${data.name}" создана`);
@@ -129,7 +131,9 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
       const nextName = name.trim();
       if (!nextName) return;
 
-      dispatchOptimistic({ type: "rename", id, name: nextName });
+      startTransition(() => {
+        dispatchOptimistic({ type: "rename", id, name: nextName });
+      });
 
       try {
         await updateGroupAction(id, { name: nextName });
@@ -144,7 +148,9 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
 
   const handleDeleteGroup = useCallback(
     async (group: GroupWithDetails) => {
-      dispatchOptimistic({ type: "remove", id: group.id });
+      startTransition(() => {
+        dispatchOptimistic({ type: "remove", id: group.id });
+      });
 
       try {
         await deleteGroupAction(group.id);
@@ -168,10 +174,12 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
         return;
       }
 
-      dispatchOptimistic({
-        type: "studentsDelta",
-        id: transferGroup.id,
-        delta: toAssign.length - toRemove.length,
+      startTransition(() => {
+        dispatchOptimistic({
+          type: "studentsDelta",
+          id: transferGroup.id,
+          delta: toAssign.length - toRemove.length,
+        });
       });
 
       try {
