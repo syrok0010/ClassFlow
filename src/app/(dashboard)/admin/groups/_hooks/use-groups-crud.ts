@@ -119,6 +119,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
         toast.success(`Группа "${data.name}" создана`);
         return true;
       } catch {
+        router.refresh();
         toast.error("Ошибка при создании группы");
         return false;
       }
@@ -140,6 +141,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
         router.refresh();
         toast.success("Группа переименована");
       } catch {
+        router.refresh();
         toast.error("Ошибка при переименовании");
       }
     },
@@ -157,6 +159,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
         router.refresh();
         toast.success(`Группа "${group.name}" удалена`);
       } catch {
+        router.refresh();
         toast.error("Ошибка при удалении группы");
       }
     },
@@ -194,6 +197,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
         router.refresh();
         toast.success("Состав группы обновлен");
       } catch {
+        router.refresh();
         toast.error("Ошибка при обновлении состава");
       }
     },

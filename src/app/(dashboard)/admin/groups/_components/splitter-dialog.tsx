@@ -4,6 +4,7 @@ import type {
   StudentForAssignment,
   SubjectOption,
 } from "../_lib/types";
+import { groupNameSchema } from "../_lib/group-schemas";
 import {
   Dialog,
   DialogContent,
@@ -21,8 +22,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Shuffle, ArrowRight, Loader2, GripVertical } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Shuffle, ArrowRight, Loader2 } from "lucide-react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod/v4";
 import {
@@ -35,14 +35,13 @@ import {
   DragOverlay,
   type DragStartEvent,
   type DragEndEvent,
-  useDroppable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { StudentBucketPanel } from "./student-bucket-panel";
+import { DraggableStudentChip } from "./draggable-student-chip";
 
 interface SplitterDialogProps {
   open: boolean;
@@ -200,7 +199,7 @@ export function SplitterDialog({
     setSaving(true);
     try {
       const subgroupsData = bucketKeys.map((key, i) => ({
-        name: `${group.name} ${subjectName} ${i + 1}`,
+        name: groupNameSchema.parse(`${group.name} ${subjectName} ${i + 1}`),
         studentIds: buckets[key] ?? [],
       }));
       await onSave({
@@ -362,7 +361,7 @@ export function SplitterDialog({
                   gridTemplateColumns: `1fr repeat(${subgroupCount}, 1fr)`,
                 }}
               >
-                <DroppableBucket
+                <StudentBucketPanel
                   id="unassigned"
                   title={`Нераспределенные (${unassignedStudents.length})`}
                   variant="source"
@@ -372,7 +371,11 @@ export function SplitterDialog({
                     strategy={verticalListSortingStrategy}
                   >
                     {unassignedStudents.map((s) => (
-                      <DraggableStudent key={s.id} student={s} />
+                      <DraggableStudentChip
+                        key={s.id}
+                        student={s}
+                        displayName={getDisplayName(s)}
+                      />
                     ))}
                   </SortableContext>
                   {unassignedStudents.length === 0 && (
@@ -380,7 +383,7 @@ export function SplitterDialog({
                       Все распределены
                     </p>
                   )}
-                </DroppableBucket>
+                </StudentBucketPanel>
 
                 {bucketKeys.map((key, i) => {
                   const bucketStudents = (buckets[key] ?? [])
@@ -388,7 +391,7 @@ export function SplitterDialog({
                     .filter(Boolean) as StudentForAssignment[];
 
                   return (
-                    <DroppableBucket
+                    <StudentBucketPanel
                       key={key}
                       id={key}
                       title={`Группа ${i + 1} (${bucketStudents.length})`}
@@ -399,9 +402,10 @@ export function SplitterDialog({
                         strategy={verticalListSortingStrategy}
                       >
                         {bucketStudents.map((s) => (
-                          <DraggableStudent
+                          <DraggableStudentChip
                             key={s.id}
                             student={s}
+                            displayName={getDisplayName(s)}
                             bucketId={key}
                           />
                         ))}
@@ -411,7 +415,7 @@ export function SplitterDialog({
                           Перетащите сюда
                         </p>
                       )}
-                    </DroppableBucket>
+                    </StudentBucketPanel>
                   );
                 })}
               </div>
@@ -452,87 +456,4 @@ export function SplitterDialog({
 function getDisplayName(s: StudentForAssignment) {
   const parts = [s.user.surname, s.user.name].filter(Boolean);
   return parts.length > 0 ? parts.join(" ") : "Без имени";
-}
-
-function DroppableBucket({
-  id,
-  title,
-  variant,
-  children,
-}: {
-  id: string;
-  title: string;
-  variant: "source" | "target";
-  children: React.ReactNode;
-}) {
-  const { setNodeRef, isOver } = useDroppable({
-    id,
-    data: { bucketId: id },
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "flex flex-col rounded-lg border min-h-[200px] transition-colors",
-        variant === "source" ? "bg-muted/30" : "bg-background",
-        isOver && "ring-2 ring-primary/50 bg-primary/5"
-      )}
-    >
-      <div
-        className={cn(
-          "px-3 py-2 text-xs font-medium border-b rounded-t-lg",
-          variant === "source"
-            ? "bg-muted/50 text-muted-foreground"
-            : "bg-primary/5 text-primary"
-        )}
-      >
-        {title}
-      </div>
-      <div className="flex-1 p-1.5 flex flex-col gap-0.5 overflow-y-auto max-h-[300px]">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function DraggableStudent({
-  student,
-  bucketId,
-}: {
-  student: StudentForAssignment;
-  bucketId?: string;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: student.id,
-    data: { bucketId },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-sm cursor-grab active:cursor-grabbing",
-        isDragging && "opacity-50"
-      )}
-      {...attributes}
-      {...listeners}
-    >
-      <GripVertical className="size-3.5 text-muted-foreground shrink-0" />
-      <span className="truncate">{getDisplayName(student)}</span>
-    </div>
-  );
 }

@@ -1,4 +1,9 @@
-import { useMemo, useState, useEffect, useCallback, Children } from "react";
+import {
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
 import {
   Dialog,
@@ -17,8 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Search, GripVertical } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Loader2, Search } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -29,14 +33,13 @@ import {
   DragOverlay,
   type DragStartEvent,
   type DragEndEvent,
-  useDroppable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { StudentBucketPanel } from "./student-bucket-panel";
+import { DraggableStudentChip } from "./draggable-student-chip";
 
 interface StudentAssignmentDialogProps {
   open: boolean;
@@ -296,21 +299,36 @@ export function StudentAssignmentDialog({
                     )}
                   </div>
 
-                  <DroppableBucket id="unassigned" emptyMessage="Нет учеников">
+                  <StudentBucketPanel
+                    id="unassigned"
+                    variant="source"
+                    emptyMessage="Нет учеников"
+                    className="flex-1 max-h-[280px] min-h-[280px]"
+                    contentClassName="p-1.5"
+                    emptyMessageClassName="py-6"
+                  >
                     <SortableContext
                       items={filteredLeftStudents.map((s) => s.id)}
                       strategy={verticalListSortingStrategy}
                     >
                       {filteredLeftStudents.map((s) => (
-                        <DraggableStudentCard
+                        <DraggableStudentChip
                           key={s.id}
                           student={s}
-                          showClass={isElective}
+                          displayName={getStudentDisplayName(s)}
                           bucketId="unassigned"
+                          className="gap-2 px-2.5 py-1.5"
+                          endSlot={
+                            isElective && getStudentClassInfo(s) ? (
+                              <span className="text-xs text-muted-foreground">
+                                {getStudentClassInfo(s)}
+                              </span>
+                            ) : null
+                          }
                         />
                       ))}
                     </SortableContext>
-                  </DroppableBucket>
+                  </StudentBucketPanel>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -322,21 +340,29 @@ export function StudentAssignmentDialog({
                   </p>
                   <div className="h-7" />
 
-                  <DroppableBucket id="assigned" emptyMessage="Пусто">
+                  <StudentBucketPanel
+                    id="assigned"
+                    variant="target"
+                    emptyMessage="Пусто"
+                    className="flex-1 max-h-[280px] min-h-[280px]"
+                    contentClassName="p-1.5"
+                    emptyMessageClassName="py-6"
+                  >
                     <SortableContext
                       items={rightStudents.map((s) => s.id)}
                       strategy={verticalListSortingStrategy}
                     >
                       {rightStudents.map((s) => (
-                        <DraggableStudentCard
+                        <DraggableStudentChip
                           key={s.id}
                           student={s}
-                          showClass={false}
+                          displayName={getStudentDisplayName(s)}
                           bucketId="assigned"
+                          className="gap-2 px-2.5 py-1.5"
                         />
                       ))}
                     </SortableContext>
-                  </DroppableBucket>
+                  </StudentBucketPanel>
                 </div>
               </div>
             </div>
@@ -368,88 +394,5 @@ export function StudentAssignmentDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function DroppableBucket({
-  id,
-  children,
-  emptyMessage,
-}: {
-  id: "unassigned" | "assigned";
-  children: React.ReactNode;
-  emptyMessage: string;
-}) {
-  const { setNodeRef, isOver } = useDroppable({
-    id,
-    data: { bucketId: id },
-  });
-
-  const childCount = Children.count(children);
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "flex-1 overflow-y-auto rounded-lg border max-h-[280px] min-h-[280px] p-1.5 flex flex-col gap-0.5 transition-colors",
-        isOver && "ring-2 ring-primary/50 bg-primary/5"
-      )}
-    >
-      {childCount > 0 ? (
-        children
-      ) : (
-        <p className="text-xs text-muted-foreground text-center py-6">{emptyMessage}</p>
-      )}
-    </div>
-  );
-}
-
-function DraggableStudentCard({
-  student,
-  showClass,
-  bucketId,
-}: {
-  student: StudentForAssignment;
-  showClass: boolean;
-  bucketId: "unassigned" | "assigned";
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: student.id,
-    data: { bucketId },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  const classInfo = getStudentClassInfo(student);
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "flex items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-sm cursor-grab active:cursor-grabbing",
-        isDragging && "opacity-50"
-      )}
-      {...attributes}
-      {...listeners}
-    >
-      <GripVertical className="size-3.5 text-muted-foreground shrink-0" />
-      <span className="flex-1 truncate">
-        {getStudentDisplayName(student)}
-      </span>
-      {showClass && classInfo && (
-        <span className="text-xs text-muted-foreground">{classInfo}</span>
-      )}
-    </div>
   );
 }

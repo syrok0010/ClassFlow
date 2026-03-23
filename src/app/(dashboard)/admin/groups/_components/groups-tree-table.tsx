@@ -1,4 +1,11 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+  type FocusEvent,
+} from "react";
 import type { GroupType } from "@/generated/prisma/client";
 import type { GroupWithDetails } from "../_lib/types";
 import {
@@ -8,8 +15,8 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
-import { useForm } from "@tanstack/react-form";
-import { z } from "zod/v4";
+import { groupNameSchema } from "../_lib/group-schemas";
+import { InlineCreateRow } from "./inline-create-row";
 import {
   Table,
   TableBody,
@@ -20,13 +27,6 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -98,6 +98,9 @@ export function GroupsTreeTable({
   const [confirmDeleteGroup, setConfirmDeleteGroup] =
     useState<GroupWithDetails | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const deleteStudentsCount = confirmDeleteGroup?._count.studentGroups ?? 0;
+  const deleteSubGroupsCount = confirmDeleteGroup?.subGroups.length ?? 0;
 
   const handleStartRename = useCallback((group: GroupWithDetails) => {
     setEditingId(group.id);
@@ -378,28 +381,19 @@ export function GroupsTreeTable({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Удалить группу?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Вы собираетесь удалить группу
-              &laquo;{confirmDeleteGroup?.name}&raquo;.
-              {(confirmDeleteGroup?._count.studentGroups ?? 0) > 0 && (
-                <>
-                  {" "}
-                  Из этой группы будут отчислены{" "}
-                  <strong>
-                    {confirmDeleteGroup?._count.studentGroups} учеников
-                  </strong>
-                  .
-                </>
+            <AlertDialogDescription className="space-y-1">
+              <span className="block">
+                Вы собираетесь удалить группу &laquo;{confirmDeleteGroup?.name}&raquo;.
+              </span>
+              {deleteStudentsCount > 0 && (
+                <span className="block">
+                  Из этой группы будут отчислены <span className="font-semibold">{deleteStudentsCount} учеников</span>.
+                </span>
               )}
-              {(confirmDeleteGroup?.subGroups?.length ?? 0) > 0 && (
-                <>
-                  {" "}
-                  Также будут удалены{" "}
-                  <strong>
-                    {confirmDeleteGroup?.subGroups.length} подгрупп
-                  </strong>
-                  .
-                </>
+              {deleteSubGroupsCount > 0 && (
+                <span className="block">
+                  Также будут удалены <span className="font-semibold">{deleteSubGroupsCount} подгрупп</span>.
+                </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -418,156 +412,6 @@ export function GroupsTreeTable({
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-function InlineCreateRow({
-  onSave,
-  onCancel,
-}: {
-  onSave: (data: {
-    name: string;
-    type: GroupType;
-    grade?: number | null;
-  }) => Promise<boolean>;
-  onCancel: () => void;
-}) {
-  const nameRef = useRef<HTMLInputElement>(null);
-
-  const form = useForm({
-    defaultValues: {
-      name: "",
-      type: "CLASS" as GroupType,
-      grade: "" as string,
-    },
-    onSubmit: async ({ value }) => {
-      const success = await onSave({
-        name: value.name.trim(),
-        type: value.type,
-        grade: value.grade ? parseInt(value.grade, 10) : null,
-      });
-      if (success) {
-        onCancel();
-      }
-    },
-  });
-
-  useEffect(() => {
-    nameRef.current?.focus();
-  }, []);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      form.handleSubmit();
-    }
-    if (e.key === "Escape") {
-      onCancel();
-    }
-  };
-
-  return (
-    <TableRow className="bg-primary/5 animate-in fade-in-0 slide-in-from-top-1">
-      <TableCell />
-      <TableCell>
-        <form.Field
-          name="name"
-          validators={{
-            onBlur: z.string().min(1, "Название обязательно").max(512),
-          }}
-        >
-          {(field) => (
-            <div>
-              <Input
-                ref={nameRef}
-                placeholder="Название (напр. 10А)"
-                value={field.state.value}
-                onChange={(e) => field.handleChange(e.target.value)}
-                onBlur={field.handleBlur}
-                onKeyDown={handleKeyDown}
-                className={cn("h-7", field.state.meta.errors.length > 0 && "border-destructive")}
-              />
-              {field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
-                <p className="text-xs text-destructive mt-1">
-                  {field.state.meta.errors.flatMap((e) => e ? [e.message] : []).join(", ")}
-                </p>
-              )}
-            </div>
-          )}
-        </form.Field>
-      </TableCell>
-      <TableCell>
-        <form.Field name="type">
-          {(field) => (
-            <Select
-              value={field.state.value}
-              onValueChange={(v) => field.handleChange(v as GroupType)}
-              items={{
-                CLASS: "Класс",
-                ELECTIVE_GROUP: "Кружок",
-              }}
-            >
-              <SelectTrigger size="sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="CLASS">Класс</SelectItem>
-                <SelectItem value="ELECTIVE_GROUP">Кружок</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        </form.Field>
-      </TableCell>
-      <TableCell>
-        <form.Field
-          name="grade"
-          validators={{
-            onBlur: z.string().refine(
-              (v) => v === "" || (/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 11),
-              "1–11"
-            ),
-          }}
-        >
-          {(field) => (
-            <div>
-              <Input
-                placeholder="Параллель"
-                type="number"
-                value={field.state.value}
-                onChange={(e) => field.handleChange(e.target.value)}
-                onBlur={field.handleBlur}
-                onKeyDown={handleKeyDown}
-                className={cn("h-7", field.state.meta.errors.length > 0 && "border-destructive")}
-              />
-              {field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
-                <p className="text-xs text-destructive mt-1">
-                  {field.state.meta.errors.flatMap((e) => e ? [e.message] : []).join(", ")}
-                </p>
-              )}
-            </div>
-          )}
-        </form.Field>
-      </TableCell>
-      <TableCell colSpan={2}>
-          <form.Subscribe selector={(s) => [s.isSubmitting, s.values.name] as const}>
-          {([isSubmitting, name]) => (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => form.handleSubmit()}
-                disabled={!name.trim() || isSubmitting}
-              >
-                Сохранить
-              </Button>
-              <Button size="sm" variant="ghost" onClick={onCancel}>
-                Отмена
-              </Button>
-            </div>
-          )}
-        </form.Subscribe>
-      </TableCell>
-      <TableCell />
-    </TableRow>
   );
 }
 
@@ -594,15 +438,17 @@ function InlineRenameInput({
   }, []);
 
   const handleSave = () => {
-    const trimmed = value.trim();
-    if (!trimmed || trimmed === defaultValue) {
+    const parsed = groupNameSchema.safeParse(value);
+
+    if (!parsed.success || parsed.data === defaultValue.trim()) {
       onCancel();
       return;
     }
-    onSave(trimmed);
+
+    onSave(parsed.data);
   };
 
-  const handleBlur = (e: React.FocusEvent) => {
+  const handleBlur = (e: FocusEvent<HTMLInputElement>) => {
     if (!mountedRef.current) return;
     if (containerRef.current?.contains(e.relatedTarget as Node)) return;
     handleSave();

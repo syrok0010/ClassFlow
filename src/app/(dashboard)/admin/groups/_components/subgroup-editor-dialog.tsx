@@ -1,4 +1,9 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+} from "react";
 import type { StudentForAssignment } from "../_lib/types";
 import type { SubgroupEditorData } from "../_actions/group-actions";
 import {
@@ -10,8 +15,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Shuffle, Loader2, GripVertical } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Shuffle, Loader2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -22,14 +26,13 @@ import {
   DragOverlay,
   type DragStartEvent,
   type DragEndEvent,
-  useDroppable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { DraggableStudentChip } from "./draggable-student-chip";
+import { StudentBucketPanel } from "./student-bucket-panel";
 
 interface SubgroupEditorDialogProps {
   open: boolean;
@@ -231,7 +234,7 @@ export function SubgroupEditorDialog({
                   gridTemplateColumns: `1fr repeat(${siblings.length}, 1fr)`,
                 }}
               >
-                <DroppableBucket
+                <StudentBucketPanel
                   id="unassigned"
                   title={`Нераспределённые (${unassignedStudents.length})`}
                   variant="source"
@@ -241,7 +244,11 @@ export function SubgroupEditorDialog({
                     strategy={verticalListSortingStrategy}
                   >
                     {unassignedStudents.map((s) => (
-                      <DraggableStudent key={s.id} student={s} />
+                      <DraggableStudentChip
+                        key={s.id}
+                        student={s}
+                        displayName={getDisplayName(s)}
+                      />
                     ))}
                   </SortableContext>
                   {unassignedStudents.length === 0 && (
@@ -249,7 +256,7 @@ export function SubgroupEditorDialog({
                       Все распределены
                     </p>
                   )}
-                </DroppableBucket>
+                </StudentBucketPanel>
 
                 {siblings.map((sib) => {
                   const bucketStudents = (buckets[sib.id] ?? [])
@@ -257,7 +264,7 @@ export function SubgroupEditorDialog({
                     .filter(Boolean) as StudentForAssignment[];
 
                   return (
-                    <DroppableBucket
+                    <StudentBucketPanel
                       key={sib.id}
                       id={sib.id}
                       title={`${sib.name} (${bucketStudents.length})`}
@@ -268,9 +275,10 @@ export function SubgroupEditorDialog({
                         strategy={verticalListSortingStrategy}
                       >
                         {bucketStudents.map((s) => (
-                          <DraggableStudent
+                          <DraggableStudentChip
                             key={s.id}
                             student={s}
+                            displayName={getDisplayName(s)}
                             bucketId={sib.id}
                           />
                         ))}
@@ -280,7 +288,7 @@ export function SubgroupEditorDialog({
                           Перетащите сюда
                         </p>
                       )}
-                    </DroppableBucket>
+                    </StudentBucketPanel>
                   );
                 })}
               </div>
@@ -319,87 +327,4 @@ export function SubgroupEditorDialog({
 function getDisplayName(s: StudentForAssignment) {
   const parts = [s.user.surname, s.user.name].filter(Boolean);
   return parts.length > 0 ? parts.join(" ") : "Без имени";
-}
-
-function DroppableBucket({
-  id,
-  title,
-  variant,
-  children,
-}: {
-  id: string;
-  title: string;
-  variant: "source" | "target";
-  children: React.ReactNode;
-}) {
-  const { setNodeRef, isOver } = useDroppable({
-    id,
-    data: { bucketId: id },
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "flex flex-col rounded-lg border min-h-[200px] transition-colors",
-        variant === "source" ? "bg-muted/30" : "bg-background",
-        isOver && "ring-2 ring-primary/50 bg-primary/5"
-      )}
-    >
-      <div
-        className={cn(
-          "px-3 py-2 text-xs font-medium border-b rounded-t-lg",
-          variant === "source"
-            ? "bg-muted/50 text-muted-foreground"
-            : "bg-primary/5 text-primary"
-        )}
-      >
-        {title}
-      </div>
-      <div className="flex-1 p-1.5 flex flex-col gap-0.5 overflow-y-auto max-h-[300px]">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function DraggableStudent({
-  student,
-  bucketId,
-}: {
-  student: StudentForAssignment;
-  bucketId?: string;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: student.id,
-    data: { bucketId },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-sm cursor-grab active:cursor-grabbing",
-        isDragging && "opacity-50"
-      )}
-      {...attributes}
-      {...listeners}
-    >
-      <GripVertical className="size-3.5 text-muted-foreground shrink-0" />
-      <span className="truncate">{getDisplayName(student)}</span>
-    </div>
-  );
 }
