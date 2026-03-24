@@ -50,9 +50,12 @@ export function FormField({
           name={field.name}
           type={type}
           placeholder={placeholder}
-          value={field.state.value as string}
+          value={field.state.value === 0 ? "" : String(field.state.value)}
           onBlur={field.handleBlur}
-          onChange={(e) => field.handleChange(e.target.value)}
+          onChange={(e) => {
+            const val = e.target.value;
+            field.handleChange(type === "number" ? (val === "" ? 0 : Number(val)) : val);
+          }}
           disabled={field.form.state.isSubmitting}
           className={cn(
             hasError ? "border-destructive focus-visible:ring-destructive" : "focus-visible:ring-primary"
