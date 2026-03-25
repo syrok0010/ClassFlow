@@ -384,45 +384,47 @@ export function GroupsTreeTable({
         </Table>
       </div>
 
-      <AlertDialog
-        open={!!confirmDeleteGroup}
-        onOpenChange={(open) => {
-          if (!open) setConfirmDeleteGroup(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Удалить группу?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-1">
-              <span className="block">
-                Вы собираетесь удалить группу &laquo;{confirmDeleteGroup?.name}&raquo;.
-              </span>
-              {deleteStudentsCount > 0 && (
+      {confirmDeleteGroup && (
+        <AlertDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setConfirmDeleteGroup(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Удалить группу?</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-1">
                 <span className="block">
-                  Из этой группы будут отчислены <span className="font-semibold">{deleteStudentsCount} учеников</span>.
+                  Вы собираетесь удалить группу &laquo;{confirmDeleteGroup.name}&raquo;.
                 </span>
-              )}
-              {deleteSubGroupsCount > 0 && (
-                <span className="block">
-                  Также будут удалены <span className="font-semibold">{deleteSubGroupsCount} подгрупп</span>.
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>
-              Отмена
-            </AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={handleConfirmDelete}
-              disabled={isDeleting}
-            >
-              Удалить
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+                {deleteStudentsCount > 0 && (
+                  <span className="block">
+                    Из этой группы будут отчислены <span className="font-semibold">{deleteStudentsCount} учеников</span>.
+                  </span>
+                )}
+                {deleteSubGroupsCount > 0 && (
+                  <span className="block">
+                    Также будут удалены <span className="font-semibold">{deleteSubGroupsCount} подгрупп</span>.
+                  </span>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>
+                Отмена
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                Удалить
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </>
   );
 }

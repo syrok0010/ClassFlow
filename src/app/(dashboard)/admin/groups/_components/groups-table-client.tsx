@@ -168,36 +168,42 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
         onOpenSubgroupEditor={handleOpenSubgroupEditor}
       />
 
-      <StudentAssignmentDialog
-        open={transferDialogOpen}
-        onOpenChange={setTransferDialogOpen}
-        group={transferGroup}
-        students={transferStudents}
-        loading={transferLoading}
-        onSave={onTransferSave}
-      />
+      {(transferDialogOpen || transferGroup || transferLoading) && (
+        <StudentAssignmentDialog
+          open={transferDialogOpen}
+          onOpenChange={setTransferDialogOpen}
+          group={transferGroup}
+          students={transferStudents}
+          loading={transferLoading}
+          onSave={onTransferSave}
+        />
+      )}
 
-      <SplitterDialog
-        open={splitterOpen}
-        onOpenChange={setSplitterOpen}
-        group={splitterGroup}
-        students={splitterStudents}
-        subjects={subjects}
-        onSave={onSplitterSave}
-      />
+      {(splitterOpen || splitterGroup) && (
+        <SplitterDialog
+          open={splitterOpen}
+          onOpenChange={setSplitterOpen}
+          group={splitterGroup}
+          students={splitterStudents}
+          subjects={subjects}
+          onSave={onSplitterSave}
+        />
+      )}
 
-      <SubgroupEditorDialog
-        open={subgroupEditorOpen}
-        onOpenChange={(open) => {
-          setSubgroupEditorOpen(open);
-          if (!open) {
-            setSubgroupEditorData(null);
-          }
-        }}
-        data={subgroupEditorData}
-        loading={subgroupEditorLoading}
-        onSave={onSubgroupEditorSave}
-      />
+      {(subgroupEditorOpen || subgroupEditorData || subgroupEditorLoading) && (
+        <SubgroupEditorDialog
+          open={subgroupEditorOpen}
+          onOpenChange={(open) => {
+            setSubgroupEditorOpen(open);
+            if (!open) {
+              setSubgroupEditorData(null);
+            }
+          }}
+          data={subgroupEditorData}
+          loading={subgroupEditorLoading}
+          onSave={onSubgroupEditorSave}
+        />
+      )}
     </div>
   );
 }

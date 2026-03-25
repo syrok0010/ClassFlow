@@ -82,9 +82,118 @@ async function seedAuthAndUsers() {
   await prisma.student.create({ data: { userId: studentUser.id } });
 }
 
+async function seedGroupsPageFixtures() {
+  const english = await prisma.subject.create({
+    data: {
+      name: "Английский язык",
+      type: "ACADEMIC",
+    },
+  });
+
+  await prisma.subject.create({
+    data: {
+      name: "Робототехника",
+      type: "ACADEMIC",
+    },
+  });
+
+  const studentUsers = await Promise.all([
+    prisma.user.create({
+      data: {
+        role: "USER",
+        status: "ACTIVE",
+        name: "Иван",
+        surname: "Петров",
+        patronymicName: "Ильич",
+      },
+    }),
+    prisma.user.create({
+      data: {
+        role: "USER",
+        status: "ACTIVE",
+        name: "Мария",
+        surname: "Соколова",
+        patronymicName: "Андреевна",
+      },
+    }),
+    prisma.user.create({
+      data: {
+        role: "USER",
+        status: "ACTIVE",
+        name: "Олег",
+        surname: "Федоров",
+        patronymicName: "Сергеевич",
+      },
+    }),
+    prisma.user.create({
+      data: {
+        role: "USER",
+        status: "ACTIVE",
+        name: "Анна",
+        surname: "Крылова",
+        patronymicName: "Павловна",
+      },
+    }),
+    prisma.user.create({
+      data: {
+        role: "USER",
+        status: "ACTIVE",
+        name: "Павел",
+        surname: "Смирнов",
+        patronymicName: "Олегович",
+      },
+    }),
+  ]);
+
+  const students = await Promise.all(
+    studentUsers.map((user) =>
+      prisma.student.create({
+        data: { userId: user.id },
+      })
+    )
+  );
+
+  const class10A = await prisma.group.create({
+    data: {
+      name: "10 А",
+      type: "CLASS",
+      grade: 10,
+    },
+  });
+
+  const class10B = await prisma.group.create({
+    data: {
+      name: "10 Б",
+      type: "CLASS",
+      grade: 10,
+    },
+  });
+
+  const robotics = await prisma.group.create({
+    data: {
+      name: "Робототехника",
+      type: "ELECTIVE_GROUP",
+    },
+  });
+
+  await prisma.studentGroups.createMany({
+    data: [
+      { studentId: students[0].id, groupId: class10A.id },
+      { studentId: students[1].id, groupId: class10A.id },
+      { studentId: students[2].id, groupId: class10A.id },
+      { studentId: students[3].id, groupId: class10B.id },
+      { studentId: students[4].id, groupId: class10B.id },
+      { studentId: students[3].id, groupId: robotics.id },
+    ],
+  });
+
+  return { english };
+}
+
 async function main() {
   await clearData();
   await seedAuthAndUsers();
+  await seedGroupsPageFixtures();
 }
 
 main()

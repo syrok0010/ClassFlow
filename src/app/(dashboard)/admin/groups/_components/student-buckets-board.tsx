@@ -31,9 +31,12 @@ export function StudentBucketsBoard({
   className,
 }: StudentBucketsBoardProps) {
   return (
-    <div className={cn("grid gap-3", className)}>
+    <div className="flex flex-wrap gap-3">
       {columns.map((column) => (
-        <div key={column.id} className="flex flex-col gap-2">
+        <div
+          key={column.id}
+          className={cn("flex min-w-2xs flex-1 flex-col gap-2", className)}
+        >
           {column.header}
           <StudentBucketPanel
             id={column.id}

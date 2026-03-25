@@ -339,7 +339,6 @@ export function StudentAssignmentDialog({
               <StudentBucketsBoard
                 columns={boardColumns}
                 getStudentDisplayName={getStudentDisplayName}
-                className="grid-cols-1 md:grid-cols-2"
               />
             </div>
 

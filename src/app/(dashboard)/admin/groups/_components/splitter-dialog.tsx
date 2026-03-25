@@ -384,7 +384,6 @@ export function SplitterDialog({
               <StudentBucketsBoard
                 columns={boardColumns}
                 getStudentDisplayName={getStudentDisplayName}
-                className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
               />
 
               <DialogFooter>
