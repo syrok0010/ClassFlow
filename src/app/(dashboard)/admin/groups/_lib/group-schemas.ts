@@ -49,6 +49,18 @@ export const splitSchema = z.object({
     .min(1),
 });
 
+export const redistributeSchema = z.object({
+  assignments: z.record(z.string(), z.array(z.string())),
+});
+
+export type GroupTypeInput = z.infer<typeof groupTypeSchema>;
+export type CreateGroupInput = z.infer<typeof createGroupSchema>;
+export type UpdateGroupInput = z.infer<typeof updateGroupSchema>;
+export type IdInput = z.infer<typeof idSchema>;
+export type AssignStudentsInput = z.infer<typeof assignStudentsSchema>;
+export type SplitInput = z.infer<typeof splitSchema>;
+export type RedistributeInput = z.infer<typeof redistributeSchema>;
+
 export const groupGradeInputSchema = z.string().refine(
   (value) =>
     value === "" ||

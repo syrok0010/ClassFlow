@@ -10,7 +10,6 @@ import { SplitterDialog } from "./splitter-dialog";
 import { SubgroupEditorDialog } from "./subgroup-editor-dialog";
 import { useGroupsCrud } from "../_hooks/use-groups-crud";
 import type { SubgroupEditorData } from "../_actions/group-actions";
-import { toast } from "sonner";
 
 interface GroupsTableClientProps {
   initialGroups: GroupWithDetails[];
@@ -62,14 +61,11 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
       setTransferLoading(true);
       setTransferGroup(group);
       setTransferDialogOpen(true);
-      try {
-        const data = await loadStudentsForAssignment(group.id, group.type);
+      const data = await loadStudentsForAssignment(group.id, group.type);
+      if (data) {
         setTransferStudents(data);
-      } catch {
-        toast.error("Ошибка загрузки учеников");
-      } finally {
-        setTransferLoading(false);
       }
+      setTransferLoading(false);
     },
     [loadStudentsForAssignment]
   );
@@ -87,11 +83,9 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
     async (group: GroupWithDetails) => {
       setSplitterGroup(group);
       setSplitterOpen(true);
-      try {
-        const students = await loadGroupStudents(group.id);
+      const students = await loadGroupStudents(group.id);
+      if (students) {
         setSplitterStudents(students);
-      } catch {
-        toast.error("Ошибка загрузки учеников");
       }
     },
     [loadGroupStudents]
@@ -103,8 +97,10 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
       subjectId: string;
       subgroups: { name: string; studentIds: string[] }[];
     }) => {
-      await handleSplitterSave(data);
-      setSplitterOpen(false);
+      const ok = await handleSplitterSave(data);
+      if (ok) {
+        setSplitterOpen(false);
+      }
     },
     [handleSplitterSave]
   );
@@ -118,15 +114,13 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
       setSubgroupEditorOpen(true);
       setSubgroupEditorLoading(true);
 
-      try {
-        const data = await loadSubgroupEditorData(group.id);
+      const data = await loadSubgroupEditorData(group.id);
+      if (data) {
         setSubgroupEditorData(data);
-      } catch {
-        toast.error("Ошибка загрузки подгрупп");
+      } else {
         setSubgroupEditorOpen(false);
-      } finally {
-        setSubgroupEditorLoading(false);
       }
+      setSubgroupEditorLoading(false);
     },
     [loadSubgroupEditorData]
   );

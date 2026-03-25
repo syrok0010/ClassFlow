@@ -100,31 +100,32 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
 
   const handleCreateGroup = useCallback(
     async (data: { name: string; type: GroupType; grade?: number | null }) => {
-      try {
-        const optimisticGroup: GroupWithDetails = {
-          id: `optimistic-${crypto.randomUUID()}`,
-          name: data.name,
-          type: data.type,
-          grade: data.grade ?? null,
-          parentId: null,
-          subjectId: null,
-          subject: null,
-          _count: { studentGroups: 0 },
-          subGroups: [],
-        };
+      const optimisticGroup: GroupWithDetails = {
+        id: `optimistic-${crypto.randomUUID()}`,
+        name: data.name,
+        type: data.type,
+        grade: data.grade ?? null,
+        parentId: null,
+        subjectId: null,
+        subject: null,
+        _count: { studentGroups: 0 },
+        subGroups: [],
+      };
 
-        startTransition(() => {
-          dispatchOptimistic({ type: "add", group: optimisticGroup });
-        });
-        await createGroupAction(data);
+      startTransition(() => {
+        dispatchOptimistic({ type: "add", group: optimisticGroup });
+      });
+
+      const response = await createGroupAction(data);
+      if (response.error) {
         router.refresh();
-        toast.success(`Группа "${data.name}" создана`);
-        return true;
-      } catch {
-        router.refresh();
-        toast.error("Ошибка при создании группы");
+        toast.error(response.error);
         return false;
       }
+
+      router.refresh();
+      toast.success(`Группа "${data.name}" создана`);
+      return true;
     },
     [dispatchOptimistic, router]
   );
@@ -138,14 +139,15 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
         dispatchOptimistic({ type: "rename", id, name: nextName });
       });
 
-      try {
-        await updateGroupAction(id, { name: nextName });
+      const response = await updateGroupAction(id, { name: nextName });
+      if (response.error) {
         router.refresh();
-        toast.success("Группа переименована");
-      } catch {
-        router.refresh();
-        toast.error("Ошибка при переименовании");
+        toast.error(response.error);
+        return;
       }
+
+      router.refresh();
+      toast.success("Группа переименована");
     },
     [dispatchOptimistic, router]
   );
@@ -156,14 +158,15 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
         dispatchOptimistic({ type: "remove", id: group.id });
       });
 
-      try {
-        await deleteGroupAction(group.id);
+      const response = await deleteGroupAction(group.id);
+      if (response.error) {
         router.refresh();
-        toast.success(`Группа "${group.name}" удалена`);
-      } catch {
-        router.refresh();
-        toast.error("Ошибка при удалении группы");
+        toast.error(response.error);
+        return;
       }
+
+      router.refresh();
+      toast.success(`Группа "${group.name}" удалена`);
     },
     [dispatchOptimistic, router]
   );
@@ -186,34 +189,49 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
         });
       });
 
-      try {
-        if (toAssign.length > 0) {
-          await assignStudentsToGroupAction(transferGroup.id, toAssign);
+      if (toAssign.length > 0) {
+        const assignResponse = await assignStudentsToGroupAction(transferGroup.id, toAssign);
+        if (assignResponse.error) {
+          router.refresh();
+          toast.error(assignResponse.error);
+          return;
         }
-
-        if (toRemove.length > 0) {
-          await removeStudentsFromGroupAction(transferGroup.id, toRemove);
-        }
-
-        router.refresh();
-        toast.success("Состав группы обновлен");
-      } catch {
-        router.refresh();
-        toast.error("Ошибка при обновлении состава");
       }
+
+      if (toRemove.length > 0) {
+        const removeResponse = await removeStudentsFromGroupAction(transferGroup.id, toRemove);
+        if (removeResponse.error) {
+          router.refresh();
+          toast.error(removeResponse.error);
+          return;
+        }
+      }
+
+      router.refresh();
+      toast.success("Состав группы обновлен");
     },
     [dispatchOptimistic, router]
   );
 
   const loadStudentsForAssignment = useCallback(
     async (groupId: string, groupType: GroupType) => {
-      return getStudentsForAssignment(groupId, groupType);
+      const response = await getStudentsForAssignment(groupId, groupType);
+      if (response.error) {
+        toast.error(response.error);
+        return null;
+      }
+      return response.result;
     },
     []
   );
 
   const loadGroupStudents = useCallback(async (groupId: string) => {
-    return getGroupStudents(groupId);
+    const response = await getGroupStudents(groupId);
+    if (response.error) {
+      toast.error(response.error);
+      return null;
+    }
+    return response.result;
   }, []);
 
   const handleSplitterSave = useCallback(
@@ -222,32 +240,39 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
       subjectId: string;
       subgroups: { name: string; studentIds: string[] }[];
     }) => {
-      try {
-        await createSubgroupsFromSplit(data);
-        router.refresh();
-        toast.success("Подгруппы созданы");
-      } catch {
-        toast.error("Ошибка при создании подгрупп");
+      const response = await createSubgroupsFromSplit(data);
+      if (response.error) {
+        toast.error(response.error);
+        return false;
       }
+
+      router.refresh();
+      toast.success("Подгруппы созданы");
+      return true;
     },
     [router]
   );
 
   const loadSubgroupEditorData = useCallback(async (subgroupId: string) => {
-    return getSubgroupEditorData(subgroupId);
+    const response = await getSubgroupEditorData(subgroupId);
+    if (response.error) {
+      toast.error(response.error);
+      return null;
+    }
+    return response.result;
   }, []);
 
   const handleSubgroupRedistributionSave = useCallback(
     async (assignments: Record<string, string[]>) => {
-      try {
-        await saveSubgroupRedistribution(assignments);
-        router.refresh();
-        toast.success("Состав подгрупп обновлен");
-        return true;
-      } catch {
-        toast.error("Ошибка при обновлении подгрупп");
+      const response = await saveSubgroupRedistribution(assignments);
+      if (response.error) {
+        toast.error(response.error);
         return false;
       }
+
+      router.refresh();
+      toast.success("Состав подгрупп обновлен");
+      return true;
     },
     [router]
   );
