@@ -10,8 +10,10 @@ import {
   createSubgroupsFromSplit,
   deleteGroupAction,
   getGroupStudents,
+  getSubgroupEditorData,
   getStudentsForAssignment,
   removeStudentsFromGroupAction,
+  saveSubgroupRedistribution,
   updateGroupAction,
 } from "../_actions/group-actions";
 import { toast } from "sonner";
@@ -169,7 +171,6 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
   const handleTransferSave = useCallback(
     async (
       transferGroup: GroupWithDetails,
-      _currentAssignedCount: number,
       toAssign: string[],
       toRemove: string[]
     ) => {
@@ -232,6 +233,25 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     [router]
   );
 
+  const loadSubgroupEditorData = useCallback(async (subgroupId: string) => {
+    return getSubgroupEditorData(subgroupId);
+  }, []);
+
+  const handleSubgroupRedistributionSave = useCallback(
+    async (assignments: Record<string, string[]>) => {
+      try {
+        await saveSubgroupRedistribution(assignments);
+        router.refresh();
+        toast.success("Состав подгрупп обновлен");
+        return true;
+      } catch {
+        toast.error("Ошибка при обновлении подгрупп");
+        return false;
+      }
+    },
+    [router]
+  );
+
   return {
     groups,
     handleCreateGroup,
@@ -241,5 +261,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     loadStudentsForAssignment,
     loadGroupStudents,
     handleSplitterSave,
+    loadSubgroupEditorData,
+    handleSubgroupRedistributionSave,
   };
 }

@@ -341,7 +341,7 @@ export async function assignStudentsToGroupAction(
 export async function removeStudentsFromGroupAction(
   groupId: string,
   studentIds: string[]
-): Promise<Record<string, number>> {
+): Promise<void> {
   const validated = assignStudentsSchema.parse({ groupId, studentIds });
 
   const subgroups = await prisma.group.findMany({
@@ -369,20 +369,7 @@ export async function removeStudentsFromGroupAction(
       : []),
   ]);
 
-  const allAffectedIds = [validated.groupId, ...subgroupIds];
-  const counts = await prisma.studentGroups.groupBy({
-    by: ["groupId"],
-    where: { groupId: { in: allAffectedIds } },
-    _count: true,
-  });
-
-  const countMap: Record<string, number> = {};
-  for (const gid of allAffectedIds) {
-    countMap[gid] = counts.find((c) => c.groupId === gid)?._count ?? 0;
-  }
-
   revalidatePath("/admin/groups");
-  return countMap;
 }
 
 export async function getGroupStudents(groupId: string): Promise<StudentForAssignment[]> {
@@ -465,14 +452,17 @@ export async function createSubgroupsFromSplit(data: {
     const parentStudentIds = new Set(parentMembershipRows.map((row) => row.studentId));
 
     const requestedStudentIds = validated.subgroups.flatMap((subgroup) => subgroup.studentIds);
+    const hasEmptySubgroup = validated.subgroups.some(
+      (subgroup) => subgroup.studentIds.length === 0
+    );
     const uniqueRequestedStudentIds = new Set(requestedStudentIds);
+
+    if (hasEmptySubgroup) {
+      throw new Error("В каждой подгруппе должен быть минимум 1 ученик");
+    }
 
     if (requestedStudentIds.length !== uniqueRequestedStudentIds.size) {
       throw new Error("Один и тот же ученик не может быть в нескольких подгруппах");
-    }
-
-    if (requestedStudentIds.length !== parentStudentIds.size) {
-      throw new Error("Распределите всех учеников класса");
     }
 
     const invalidStudentIds = requestedStudentIds.filter(
@@ -614,20 +604,120 @@ export async function saveSubgroupRedistribution(
 
   const subgroupIds = Object.keys(validated.assignments);
 
-  await prisma.$transaction([
-    prisma.studentGroups.deleteMany({
-      where: { groupId: { in: subgroupIds } },
-    }),
-    prisma.studentGroups.createMany({
-      data: subgroupIds.flatMap((groupId) =>
+  if (subgroupIds.length === 0) {
+    throw new Error("Не переданы подгруппы для перераспределения");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const subgroups = await tx.group.findMany({
+      where: { id: { in: subgroupIds } },
+      select: {
+        id: true,
+        type: true,
+        parentId: true,
+        subjectId: true,
+      },
+    });
+
+    if (subgroups.length !== subgroupIds.length) {
+      throw new Error("Некоторые подгруппы не найдены");
+    }
+
+    const first = subgroups[0];
+
+    if (
+      first.type !== "SUBJECT_SUBGROUP" ||
+      !first.parentId ||
+      !first.subjectId
+    ) {
+      throw new Error("Некорректный набор подгрупп");
+    }
+
+    const sameHierarchy = subgroups.every(
+      (subgroup) =>
+        subgroup.type === "SUBJECT_SUBGROUP" &&
+        subgroup.parentId === first.parentId &&
+        subgroup.subjectId === first.subjectId
+    );
+
+    if (!sameHierarchy) {
+      throw new Error("Подгруппы должны относиться к одному классу и предмету");
+    }
+
+    const siblingRows = await tx.group.findMany({
+      where: {
+        parentId: first.parentId,
+        subjectId: first.subjectId,
+        type: "SUBJECT_SUBGROUP",
+      },
+      select: { id: true },
+    });
+    const siblingIds = siblingRows.map((row) => row.id);
+
+    if (siblingIds.length === 0) {
+      throw new Error("Подгруппы для выбранного класса и предмета не найдены");
+    }
+
+    const providedSet = new Set(subgroupIds);
+    const siblingSet = new Set(siblingIds);
+
+    if (
+      providedSet.size !== siblingSet.size ||
+      siblingIds.some((id) => !providedSet.has(id))
+    ) {
+      throw new Error("Передайте распределение для всех подгрупп этого предмета");
+    }
+
+    const requestedStudentIds = siblingIds.flatMap(
+      (groupId) => validated.assignments[groupId] ?? []
+    );
+    const hasEmptySubgroup = siblingIds.some(
+      (groupId) => (validated.assignments[groupId] ?? []).length === 0
+    );
+    const uniqueRequestedStudentIds = new Set(requestedStudentIds);
+
+    if (hasEmptySubgroup) {
+      throw new Error("В каждой подгруппе должен быть минимум 1 ученик");
+    }
+
+    if (requestedStudentIds.length !== uniqueRequestedStudentIds.size) {
+      throw new Error("Один и тот же ученик не может быть в нескольких подгруппах");
+    }
+
+    const parentMembershipRows = await tx.studentGroups.findMany({
+      where: { groupId: first.parentId },
+      select: { studentId: true },
+    });
+    const parentStudentIds = new Set(
+      parentMembershipRows.map((row) => row.studentId)
+    );
+
+    if (requestedStudentIds.length !== parentStudentIds.size) {
+      throw new Error("Распределите всех учеников класса");
+    }
+
+    const hasForeignStudents = requestedStudentIds.some(
+      (studentId) => !parentStudentIds.has(studentId)
+    );
+
+    if (hasForeignStudents) {
+      throw new Error("Некоторые ученики не относятся к выбранному классу");
+    }
+
+    await tx.studentGroups.deleteMany({
+      where: { groupId: { in: siblingIds } },
+    });
+
+    await tx.studentGroups.createMany({
+      data: siblingIds.flatMap((groupId) =>
         (validated.assignments[groupId] ?? []).map((studentId) => ({
           studentId,
           groupId,
         }))
       ),
       skipDuplicates: true,
-    }),
-  ]);
+    });
+  });
 
   revalidatePath("/admin/groups");
 }

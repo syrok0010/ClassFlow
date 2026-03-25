@@ -7,7 +7,9 @@ import { GroupsToolbar } from "./groups-toolbar";
 import { GroupsTreeTable } from "./groups-tree-table";
 import { StudentAssignmentDialog } from "./student-assignment-dialog";
 import { SplitterDialog } from "./splitter-dialog";
+import { SubgroupEditorDialog } from "./subgroup-editor-dialog";
 import { useGroupsCrud } from "../_hooks/use-groups-crud";
+import type { SubgroupEditorData } from "../_actions/group-actions";
 import { toast } from "sonner";
 
 interface GroupsTableClientProps {
@@ -25,6 +27,8 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
     loadStudentsForAssignment,
     loadGroupStudents,
     handleSplitterSave,
+    loadSubgroupEditorData,
+    handleSubgroupRedistributionSave,
   } = useGroupsCrud(initialGroups);
 
   const [searchQuery, setSearchQuery] = useQueryState("search", {
@@ -49,6 +53,10 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
   const [splitterGroup, setSplitterGroup] = useState<GroupWithDetails | null>(null);
   const [splitterStudents, setSplitterStudents] = useState<StudentForAssignment[]>([]);
 
+  const [subgroupEditorOpen, setSubgroupEditorOpen] = useState(false);
+  const [subgroupEditorData, setSubgroupEditorData] = useState<SubgroupEditorData | null>(null);
+  const [subgroupEditorLoading, setSubgroupEditorLoading] = useState(false);
+
   const handleOpenTransferList = useCallback(
     async (group: GroupWithDetails) => {
       setTransferLoading(true);
@@ -69,8 +77,7 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
   const onTransferSave = useCallback(
     async (toAssign: string[], toRemove: string[]) => {
       if (!transferGroup || !transferStudents) return;
-      const currentCount = transferStudents.assigned.length;
-      await handleTransferSave(transferGroup, currentCount, toAssign, toRemove);
+      await handleTransferSave(transferGroup, toAssign, toRemove);
       setTransferDialogOpen(false);
     },
     [transferGroup, transferStudents, handleTransferSave]
@@ -100,6 +107,38 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
       setSplitterOpen(false);
     },
     [handleSplitterSave]
+  );
+
+  const handleOpenSubgroupEditor = useCallback(
+    async (group: GroupWithDetails) => {
+      if (group.type !== "SUBJECT_SUBGROUP") {
+        return;
+      }
+
+      setSubgroupEditorOpen(true);
+      setSubgroupEditorLoading(true);
+
+      try {
+        const data = await loadSubgroupEditorData(group.id);
+        setSubgroupEditorData(data);
+      } catch {
+        toast.error("Ошибка загрузки подгрупп");
+        setSubgroupEditorOpen(false);
+      } finally {
+        setSubgroupEditorLoading(false);
+      }
+    },
+    [loadSubgroupEditorData]
+  );
+
+  const onSubgroupEditorSave = useCallback(
+    async (assignments: Record<string, string[]>) => {
+      const ok = await handleSubgroupRedistributionSave(assignments);
+      if (ok) {
+        setSubgroupEditorOpen(false);
+      }
+    },
+    [handleSubgroupRedistributionSave]
   );
 
   return (
@@ -132,6 +171,7 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
         onDeleteGroup={handleDeleteGroup}
         onOpenTransferList={handleOpenTransferList}
         onOpenSplitter={handleOpenSplitter}
+        onOpenSubgroupEditor={handleOpenSubgroupEditor}
       />
 
       <StudentAssignmentDialog
@@ -150,6 +190,19 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
         students={splitterStudents}
         subjects={subjects}
         onSave={onSplitterSave}
+      />
+
+      <SubgroupEditorDialog
+        open={subgroupEditorOpen}
+        onOpenChange={(open) => {
+          setSubgroupEditorOpen(open);
+          if (!open) {
+            setSubgroupEditorData(null);
+          }
+        }}
+        data={subgroupEditorData}
+        loading={subgroupEditorLoading}
+        onSave={onSubgroupEditorSave}
       />
     </div>
   );

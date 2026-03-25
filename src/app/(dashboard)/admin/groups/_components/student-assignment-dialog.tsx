@@ -5,6 +5,7 @@ import {
   useCallback,
 } from "react";
 import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
+import { getStudentDisplayName } from "../_lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -34,12 +35,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { StudentBucketPanel } from "./student-bucket-panel";
-import { DraggableStudentChip } from "./draggable-student-chip";
+import { StudentBucketsBoard } from "./student-buckets-board";
 
 interface StudentAssignmentDialogProps {
   open: boolean;
@@ -51,13 +47,6 @@ interface StudentAssignmentDialogProps {
   } | null;
   loading: boolean;
   onSave: (toAssign: string[], toRemove: string[]) => Promise<void>;
-}
-
-function getStudentDisplayName(s: StudentForAssignment) {
-  const parts = [s.user.surname, s.user.name, s.user.patronymicName].filter(
-    Boolean
-  );
-  return parts.length > 0 ? parts.join(" ") : "Без имени";
 }
 
 function getStudentClassInfo(s: StudentForAssignment) {
@@ -231,6 +220,94 @@ export function StudentAssignmentDialog({
 
   const isElective = group?.type === "ELECTIVE_GROUP";
   const activeStudent = activeId ? studentById.get(activeId) ?? null : null;
+  const boardColumns = useMemo(
+    () => [
+      {
+        id: "unassigned",
+        tone: "source" as const,
+        header: (
+          <>
+            <p className="text-sm font-medium">
+              {isElective ? "Все ученики" : "Свободные ученики"}{" "}
+              <span className="text-muted-foreground">
+                ({filteredLeftStudents.length})
+              </span>
+            </p>
+
+            <div className="flex gap-1.5">
+              <div className="relative flex-1">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Поиск..."
+                  value={leftSearch}
+                  onChange={(e) => setLeftSearch(e.target.value)}
+                  className="h-7 pl-7 text-xs"
+                />
+              </div>
+              {isElective && availableClasses.length > 0 && (
+                <Select
+                  value={leftClassFilter}
+                  onValueChange={(v) => setLeftClassFilter(v ?? "ALL")}
+                  items={classFilterItems}
+                >
+                  <SelectTrigger size="sm" className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Все</SelectItem>
+                    {availableClasses.map((cls) => (
+                      <SelectItem key={cls} value={cls}>
+                        {cls}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </>
+        ),
+        students: filteredLeftStudents,
+        emptyMessage: "Нет учеников",
+        chipBucketId: "unassigned",
+        renderStudentEnd: isElective
+          ? (s: StudentForAssignment) => {
+              const className = getStudentClassInfo(s);
+              if (!className) return null;
+
+              return (
+                <span className="text-xs text-muted-foreground">{className}</span>
+              );
+            }
+          : undefined,
+      },
+      {
+        id: "assigned",
+        tone: "target" as const,
+        header: (
+          <>
+            <p className="text-sm font-medium">
+              Состав {group?.name ?? ""}{" "}
+              <span className="text-muted-foreground">({rightStudents.length})</span>
+            </p>
+            <div className="h-7" />
+          </>
+        ),
+        students: rightStudents,
+        emptyMessage: "Пусто",
+        chipBucketId: "assigned",
+      },
+    ],
+    [
+      availableClasses,
+      classFilterItems,
+      filteredLeftStudents,
+      group?.name,
+      isElective,
+      leftClassFilter,
+      leftSearch,
+      rightStudents,
+    ]
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -259,112 +336,11 @@ export function StudentAssignmentDialog({
             onDragEnd={handleDragEnd}
           >
             <div className="flex flex-col gap-3 min-h-[350px]">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm font-medium">
-                    {isElective ? "Все ученики" : "Свободные ученики"}{" "}
-                    <span className="text-muted-foreground">
-                      ({filteredLeftStudents.length})
-                    </span>
-                  </p>
-
-                  <div className="flex gap-1.5">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                      <Input
-                        placeholder="Поиск..."
-                        value={leftSearch}
-                        onChange={(e) => setLeftSearch(e.target.value)}
-                        className="h-7 pl-7 text-xs"
-                      />
-                    </div>
-                    {isElective && availableClasses.length > 0 && (
-                      <Select
-                        value={leftClassFilter}
-                        onValueChange={(v) => setLeftClassFilter(v ?? "ALL")}
-                        items={classFilterItems}
-                      >
-                        <SelectTrigger size="sm" className="w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ALL">Все</SelectItem>
-                          {availableClasses.map((cls) => (
-                            <SelectItem key={cls} value={cls}>
-                              {cls}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-
-                  <StudentBucketPanel
-                    id="unassigned"
-                    variant="source"
-                    emptyMessage="Нет учеников"
-                    className="flex-1 max-h-[280px] min-h-[280px]"
-                    contentClassName="p-1.5"
-                    emptyMessageClassName="py-6"
-                  >
-                    <SortableContext
-                      items={filteredLeftStudents.map((s) => s.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {filteredLeftStudents.map((s) => (
-                        <DraggableStudentChip
-                          key={s.id}
-                          student={s}
-                          displayName={getStudentDisplayName(s)}
-                          bucketId="unassigned"
-                          className="gap-2 px-2.5 py-1.5"
-                          endSlot={
-                            isElective && getStudentClassInfo(s) ? (
-                              <span className="text-xs text-muted-foreground">
-                                {getStudentClassInfo(s)}
-                              </span>
-                            ) : null
-                          }
-                        />
-                      ))}
-                    </SortableContext>
-                  </StudentBucketPanel>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm font-medium">
-                    Состав {group?.name ?? ""}{" "}
-                    <span className="text-muted-foreground">
-                      ({rightStudents.length})
-                    </span>
-                  </p>
-                  <div className="h-7" />
-
-                  <StudentBucketPanel
-                    id="assigned"
-                    variant="target"
-                    emptyMessage="Пусто"
-                    className="flex-1 max-h-[280px] min-h-[280px]"
-                    contentClassName="p-1.5"
-                    emptyMessageClassName="py-6"
-                  >
-                    <SortableContext
-                      items={rightStudents.map((s) => s.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {rightStudents.map((s) => (
-                        <DraggableStudentChip
-                          key={s.id}
-                          student={s}
-                          displayName={getStudentDisplayName(s)}
-                          bucketId="assigned"
-                          className="gap-2 px-2.5 py-1.5"
-                        />
-                      ))}
-                    </SortableContext>
-                  </StudentBucketPanel>
-                </div>
-              </div>
+              <StudentBucketsBoard
+                columns={boardColumns}
+                getStudentDisplayName={getStudentDisplayName}
+                className="grid-cols-1 md:grid-cols-2"
+              />
             </div>
 
             <DragOverlay>

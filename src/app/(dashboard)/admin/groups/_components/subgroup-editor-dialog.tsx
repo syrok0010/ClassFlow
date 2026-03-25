@@ -6,6 +6,7 @@ import {
 } from "react";
 import type { StudentForAssignment } from "../_lib/types";
 import type { SubgroupEditorData } from "../_actions/group-actions";
+import { getStudentDisplayName } from "../_lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -27,12 +28,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { DraggableStudentChip } from "./draggable-student-chip";
-import { StudentBucketPanel } from "./student-bucket-panel";
+import { StudentBucketsBoard } from "./student-buckets-board";
 
 interface SubgroupEditorDialogProps {
   open: boolean;
@@ -69,17 +65,6 @@ export function SubgroupEditorDialog({
     }
   }, [data, initializedFrom]);
 
-  const assignedIds = useMemo(() => {
-    const set = new Set<string>();
-    Object.values(buckets).forEach((ids) => ids.forEach((id) => set.add(id)));
-    return set;
-  }, [buckets]);
-
-  const unassignedStudents = useMemo(
-    () => students.filter((s) => !assignedIds.has(s.id)),
-    [students, assignedIds]
-  );
-
   const siblingIds = useMemo(() => siblings.map((s) => s.id), [siblings]);
 
   const sensors = useSensors(
@@ -111,29 +96,22 @@ export function SubgroupEditorDialog({
     const targetBucket =
       (over.data.current?.bucketId as string) ?? (over.id as string);
 
-    if (targetBucket === "unassigned") {
-      const sourceBucket = findBucketOfStudent(studentId);
-      if (sourceBucket) {
-        setBuckets((prev) => ({
-          ...prev,
-          [sourceBucket]: prev[sourceBucket].filter((id) => id !== studentId),
-        }));
-      }
-      return;
-    }
-
     if (!siblingIds.includes(targetBucket)) return;
 
     const sourceBucket = findBucketOfStudent(studentId);
 
+    if (!sourceBucket || sourceBucket === targetBucket) {
+      return;
+    }
+
+    if ((buckets[sourceBucket]?.length ?? 0) <= 1) {
+      return;
+    }
+
     setBuckets((prev) => {
       const next = { ...prev };
 
-      if (sourceBucket) {
-        next[sourceBucket] = next[sourceBucket].filter(
-          (id) => id !== studentId
-        );
-      }
+      next[sourceBucket] = next[sourceBucket].filter((id) => id !== studentId);
 
       if (!next[targetBucket]) next[targetBucket] = [];
       if (!next[targetBucket].includes(studentId)) {
@@ -184,6 +162,24 @@ export function SubgroupEditorDialog({
     return false;
   }, [data, buckets]);
 
+  const boardColumns = useMemo(
+    () =>
+      siblings.map((sib) => {
+        const bucketStudents = (buckets[sib.id] ?? [])
+          .map((id) => students.find((s) => s.id === id))
+          .filter(Boolean) as StudentForAssignment[];
+
+        return {
+          id: sib.id,
+          title: `${sib.name} (${bucketStudents.length})`,
+          tone: "target" as const,
+          students: bucketStudents,
+          emptyMessage: "Перетащите сюда",
+        };
+      }),
+    [buckets, siblings, students]
+  );
+
   const activeStudent = activeId
     ? students.find((s) => s.id === activeId) ?? null
     : null;
@@ -224,74 +220,15 @@ export function SubgroupEditorDialog({
                   Перемешать поровну
                 </Button>
                 <span className="text-xs text-muted-foreground ml-auto">
-                  Перетащите учеников между подгруппами
+                  Ученик должен оставаться в одной из подгрупп
                 </span>
               </div>
 
-              <div
-                className="grid gap-3"
-                style={{
-                  gridTemplateColumns: `1fr repeat(${siblings.length}, 1fr)`,
-                }}
-              >
-                <StudentBucketPanel
-                  id="unassigned"
-                  title={`Нераспределённые (${unassignedStudents.length})`}
-                  variant="source"
-                >
-                  <SortableContext
-                    items={unassignedStudents.map((s) => s.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {unassignedStudents.map((s) => (
-                      <DraggableStudentChip
-                        key={s.id}
-                        student={s}
-                        displayName={getDisplayName(s)}
-                      />
-                    ))}
-                  </SortableContext>
-                  {unassignedStudents.length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-4">
-                      Все распределены
-                    </p>
-                  )}
-                </StudentBucketPanel>
-
-                {siblings.map((sib) => {
-                  const bucketStudents = (buckets[sib.id] ?? [])
-                    .map((id) => students.find((s) => s.id === id))
-                    .filter(Boolean) as StudentForAssignment[];
-
-                  return (
-                    <StudentBucketPanel
-                      key={sib.id}
-                      id={sib.id}
-                      title={`${sib.name} (${bucketStudents.length})`}
-                      variant="target"
-                    >
-                      <SortableContext
-                        items={bucketStudents.map((s) => s.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        {bucketStudents.map((s) => (
-                          <DraggableStudentChip
-                            key={s.id}
-                            student={s}
-                            displayName={getDisplayName(s)}
-                            bucketId={sib.id}
-                          />
-                        ))}
-                      </SortableContext>
-                      {bucketStudents.length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-4">
-                          Перетащите сюда
-                        </p>
-                      )}
-                    </StudentBucketPanel>
-                  );
-                })}
-              </div>
+              <StudentBucketsBoard
+                columns={boardColumns}
+                getStudentDisplayName={getStudentDisplayName}
+                className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+              />
 
               <DialogFooter>
                 <Button
@@ -313,7 +250,7 @@ export function SubgroupEditorDialog({
             <DragOverlay>
               {activeStudent && (
                 <div className="rounded-md border bg-background px-3 py-1.5 text-sm shadow-lg">
-                  {getDisplayName(activeStudent)}
+                  {getStudentDisplayName(activeStudent)}
                 </div>
               )}
             </DragOverlay>
@@ -322,9 +259,4 @@ export function SubgroupEditorDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-function getDisplayName(s: StudentForAssignment) {
-  const parts = [s.user.surname, s.user.name].filter(Boolean);
-  return parts.length > 0 ? parts.join(" ") : "Без имени";
 }

@@ -68,6 +68,7 @@ interface GroupsTreeTableProps {
   onDeleteGroup: (group: GroupWithDetails) => Promise<void>;
   onOpenTransferList: (group: GroupWithDetails) => void;
   onOpenSplitter: (group: GroupWithDetails) => void;
+  onOpenSubgroupEditor: (group: GroupWithDetails) => void;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -93,6 +94,7 @@ export function GroupsTreeTable({
   onDeleteGroup,
   onOpenTransferList,
   onOpenSplitter,
+  onOpenSubgroupEditor,
 }: GroupsTreeTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteGroup, setConfirmDeleteGroup] =
@@ -233,7 +235,14 @@ export function GroupsTreeTable({
               variant="link"
               size="sm"
               className="h-auto p-0 text-sm"
-              onClick={() => onOpenTransferList(group)}
+              onClick={() => {
+                if (group.type === "SUBJECT_SUBGROUP") {
+                  onOpenSubgroupEditor(group);
+                  return;
+                }
+
+                onOpenTransferList(group);
+              }}
             >
               {group._count.studentGroups} чел.
             </Button>
@@ -279,8 +288,10 @@ export function GroupsTreeTable({
           const group = row.original;
           return (
             <GroupActionMenu
+              group={group}
               onRename={() => handleStartRename(group)}
               onManageStudents={() => onOpenTransferList(group)}
+              onEditSubgroups={() => onOpenSubgroupEditor(group)}
               onDelete={() => setConfirmDeleteGroup(group)}
             />
           );
@@ -295,6 +306,7 @@ export function GroupsTreeTable({
       handleStartRename,
       onOpenTransferList,
       onOpenSplitter,
+      onOpenSubgroupEditor,
     ]
   );
 
@@ -480,12 +492,16 @@ function InlineRenameInput({
 }
 
 function GroupActionMenu({
+  group,
   onRename,
   onManageStudents,
+  onEditSubgroups,
   onDelete,
 }: {
+  group: GroupWithDetails;
   onRename: () => void;
   onManageStudents: () => void;
+  onEditSubgroups: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -502,10 +518,18 @@ function GroupActionMenu({
           <Pencil className="size-4" />
           Переименовать
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={onManageStudents}>
-          <UserPlus className="size-4" />
-          Управление учениками
-        </DropdownMenuItem>
+        {group.type !== "SUBJECT_SUBGROUP" && (
+          <DropdownMenuItem onClick={onManageStudents}>
+            <UserPlus className="size-4" />
+            Управление учениками
+          </DropdownMenuItem>
+        )}
+        {group.type === "SUBJECT_SUBGROUP" && (
+          <DropdownMenuItem onClick={onEditSubgroups}>
+            <Scissors className="size-4" />
+            Редактировать подгруппы
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={onDelete}>
           <Trash2 className="size-4" />

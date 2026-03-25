@@ -4,6 +4,7 @@ import type {
   StudentForAssignment,
   SubjectOption,
 } from "../_lib/types";
+import { getStudentDisplayName } from "../_lib/utils";
 import { groupNameSchema } from "../_lib/group-schemas";
 import {
   Dialog,
@@ -36,12 +37,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { StudentBucketPanel } from "./student-bucket-panel";
-import { DraggableStudentChip } from "./draggable-student-chip";
+import { StudentBucketsBoard } from "./student-buckets-board";
 
 interface SplitterDialogProps {
   open: boolean;
@@ -117,8 +113,12 @@ export function SplitterDialog({
     () => students.filter((s) => !assignedIds.has(s.id)),
     [students, assignedIds]
   );
-
   const allAssigned = unassignedStudents.length === 0 && students.length > 0;
+
+  const hasEmptySubgroup = useMemo(
+    () => bucketKeys.some((key) => (buckets[key]?.length ?? 0) === 0),
+    [bucketKeys, buckets]
+  );
 
 
   const sensors = useSensors(
@@ -227,6 +227,32 @@ export function SplitterDialog({
   const activeStudent = activeId
     ? students.find((s) => s.id === activeId) ?? null
     : null;
+
+  const boardColumns = useMemo(
+    () => [
+      {
+        id: "unassigned",
+        title: `Нераспределенные (${unassignedStudents.length})`,
+        tone: "source" as const,
+        students: unassignedStudents,
+        emptyMessage: "Все распределены",
+      },
+      ...bucketKeys.map((key, i) => {
+        const bucketStudents = (buckets[key] ?? [])
+          .map((id) => students.find((s) => s.id === id))
+          .filter(Boolean) as StudentForAssignment[];
+
+        return {
+          id: key,
+          title: `Группа ${i + 1} (${bucketStudents.length})`,
+          tone: "target" as const,
+          students: bucketStudents,
+          emptyMessage: "Перетащите сюда",
+        };
+      }),
+    ],
+    [buckets, bucketKeys, students, unassignedStudents]
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -355,82 +381,25 @@ export function SplitterDialog({
                 </span>
               </div>
 
-              <div
-                className="grid gap-3"
-                style={{
-                  gridTemplateColumns: `1fr repeat(${subgroupCount}, 1fr)`,
-                }}
-              >
-                <StudentBucketPanel
-                  id="unassigned"
-                  title={`Нераспределенные (${unassignedStudents.length})`}
-                  variant="source"
-                >
-                  <SortableContext
-                    items={unassignedStudents.map((s) => s.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {unassignedStudents.map((s) => (
-                      <DraggableStudentChip
-                        key={s.id}
-                        student={s}
-                        displayName={getDisplayName(s)}
-                      />
-                    ))}
-                  </SortableContext>
-                  {unassignedStudents.length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-4">
-                      Все распределены
-                    </p>
-                  )}
-                </StudentBucketPanel>
-
-                {bucketKeys.map((key, i) => {
-                  const bucketStudents = (buckets[key] ?? [])
-                    .map((id) => students.find((s) => s.id === id))
-                    .filter(Boolean) as StudentForAssignment[];
-
-                  return (
-                    <StudentBucketPanel
-                      key={key}
-                      id={key}
-                      title={`Группа ${i + 1} (${bucketStudents.length})`}
-                      variant="target"
-                    >
-                      <SortableContext
-                        items={bucketStudents.map((s) => s.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        {bucketStudents.map((s) => (
-                          <DraggableStudentChip
-                            key={s.id}
-                            student={s}
-                            displayName={getDisplayName(s)}
-                            bucketId={key}
-                          />
-                        ))}
-                      </SortableContext>
-                      {bucketStudents.length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-4">
-                          Перетащите сюда
-                        </p>
-                      )}
-                    </StudentBucketPanel>
-                  );
-                })}
-              </div>
+              <StudentBucketsBoard
+                columns={boardColumns}
+                getStudentDisplayName={getStudentDisplayName}
+                className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+              />
 
               <DialogFooter>
                 <Button variant="outline" onClick={handleBack}>
                   Назад
                 </Button>
                 <Button
-                  disabled={!allAssigned || saving}
+                  disabled={!allAssigned || hasEmptySubgroup || saving}
                   onClick={handleSave}
                   title={
                     !allAssigned
                       ? "Распределите всех учеников"
-                      : undefined
+                      : hasEmptySubgroup
+                        ? "В каждой подгруппе должен быть минимум 1 ученик"
+                        : undefined
                   }
                 >
                   {saving && <Loader2 className="size-4 animate-spin" />}
@@ -442,7 +411,7 @@ export function SplitterDialog({
             <DragOverlay>
               {activeStudent && (
                 <div className="rounded-md border bg-background px-3 py-1.5 text-sm shadow-lg">
-                  {getDisplayName(activeStudent)}
+                  {getStudentDisplayName(activeStudent)}
                 </div>
               )}
             </DragOverlay>
@@ -451,9 +420,4 @@ export function SplitterDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-function getDisplayName(s: StudentForAssignment) {
-  const parts = [s.user.surname, s.user.name].filter(Boolean);
-  return parts.length > 0 ? parts.join(" ") : "Без имени";
 }
