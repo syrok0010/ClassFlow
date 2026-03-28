@@ -12,6 +12,7 @@ import {
 import {
   SUBJECT_FILTER_OPTIONS,
   SUBJECT_SORT_OPTIONS,
+  SUBJECT_SORT_SELECT_ITEMS,
   type SubjectFilterType,
   type SubjectSortKey,
 } from "../_lib/constants";
@@ -60,7 +61,11 @@ export function SubjectsToolbar({
         size="sm"
       />
 
-      <Select value={sortBy} onValueChange={(value) => onSortByChange(value as SubjectSortKey)}>
+      <Select
+        value={sortBy}
+        onValueChange={(value) => onSortByChange(value as SubjectSortKey)}
+        items={SUBJECT_SORT_SELECT_ITEMS}
+      >
         <SelectTrigger size="sm" className="w-40">
           <ArrowDownAZ className="size-3.5 text-muted-foreground" />
           <SelectValue />

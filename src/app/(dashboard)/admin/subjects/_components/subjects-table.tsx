@@ -134,9 +134,11 @@ export function SubjectsTable({
     getRowId: (row) => row.id,
   });
 
+  const rows = table.getRowModel().rows;
+
   const rowsById = useMemo(
-    () => new Map(table.getRowModel().rows.map((row) => [row.original.id, row])),
-    [table]
+    () => new Map(rows.map((row) => [row.original.id, row])),
+    [rows]
   );
   const groupedSubjects = useMemo(() => groupSubjectsByType(subjects), [subjects]);
 

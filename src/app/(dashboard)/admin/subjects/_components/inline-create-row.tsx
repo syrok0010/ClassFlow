@@ -16,6 +16,7 @@ import {
   subjectNameSchema,
   subjectTypeSchema,
 } from "../_lib/subject-schemas";
+import { SUBJECT_TYPE_SELECT_ITEMS } from "../_lib/constants";
 
 const TYPE_OPTIONS: { value: SubjectType; label: string }[] = [
   { value: "ACADEMIC", label: "Основная программа" },
@@ -101,8 +102,9 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
             <Select
               value={field.state.value}
               onValueChange={(value) => field.handleChange(value as SubjectType)}
+              items={SUBJECT_TYPE_SELECT_ITEMS}
             >
-              <SelectTrigger size="sm" className="w-[12rem]">
+              <SelectTrigger size="sm" className="w-48">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

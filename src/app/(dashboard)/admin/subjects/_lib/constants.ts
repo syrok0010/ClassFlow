@@ -15,6 +15,17 @@ export const SUBJECT_SORT_OPTIONS = [
   { value: "type", label: "По типу" },
 ] as const;
 
+export const SUBJECT_TYPE_SELECT_ITEMS: Record<SubjectType, string> = {
+  ACADEMIC: "Основная программа",
+  ELECTIVE: "Дополнительные занятия",
+  REGIME: "Режимные моменты",
+};
+
+export const SUBJECT_SORT_SELECT_ITEMS: Record<SubjectSortKey, string> = {
+  name: "По названию",
+  type: "По типу",
+};
+
 export const SUBJECT_TYPE_LABELS: Record<SubjectType, string> = {
   ACADEMIC: "Основной",
   ELECTIVE: "Дополнительный",
