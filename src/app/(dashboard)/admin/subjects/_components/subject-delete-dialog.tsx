@@ -1,0 +1,103 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import type { SubjectDeleteGuards, SubjectWithUsage } from "../_lib/types";
+
+interface SubjectDeleteDialogProps {
+  open: boolean;
+  subject: SubjectWithUsage | null;
+  guards: SubjectDeleteGuards | null;
+  isDeleting: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => Promise<void>;
+}
+
+function hasDependencies(guards: SubjectDeleteGuards | null): boolean {
+  if (!guards) {
+    return false;
+  }
+
+  return (
+    guards.roomsCount > 0 ||
+    guards.requirementsCount > 0 ||
+    guards.teachersCount > 0 ||
+    guards.scheduleTemplatesCount > 0 ||
+    guards.scheduleEntriesCount > 0
+  );
+}
+
+export function SubjectDeleteDialog({
+  open,
+  subject,
+  guards,
+  isDeleting,
+  onOpenChange,
+  onConfirm,
+}: SubjectDeleteDialogProps) {
+  if (!subject) {
+    return null;
+  }
+
+  const blocked = hasDependencies(guards);
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {blocked
+              ? `Невозможно удалить предмет \"${subject.name}\"`
+              : `Удалить предмет \"${subject.name}\"?`}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="space-y-1">
+            {blocked ? (
+              <>
+                <span className="block">Невозможно удалить предмет, пока он используется в других разделах системы.</span>
+                {guards && guards.roomsCount > 0 ? (
+                  <span className="block">Используется в {guards.roomsCount} кабинетах</span>
+                ) : null}
+                {guards && guards.requirementsCount > 0 ? (
+                  <span className="block">
+                    Используется в {guards.requirementsCount} требованиях учебного плана
+                  </span>
+                ) : null}
+                {guards && guards.teachersCount > 0 ? (
+                  <span className="block">Назначен {guards.teachersCount} преподавателям</span>
+                ) : null}
+                {guards && guards.scheduleTemplatesCount > 0 ? (
+                  <span className="block">
+                    Используется в {guards.scheduleTemplatesCount} шаблонах расписания
+                  </span>
+                ) : null}
+                {guards && guards.scheduleEntriesCount > 0 ? (
+                  <span className="block">Используется в {guards.scheduleEntriesCount} записях расписания</span>
+                ) : null}
+              </>
+            ) : (
+              <span className="block">Это действие нельзя отменить.</span>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeleting}>Отмена</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={blocked || isDeleting}
+            onClick={() => {
+              void onConfirm();
+            }}
+          >
+            Удалить
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
