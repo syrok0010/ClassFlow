@@ -1,6 +1,11 @@
 import { z } from "zod/v4";
 
-export const subjectTypeSchema = z.enum(["ACADEMIC", "ELECTIVE", "REGIME"]);
+export const subjectTypeSchema = z.enum([
+  "ACADEMIC",
+  "ELECTIVE_REQUIRED",
+  "ELECTIVE_OPTIONAL",
+  "REGIME",
+]);
 
 export const subjectNameSchema = z
   .string()

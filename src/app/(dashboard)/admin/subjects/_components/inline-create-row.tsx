@@ -16,13 +16,7 @@ import {
   subjectNameSchema,
   subjectTypeSchema,
 } from "../_lib/subject-schemas";
-import { SUBJECT_TYPE_SELECT_ITEMS } from "../_lib/constants";
-
-const TYPE_OPTIONS: { value: SubjectType; label: string }[] = [
-  { value: "ACADEMIC", label: "Основная программа" },
-  { value: "ELECTIVE", label: "Дополнительные занятия" },
-  { value: "REGIME", label: "Режимные моменты" },
-];
+import { SUBJECT_TYPE_SELECT_ITEMS, TYPE_OPTIONS } from "../_lib/constants";
 
 interface InlineCreateRowProps {
   onSave: (data: { name: string; type: SubjectType }) => Promise<boolean>;

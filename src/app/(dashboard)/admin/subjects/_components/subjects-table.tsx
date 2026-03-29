@@ -39,7 +39,6 @@ interface SubjectsTableProps {
   allSubjectsCount: number;
   subjects: SubjectWithUsage[];
   isAddingRow: boolean;
-  grouped: boolean;
   hasActiveFilters: boolean;
   onCreateSubject: (data: {
     name: string;
@@ -56,7 +55,6 @@ export function SubjectsTable({
   allSubjectsCount,
   subjects,
   isAddingRow,
-  grouped,
   hasActiveFilters,
   onCreateSubject,
   onRenameSubject,
@@ -72,6 +70,7 @@ export function SubjectsTable({
       {
         accessorKey: "name",
         header: "Название",
+        size: 420,
         cell: ({ row }) => {
           const subject = row.original;
 
@@ -92,7 +91,7 @@ export function SubjectsTable({
             <button
               type="button"
               onDoubleClick={() => setEditingId(subject.id)}
-              className="cursor-default text-left font-medium"
+              className="block w-full cursor-default truncate text-left font-medium"
               title="Двойной клик для переименования"
             >
               {subject.name}
@@ -109,7 +108,13 @@ export function SubjectsTable({
       {
         id: "usage",
         header: "Где используется",
-        cell: ({ row }) => <SubjectUsageCell usage={row.original.usage} />,
+        size: 360,
+        cell: ({ row }) => (
+          <SubjectUsageCell
+            subjectId={row.original.id}
+            usage={row.original.usage}
+          />
+        ),
       },
       {
         id: "actions",
@@ -146,7 +151,7 @@ export function SubjectsTable({
 
   return (
     <div className="rounded-xl border bg-card text-card-foreground shadow">
-      <Table>
+      <Table className="table-fixed">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
@@ -180,7 +185,7 @@ export function SubjectsTable({
             </TableRow>
           ) : null}
 
-          {hasRows && grouped
+          {hasRows
             ? SUBJECT_TYPE_ORDER.map((type) => {
                 const typedSubjects = groupedSubjects.get(type) ?? [];
                 if (typedSubjects.length === 0) {
@@ -221,15 +226,7 @@ export function SubjectsTable({
                   </Fragment>
                 );
               })
-            : table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
+            : null}
         </TableBody>
       </Table>
     </div>

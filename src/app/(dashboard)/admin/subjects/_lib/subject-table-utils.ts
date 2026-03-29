@@ -1,11 +1,10 @@
-import type { SubjectType } from "@/generated/prisma/client";
-import { SUBJECT_TYPE_ORDER, type SubjectSortKey } from "./constants";
-import type { SubjectWithUsage } from "./types";
+import type {SubjectType} from "@/generated/prisma/client";
+import {SUBJECT_TYPE_ORDER} from "./constants";
+import type {SubjectWithUsage} from "./types";
 
 type TableState = {
   search: string;
   typeFilter: "all" | SubjectType;
-  sort: SubjectSortKey;
 };
 
 export function filterAndSortSubjects(
@@ -21,20 +20,9 @@ export function filterAndSortSubjects(
     return matchesType && matchesSearch;
   });
 
-  const sorted = [...filtered].sort((a, b) => {
-    if (state.sort === "type") {
-      const typeDelta =
-        SUBJECT_TYPE_ORDER.indexOf(a.type) - SUBJECT_TYPE_ORDER.indexOf(b.type);
-
-      if (typeDelta !== 0) {
-        return typeDelta;
-      }
-    }
-
-    return a.name.localeCompare(b.name, "ru", { sensitivity: "base" });
-  });
-
-  return sorted;
+  return [...filtered].sort((a, b) =>
+      a.name.localeCompare(b.name, "ru", {sensitivity: "base"})
+  );
 }
 
 export function groupSubjectsByType(subjects: SubjectWithUsage[]) {

@@ -8,12 +8,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Loader2 } from "lucide-react";
 import type { SubjectDeleteGuards, SubjectWithUsage } from "../_lib/types";
 
 interface SubjectDeleteDialogProps {
   open: boolean;
   subject: SubjectWithUsage | null;
   guards: SubjectDeleteGuards | null;
+  isLoadingGuards: boolean;
   isDeleting: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => Promise<void>;
@@ -37,6 +39,7 @@ export function SubjectDeleteDialog({
   open,
   subject,
   guards,
+  isLoadingGuards,
   isDeleting,
   onOpenChange,
   onConfirm,
@@ -46,18 +49,26 @@ export function SubjectDeleteDialog({
   }
 
   const blocked = hasDependencies(guards);
+  const disableDelete = isLoadingGuards || blocked || isDeleting;
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {blocked
+            {isLoadingGuards
+              ? `Проверяем связи предмета \"${subject.name}\"`
+              : blocked
               ? `Невозможно удалить предмет \"${subject.name}\"`
               : `Удалить предмет \"${subject.name}\"?`}
           </AlertDialogTitle>
           <AlertDialogDescription className="space-y-1">
-            {blocked ? (
+            {isLoadingGuards ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="size-4 animate-spin" />
+                Проверяем, где используется предмет...
+              </span>
+            ) : blocked ? (
               <>
                 <span className="block">Невозможно удалить предмет, пока он используется в других разделах системы.</span>
                 {guards && guards.roomsCount > 0 ? (
@@ -89,7 +100,7 @@ export function SubjectDeleteDialog({
           <AlertDialogCancel disabled={isDeleting}>Отмена</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
-            disabled={blocked || isDeleting}
+            disabled={disableDelete}
             onClick={() => {
               void onConfirm();
             }}

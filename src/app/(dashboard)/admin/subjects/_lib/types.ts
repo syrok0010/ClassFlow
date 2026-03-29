@@ -18,7 +18,11 @@ export type SubjectWithUsage = {
 export type SubjectListFilters = {
   search?: string;
   type?: SubjectType;
-  sort?: "name" | "type";
+};
+
+export type SubjectUsageDetails = {
+  rooms: string[];
+  teachers: string[];
 };
 
 export type SubjectDeleteGuards = {

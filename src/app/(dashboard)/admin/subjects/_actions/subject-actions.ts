@@ -16,9 +16,9 @@ import {
 import type {
   SubjectDeleteGuards,
   SubjectListFilters,
+  SubjectUsageDetails,
   SubjectWithUsage,
 } from "../_lib/types";
-import { SUBJECT_TYPE_ORDER } from "../_lib/constants";
 
 const SUBJECTS_PATH = "/admin/subjects";
 
@@ -44,22 +44,23 @@ function applyFilters(subjects: SubjectWithUsage[], filters: SubjectListFilters)
     return typeMatches && searchMatches;
   });
 
-  if (filters.sort === "type") {
-    return filtered.sort((a, b) => {
-      const typeDelta =
-        SUBJECT_TYPE_ORDER.indexOf(a.type) - SUBJECT_TYPE_ORDER.indexOf(b.type);
-
-      if (typeDelta !== 0) {
-        return typeDelta;
-      }
-
-      return a.name.localeCompare(b.name, "ru", { sensitivity: "base" });
-    });
-  }
-
   return filtered.sort((a, b) =>
     a.name.localeCompare(b.name, "ru", { sensitivity: "base" })
   );
+}
+
+function formatTeacherName(teacher: {
+  user: {
+    surname: string | null;
+    name: string | null;
+    patronymicName: string | null;
+  };
+}) {
+  const parts = [teacher.user.surname, teacher.user.name, teacher.user.patronymicName]
+    .map((part) => part?.trim())
+    .filter(Boolean);
+
+  return parts.join(" ") || "Без имени";
 }
 
 function toSubjectWithUsage(
@@ -238,6 +239,59 @@ export async function getSubjectDeleteGuardsAction(
     );
   } catch (error) {
     return err(getErrorMessage(error, "Не удалось проверить связи предмета"));
+  }
+}
+
+export async function getSubjectUsageDetailsAction(
+  id: IdInput
+): Promise<Result<SubjectUsageDetails>> {
+  try {
+    idSchema.parse(id);
+
+    const subject = await prisma.subject.findUnique({
+      where: { id },
+      select: {
+        roomSubjects: {
+          select: {
+            room: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        teacherSubjects: {
+          select: {
+            teacher: {
+              select: {
+                user: {
+                  select: {
+                    surname: true,
+                    name: true,
+                    patronymicName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!subject) {
+      return err("Предмет не найден");
+    }
+
+    const rooms = Array.from(new Set(subject.roomSubjects.map((item) => item.room.name))).sort(
+      (a, b) => a.localeCompare(b, "ru", { sensitivity: "base" })
+    );
+    const teachers = Array.from(
+      new Set(subject.teacherSubjects.map((item) => formatTeacherName(item.teacher)))
+    ).sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }));
+
+    return ok({ rooms, teachers });
+  } catch (error) {
+    return err(getErrorMessage(error, "Не удалось загрузить данные использования"));
   }
 }
 

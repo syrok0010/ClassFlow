@@ -9,7 +9,7 @@ import type { SubjectDeleteGuards, SubjectWithUsage } from "../_lib/types";
 import {
   filterAndSortSubjects,
 } from "../_lib/subject-table-utils";
-import type { SubjectFilterType, SubjectSortKey } from "../_lib/constants";
+import type { SubjectFilterType } from "../_lib/constants";
 import { useSubjectsCrud } from "../_hooks/use-subjects-crud";
 
 interface SubjectsTableClientProps {
@@ -33,51 +33,50 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
     defaultValue: "all",
     shallow: true,
   });
-  const [sortBy, setSortBy] = useQueryState("sort", {
-    defaultValue: "name",
-    shallow: true,
-  });
-  const [groupedState, setGroupedState] = useQueryState("grouped", {
-    defaultValue: "1",
-    shallow: true,
-  });
 
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [deleteSubject, setDeleteSubject] = useState<SubjectWithUsage | null>(null);
   const [deleteGuards, setDeleteGuards] = useState<SubjectDeleteGuards | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteGuardsLoading, setDeleteGuardsLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const grouped = groupedState !== "0";
   const safeType =
-    filterType === "ACADEMIC" || filterType === "ELECTIVE" || filterType === "REGIME"
+    filterType === "ACADEMIC" ||
+    filterType === "ELECTIVE_REQUIRED" ||
+    filterType === "ELECTIVE_OPTIONAL" ||
+    filterType === "REGIME"
       ? filterType
       : "all";
-  const safeSort: SubjectSortKey = sortBy === "type" ? "type" : "name";
 
   const visibleSubjects = useMemo(
     () =>
       filterAndSortSubjects(subjects, {
         search: searchQuery,
         typeFilter: safeType as SubjectFilterType,
-        sort: safeSort,
       }),
-    [safeSort, safeType, searchQuery, subjects]
+    [safeType, searchQuery, subjects]
   );
 
-  const hasActiveFilters =
-    Boolean(searchQuery) || safeType !== "all" || safeSort !== "name" || !grouped;
+  const hasActiveFilters = Boolean(searchQuery) || safeType !== "all";
 
   const handleDeleteRequest = async (subject: SubjectWithUsage) => {
     setDeleteSubject(subject);
+    setDeleteGuards(null);
+    setDeleteGuardsLoading(true);
     setDeleteOpen(true);
-    const guards = await loadDeleteGuards(subject.id);
-    if (guards) {
-      setDeleteGuards(guards);
-      return;
-    }
 
-    setDeleteGuards(subject.usage);
+    try {
+      const guards = await loadDeleteGuards(subject.id);
+      if (guards) {
+        setDeleteGuards(guards);
+        return;
+      }
+
+      setDeleteGuards(subject.usage);
+    } finally {
+      setDeleteGuardsLoading(false);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -101,8 +100,6 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
   const resetFilters = () => {
     void setSearchQuery(null);
     void setFilterType(null);
-    void setSortBy(null);
-    void setGroupedState(null);
   };
 
   return (
@@ -125,14 +122,6 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
         onFilterTypeChange={(value) => {
           void setFilterType(value === "all" ? null : value);
         }}
-        sortBy={safeSort}
-        onSortByChange={(value) => {
-          void setSortBy(value === "name" ? null : value);
-        }}
-        grouped={grouped}
-        onGroupedChange={(value) => {
-          void setGroupedState(value ? null : "0");
-        }}
         isAddingRow={isAddingRow}
         onAddSubject={() => setIsAddingRow(true)}
       />
@@ -141,7 +130,6 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
         allSubjectsCount={subjects.length}
         subjects={visibleSubjects}
         isAddingRow={isAddingRow}
-        grouped={grouped}
         hasActiveFilters={hasActiveFilters}
         onCreateSubject={handleCreateSubject}
         onRenameSubject={handleRenameSubject}
@@ -155,12 +143,14 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
         open={deleteOpen}
         subject={deleteSubject}
         guards={deleteGuards}
+        isLoadingGuards={deleteGuardsLoading}
         isDeleting={deleteLoading}
         onOpenChange={(open) => {
           setDeleteOpen(open);
           if (!open) {
             setDeleteSubject(null);
             setDeleteGuards(null);
+            setDeleteGuardsLoading(false);
           }
         }}
         onConfirm={handleDeleteConfirm}
