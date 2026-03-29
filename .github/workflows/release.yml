@@ -1,0 +1,196 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (for example 0.2.0 or v0.2.0)"
+        required: true
+        type: string
+      target:
+        description: "Branch, tag, or commit to release"
+        required: true
+        default: "main"
+        type: string
+      prerelease:
+        description: "Mark the GitHub Release as a pre-release"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      release_tag: ${{ steps.meta.outputs.tag }}
+      release_sha: ${{ steps.meta.outputs.sha }}
+    env:
+      BETTER_AUTH_SECRET: ci-release-not-for-production-secret-32chars
+      DATABASE_URL: postgresql://prisma:prisma_password@127.0.0.1:5432/classflow_release
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: prisma
+          POSTGRES_PASSWORD: prisma_password
+          POSTGRES_DB: classflow_release
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prisma -d classflow_release"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout target ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target }}
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          raw_version="${{ inputs.version }}"
+
+          if [[ -z "${raw_version}" ]]; then
+            echo "Version input is required." >&2
+            exit 1
+          fi
+
+          if [[ "${raw_version}" == v* ]]; then
+            tag="${raw_version}"
+          else
+            tag="v${raw_version}"
+          fi
+
+          if ! [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)*$ ]]; then
+            echo "Version must look like v1.2.3, 1.2.3, v1.2.3-rc.1, or v1.2.3+build.5." >&2
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+
+      - name: Apply Prisma migrations
+        run: pnpm prisma migrate deploy
+
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Package standalone bundle
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          release_root="release/classflow-${RELEASE_TAG}"
+          bundle_name="classflow-${RELEASE_TAG}-standalone.tar.gz"
+
+          rm -rf release
+          mkdir -p "${release_root}"
+          cp -R .next/standalone/. "${release_root}/"
+          mkdir -p "${release_root}/.next"
+          cp -R .next/static "${release_root}/.next/static"
+
+          if [[ -d public ]]; then
+            cp -R public "${release_root}/public"
+          fi
+
+          tar -czf "release/${bundle_name}" -C release "classflow-${RELEASE_TAG}"
+          sha256sum "release/${bundle_name}" > "release/${bundle_name}.sha256"
+
+      - name: Upload standalone bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-bundle-${{ steps.meta.outputs.tag }}
+          path: |
+            release/*.tar.gz
+            release/*.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+
+    steps:
+      - name: Checkout validated ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Download standalone bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: standalone-bundle-${{ needs.validate.outputs.release_tag }}
+          path: release
+
+      - name: Ensure tag and release do not already exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/${{ needs.validate.outputs.release_tag }}" >/dev/null; then
+            echo "Git tag ${{ needs.validate.outputs.release_tag }} already exists." >&2
+            exit 1
+          fi
+
+          if gh release view "${{ needs.validate.outputs.release_tag }}" >/dev/null 2>&1; then
+            echo "GitHub Release ${{ needs.validate.outputs.release_tag }} already exists." >&2
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          tag="${{ needs.validate.outputs.release_tag }}"
+          bundle="release/classflow-${tag}-standalone.tar.gz"
+          checksum="${bundle}.sha256"
+
+          args=(
+            "${tag}"
+            --target "${{ needs.validate.outputs.release_sha }}"
+            --title "${tag}"
+            --generate-notes
+            "${bundle}"
+            "${checksum}"
+          )
+
+          if [[ "${{ inputs.prerelease }}" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+
+          gh release create "${args[@]}"
