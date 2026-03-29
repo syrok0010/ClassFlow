@@ -106,7 +106,7 @@ export function RoomSubjectsTransfer({
   const mutation = useMutation({
     mutationFn: async (nextSubjectIds: string[]) => {
       const result = await updateRoomSubjectsAction(roomId, nextSubjectIds);
-      if ("error" in result) {
+      if (result.error) {
         throw new Error(result.error);
       }
       return nextSubjectIds;

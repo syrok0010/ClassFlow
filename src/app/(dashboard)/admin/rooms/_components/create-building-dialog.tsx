@@ -6,7 +6,8 @@ import { useForm } from "@tanstack/react-form";
 import { Building2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FormField } from "@/components/ui/form-field";
+import { z } from "zod";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { createBuildingAction } from "../_actions/room-actions";
+import { createBuildingSchema } from "../_lib/schemas";
+
+const createBuildingFormSchema = createBuildingSchema.extend({
+  address: z.string().trim().max(100, "Максимум 100 символов"),
+});
 
 type CreateBuildingDialogProps = {
   triggerVariant?: "icon" | "button";
@@ -31,15 +37,23 @@ export function CreateBuildingDialog({ triggerVariant = "icon" }: CreateBuilding
       name: "",
       address: "",
     },
+    validators: {
+      onChange: createBuildingFormSchema,
+    },
     onSubmit: async ({ value }) => {
       const result = await createBuildingAction(value);
 
-      if ("error" in result) {
+      if (result.error) {
         toast.error(result.error);
         return;
       }
 
-      toast.success(`Здание '${result.building.name}' успешно добавлено`);
+      if (!result.result) {
+        toast.error("Не удалось создать здание");
+        return;
+      }
+
+      toast.success(`Здание '${result.result.name}' успешно добавлено`);
       setOpen(false);
       form.reset();
       router.refresh();
@@ -74,45 +88,18 @@ export function CreateBuildingDialog({ triggerVariant = "icon" }: CreateBuilding
         <div className="grid gap-3">
           <form.Field name="name">
             {(field) => (
-              <div className="grid gap-1.5">
-                <label htmlFor={field.name} className="text-sm font-medium">
-                  Название
-                </label>
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  placeholder="Главный корпус"
-                  disabled={form.state.isSubmitting}
-                />
-                {field.state.meta.errors[0] ? (
-                  <p className="text-xs text-destructive">{String(field.state.meta.errors[0])}</p>
-                ) : null}
-              </div>
+              <FormField
+                field={field}
+                label="Название"
+                placeholder="Главный корпус"
+                required
+              />
             )}
           </form.Field>
 
           <form.Field name="address">
             {(field) => (
-              <div className="grid gap-1.5">
-                <label htmlFor={field.name} className="text-sm font-medium">
-                  Адрес
-                </label>
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  placeholder="ул. Лесная, 10"
-                  disabled={form.state.isSubmitting}
-                />
-                {field.state.meta.errors[0] ? (
-                  <p className="text-xs text-destructive">{String(field.state.meta.errors[0])}</p>
-                ) : null}
-              </div>
+              <FormField field={field} label="Адрес" placeholder="ул. Лесная, 10" />
             )}
           </form.Field>
         </div>

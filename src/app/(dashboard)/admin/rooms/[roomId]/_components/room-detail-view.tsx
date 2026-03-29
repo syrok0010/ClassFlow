@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
@@ -21,18 +21,22 @@ export function RoomDetailView({ roomId }: RoomDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { subjects } = useRoomsData();
-  const [isSaving, setIsSaving] = useState(false);
 
   const queryKey = useMemo(() => ["rooms", "detail", roomId] as const, [roomId]);
 
   const roomQuery = useQuery({
     queryKey,
     queryFn: async () => {
-      const room = await getRoomByIdAction(roomId);
-      if (!room) {
+      const response = await getRoomByIdAction(roomId);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (!response.result) {
         throw new Error("Кабинет не найден");
       }
-      return room;
+
+      return response.result;
     },
     staleTime: 30_000,
   });
@@ -50,15 +54,13 @@ export function RoomDetailView({ roomId }: RoomDetailViewProps) {
     onSubmit: async ({ value }) => {
       if (!room) return;
 
-      setIsSaving(true);
       const result = await updateRoomAction({
         id: room.id,
         name: value.name.trim(),
         seatsCount: value.seatsCount,
       });
-      setIsSaving(false);
 
-      if ("error" in result) {
+      if (result.error) {
         toast.error(result.error);
         return;
       }

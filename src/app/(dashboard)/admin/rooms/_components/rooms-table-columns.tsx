@@ -50,7 +50,7 @@ export const roomsColumns: ColumnDef<RoomListItem>[] = [
   },
   {
     id: "subjects",
-    header: "Доп. предметы",
+    header: "Предметы",
     cell: ({ row }) => {
       if (!row.original.subjects.length) {
         return <span className="text-xs text-muted-foreground">Не указаны</span>;

@@ -27,7 +27,7 @@ export function RoomActionsMenu({ room, onEdit, onDelete }: RoomActionsMenuProps
     const result = await deleteRoomAction(room.id);
     setIsDeleting(false);
 
-    if ("error" in result) {
+    if (result.error) {
       toast.error(result.error);
       return;
     }

@@ -125,14 +125,16 @@ export function RoomsTableView() {
           <p className="text-sm text-muted-foreground">Управление кабинетами и допустимыми предметами.</p>
         </div>
 
-        {canCreateRoom ? (
-          <Button size="lg" onClick={() => setSmartRowActive(true)}>
-            + Добавить кабинет
-          </Button>
-        ) : (
-          <p className="rounded-lg border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-            Чтобы создать кабинет, выберите конкретное здание в левом меню.
-          </p>
+        {!smartRowActive && (
+          canCreateRoom ? (
+            <Button size="lg" onClick={() => setSmartRowActive(true)}>
+              + Добавить кабинет
+            </Button>
+          ) : (
+            <p className="rounded-lg border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              Чтобы создать кабинет, выберите конкретное здание в левом меню.
+            </p>
+          )
         )}
       </div>
 
@@ -174,9 +176,9 @@ export function RoomsTableView() {
           </TableHeader>
 
           <TableBody>
-            {canCreateRoom ? (
+            {smartRowActive && canCreateRoom ? (
               <RoomSmartRow
-                active={smartRowActive}
+                key={`${buildingFilter}:${smartRowActive ? "open" : "closed"}`}
                 buildingId={selectedBuilding.id}
                 onDeactivate={() => setSmartRowActive(false)}
                 onCreated={(roomId, configureSubjects) => {
