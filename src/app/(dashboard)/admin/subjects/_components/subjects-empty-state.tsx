@@ -28,7 +28,7 @@ export function SubjectsEmptyState({
     <div className="flex h-56 flex-col items-center justify-center gap-3 text-center">
       <p className="text-base font-medium">Справочник предметов пока пуст</p>
       <p className="max-w-xl text-sm text-muted-foreground">
-        Добавьте академические предметы, допы и режимные моменты, чтобы настроить кабинеты и учебный план.
+        Добавьте академические, дополнительные предметы и режимные моменты, чтобы настроить кабинеты и учебный план.
       </p>
       <Button onClick={onCreateFirst}>+ Добавить первый предмет</Button>
     </div>
