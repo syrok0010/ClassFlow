@@ -84,7 +84,7 @@ export function InlineNameCell({
           }}
           onBlur={onBlur}
           onKeyDown={onKeyDown}
-          className="h-7 min-w-[12rem]"
+          className="h-7 min-w-48"
         />
         <Button size="icon-xs" variant="ghost" onClick={save} title="Сохранить">
           <Check className="size-3.5" />
