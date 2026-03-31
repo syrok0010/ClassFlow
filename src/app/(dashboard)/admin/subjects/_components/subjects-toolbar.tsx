@@ -2,10 +2,8 @@ import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import {
-  SUBJECT_FILTER_OPTIONS,
-  type SubjectFilterType,
-} from "../_lib/constants";
+import { SUBJECT_FILTERS } from "../_lib/constants";
+import { SubjectFilterType } from "../_lib/types";
 
 interface SubjectsToolbarProps {
   searchQuery: string;
@@ -39,7 +37,7 @@ export function SubjectsToolbar({
       <SegmentedControl
         value={filterType}
         onChange={onFilterTypeChange}
-        options={SUBJECT_FILTER_OPTIONS}
+        options={SUBJECT_FILTERS}
         size="sm"
       />
 

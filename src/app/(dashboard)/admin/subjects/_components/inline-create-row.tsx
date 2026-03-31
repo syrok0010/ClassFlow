@@ -16,7 +16,7 @@ import {
   subjectNameSchema,
   subjectTypeSchema,
 } from "../_lib/subject-schemas";
-import { SUBJECT_TYPE_SELECT_ITEMS, TYPE_OPTIONS } from "../_lib/constants";
+import { SUBJECT_LABELS, TYPE_OPTIONS } from "../_lib/constants";
 
 interface InlineCreateRowProps {
   onSave: (data: { name: string; type: SubjectType }) => Promise<boolean>;
@@ -96,7 +96,7 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
             <Select
               value={field.state.value}
               onValueChange={(value) => field.handleChange(value as SubjectType)}
-              items={SUBJECT_TYPE_SELECT_ITEMS}
+              items={SUBJECT_LABELS}
             >
               <SelectTrigger size="sm" className="w-48">
                 <SelectValue />

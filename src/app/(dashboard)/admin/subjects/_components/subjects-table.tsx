@@ -25,9 +25,9 @@ import {
 import type { SubjectWithUsage } from "../_lib/types";
 import { groupSubjectsByType } from "../_lib/subject-table-utils";
 import {
-  SUBJECT_TYPE_LABELS,
-  SUBJECT_TYPE_ORDER,
-  SUBJECT_TYPE_SECTION_MARKER_CLASS,
+  SUBJECT_LABELS,
+  SUBJECT_SELECT,
+  SUBJECT_MARKERS,
 } from "../_lib/constants";
 import { SubjectTypeBadge } from "./subject-type-badge";
 import { SubjectUsageCell } from "./subject-usage-cell";
@@ -186,7 +186,7 @@ export function SubjectsTable({
           ) : null}
 
           {hasRows
-            ? SUBJECT_TYPE_ORDER.map((type) => {
+            ? SUBJECT_SELECT.map((type) => {
                 const typedSubjects = groupedSubjects.get(type) ?? [];
                 if (typedSubjects.length === 0) {
                   return null;
@@ -198,11 +198,11 @@ export function SubjectsTable({
                       <TableCell colSpan={columns.length} className="border-t py-2.5">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`h-4 w-1.5 rounded-full ${SUBJECT_TYPE_SECTION_MARKER_CLASS[type]}`}
+                            className={`h-4 w-1.5 rounded-full ${SUBJECT_MARKERS[type]}`}
                             aria-hidden
                           />
                           <span className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-                            {SUBJECT_TYPE_LABELS[type]}
+                            {SUBJECT_LABELS[type]}
                           </span>
                         </div>
                       </TableCell>

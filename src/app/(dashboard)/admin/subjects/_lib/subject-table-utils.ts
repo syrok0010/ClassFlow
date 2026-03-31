@@ -1,10 +1,10 @@
-import type {SubjectType} from "@/generated/prisma/client";
-import {SUBJECT_TYPE_ORDER} from "./constants";
-import type {SubjectWithUsage} from "./types";
+import type { SubjectType } from "@/generated/prisma/client";
+import { SUBJECT_SELECT } from "./constants";
+import type {SubjectFilterType, SubjectWithUsage} from "./types";
 
 type TableState = {
   search: string;
-  typeFilter: "all" | SubjectType;
+  typeFilter: SubjectFilterType;
 };
 
 export function filterAndSortSubjects(
@@ -14,7 +14,7 @@ export function filterAndSortSubjects(
   const search = state.search.trim().toLowerCase();
 
   const filtered = subjects.filter((subject) => {
-    const matchesType = state.typeFilter === "all" || subject.type === state.typeFilter;
+    const matchesType = state.typeFilter === "ALL" || subject.type === state.typeFilter;
     const matchesSearch = !search || subject.name.toLowerCase().includes(search);
 
     return matchesType && matchesSearch;
@@ -28,7 +28,7 @@ export function filterAndSortSubjects(
 export function groupSubjectsByType(subjects: SubjectWithUsage[]) {
   const grouped = new Map<SubjectType, SubjectWithUsage[]>();
 
-  for (const type of SUBJECT_TYPE_ORDER) {
+  for (const type of SUBJECT_SELECT) {
     grouped.set(type, []);
   }
 

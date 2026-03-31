@@ -9,7 +9,7 @@ import type { SubjectDeleteGuards, SubjectWithUsage } from "../_lib/types";
 import {
   filterAndSortSubjects,
 } from "../_lib/subject-table-utils";
-import type { SubjectFilterType } from "../_lib/constants";
+import type { SubjectFilterType } from "../_lib/types";
 import { useSubjectsCrud } from "../_hooks/use-subjects-crud";
 
 interface SubjectsTableClientProps {
@@ -30,7 +30,7 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
     shallow: true,
   });
   const [filterType, setFilterType] = useQueryState("type", {
-    defaultValue: "all",
+    defaultValue: "ALL",
     shallow: true,
   });
 
@@ -47,7 +47,7 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
     filterType === "ELECTIVE_OPTIONAL" ||
     filterType === "REGIME"
       ? filterType
-      : "all";
+      : "ALL";
 
   const visibleSubjects = useMemo(
     () =>
@@ -58,7 +58,7 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
     [safeType, searchQuery, subjects]
   );
 
-  const hasActiveFilters = Boolean(searchQuery) || safeType !== "all";
+  const hasActiveFilters = Boolean(searchQuery) || safeType !== "ALL";
 
   const handleDeleteRequest = async (subject: SubjectWithUsage) => {
     setDeleteSubject(subject);
@@ -120,7 +120,7 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
         }}
         filterType={safeType as SubjectFilterType}
         onFilterTypeChange={(value) => {
-          void setFilterType(value === "all" ? null : value);
+          void setFilterType(value === "ALL" ? null : value);
         }}
         isAddingRow={isAddingRow}
         onAddSubject={() => setIsAddingRow(true)}
