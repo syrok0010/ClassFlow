@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,9 +17,8 @@ import type { SubjectDeleteGuards, SubjectWithUsage } from "../_lib/types";
 interface SubjectDeleteDialogProps {
   open: boolean;
   subject: SubjectWithUsage | null;
-  guards: SubjectDeleteGuards | null;
-  isLoadingGuards: boolean;
   isDeleting: boolean;
+  loadDeleteGuards: (id: string) => Promise<SubjectDeleteGuards | null>;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => Promise<void>;
 }
@@ -38,12 +40,47 @@ function hasDependencies(guards: SubjectDeleteGuards | null): boolean {
 export function SubjectDeleteDialog({
   open,
   subject,
-  guards,
-  isLoadingGuards,
   isDeleting,
+  loadDeleteGuards,
   onOpenChange,
   onConfirm,
 }: SubjectDeleteDialogProps) {
+  const [guards, setGuards] = useState<SubjectDeleteGuards | null>(null);
+  const [isLoadingGuards, setIsLoadingGuards] = useState(false);
+
+  useEffect(() => {
+    if (!open || !subject) {
+      setGuards(null);
+      setIsLoadingGuards(false);
+      return;
+    }
+
+    let active = true;
+
+    const loadGuards = async () => {
+      setIsLoadingGuards(true);
+
+      try {
+        const nextGuards = await loadDeleteGuards(subject.id);
+        if (!active) {
+          return;
+        }
+
+        setGuards(nextGuards ?? subject.usage);
+      } finally {
+        if (active) {
+          setIsLoadingGuards(false);
+        }
+      }
+    };
+
+    void loadGuards();
+
+    return () => {
+      active = false;
+    };
+  }, [loadDeleteGuards, open, subject]);
+
   if (!subject) {
     return null;
   }

@@ -2,15 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useQueryState } from "nuqs";
-import { SubjectsToolbar } from "./subjects-toolbar";
-import { SubjectsTable } from "./subjects-table";
 import { SubjectDeleteDialog } from "./subject-delete-dialog";
-import type { SubjectDeleteGuards, SubjectWithUsage } from "../_lib/types";
-import {
-  filterAndSortSubjects,
-} from "../_lib/subject-table-utils";
-import type { SubjectFilterType } from "../_lib/types";
+import { SubjectsTable } from "./subjects-table";
+import { SubjectsToolbar } from "./subjects-toolbar";
 import { useSubjectsCrud } from "../_hooks/use-subjects-crud";
+import { filterAndSortSubjects } from "../_lib/subject-table-utils";
+import type { SubjectFilterType, SubjectWithUsage } from "../_lib/types";
 
 interface SubjectsTableClientProps {
   initialSubjects: SubjectWithUsage[];
@@ -36,9 +33,7 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
 
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [deleteSubject, setDeleteSubject] = useState<SubjectWithUsage | null>(null);
-  const [deleteGuards, setDeleteGuards] = useState<SubjectDeleteGuards | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteGuardsLoading, setDeleteGuardsLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const safeType =
@@ -62,21 +57,7 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
 
   const handleDeleteRequest = async (subject: SubjectWithUsage) => {
     setDeleteSubject(subject);
-    setDeleteGuards(null);
-    setDeleteGuardsLoading(true);
     setDeleteOpen(true);
-
-    try {
-      const guards = await loadDeleteGuards(subject.id);
-      if (guards) {
-        setDeleteGuards(guards);
-        return;
-      }
-
-      setDeleteGuards(subject.usage);
-    } finally {
-      setDeleteGuardsLoading(false);
-    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -90,7 +71,6 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
       if (success) {
         setDeleteOpen(false);
         setDeleteSubject(null);
-        setDeleteGuards(null);
       }
     } finally {
       setDeleteLoading(false);
@@ -142,15 +122,12 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
       <SubjectDeleteDialog
         open={deleteOpen}
         subject={deleteSubject}
-        guards={deleteGuards}
-        isLoadingGuards={deleteGuardsLoading}
         isDeleting={deleteLoading}
+        loadDeleteGuards={loadDeleteGuards}
         onOpenChange={(open) => {
           setDeleteOpen(open);
           if (!open) {
             setDeleteSubject(null);
-            setDeleteGuards(null);
-            setDeleteGuardsLoading(false);
           }
         }}
         onConfirm={handleDeleteConfirm}

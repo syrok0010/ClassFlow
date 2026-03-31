@@ -1,4 +1,6 @@
-import { useRef, useState } from "react";
+"use client";
+
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import {
   Popover,
@@ -12,6 +14,8 @@ interface SubjectUsageCellProps {
   subjectId: string;
   usage: SubjectUsage;
 }
+
+type SubjectUsageStatus = "idle" | "loading" | "success" | "error";
 
 const PREVIEW_LIMIT = 6;
 
@@ -33,10 +37,9 @@ function renderPreviewList(items: string[]) {
 
 export function SubjectUsageCell({ subjectId, usage }: SubjectUsageCellProps) {
   const [open, setOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState<SubjectUsageStatus>("idle");
   const [details, setDetails] = useState<SubjectUsageDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const loadedRef = useRef(false);
 
   const total =
     usage.roomsCount +
@@ -45,25 +48,24 @@ export function SubjectUsageCell({ subjectId, usage }: SubjectUsageCellProps) {
     usage.scheduleTemplatesCount +
     usage.scheduleEntriesCount;
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen);
-
-    if (!nextOpen || total === 0 || loadedRef.current || isLoading) {
+  const loadDetails = async () => {
+    if (total === 0 || status === "loading" || status === "success") {
       return;
     }
 
-    setIsLoading(true);
-    void getSubjectUsageDetailsAction(subjectId)
-      .then((response) => {
-        if (response.error || !response.result) {
-          setError(response.error ?? "Не удалось загрузить детали");
-          return;
-        }
+    setStatus("loading");
+    setError(null);
 
-        setDetails(response.result);
-        loadedRef.current = true;
-      })
-      .finally(() => setIsLoading(false));
+    const response = await getSubjectUsageDetailsAction(subjectId);
+    if (response.error || !response.result) {
+      setDetails(null);
+      setError(response.error ?? "Не удалось загрузить детали");
+      setStatus("error");
+      return;
+    }
+
+    setDetails(response.result);
+    setStatus("success");
   };
 
   if (total === 0) {
@@ -71,14 +73,22 @@ export function SubjectUsageCell({ subjectId, usage }: SubjectUsageCellProps) {
   }
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger openOnHover={true}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        openOnHover={true}
+        delay={0}
+        onPointerEnter={() => {
+          void loadDetails();
+        }}
+        onFocus={() => {
+          void loadDetails();
+        }}
         className="text-left text-sm text-muted-foreground underline decoration-dotted underline-offset-4"
       >
         Кабинеты: {usage.roomsCount} · Требования: {usage.requirementsCount} · Учителя: {usage.teachersCount}
       </PopoverTrigger>
       <PopoverContent align="start" side="top" className="w-96 gap-2">
-        {isLoading ? (
+        {status === "loading" || status === "idle" ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
             Загружаем связи...
