@@ -182,7 +182,8 @@ model RoomSubject {
 
 enum SubjectType {
   ACADEMIC
-  ELECTIVE
+  ELECTIVE_REQUIRED
+  ELECTIVE_OPTIONAL
   REGIME
 }
 
