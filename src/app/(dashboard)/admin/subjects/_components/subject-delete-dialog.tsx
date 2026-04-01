@@ -15,8 +15,7 @@ import { Loader2 } from "lucide-react";
 import type { SubjectDeleteGuards, SubjectWithUsage } from "../_lib/types";
 
 interface SubjectDeleteDialogProps {
-  open: boolean;
-  subject: SubjectWithUsage | null;
+  subject: SubjectWithUsage;
   isDeleting: boolean;
   loadDeleteGuards: (id: string) => Promise<SubjectDeleteGuards | null>;
   onOpenChange: (open: boolean) => void;
@@ -38,7 +37,6 @@ function hasDependencies(guards: SubjectDeleteGuards | null): boolean {
 }
 
 export function SubjectDeleteDialog({
-  open,
   subject,
   isDeleting,
   loadDeleteGuards,
@@ -49,11 +47,8 @@ export function SubjectDeleteDialog({
   const [isLoadingGuards, setIsLoadingGuards] = useState(false);
 
   useEffect(() => {
-    if (!open || !subject) {
-      setGuards(null);
-      setIsLoadingGuards(false);
-      return;
-    }
+    setGuards(null);
+    setIsLoadingGuards(false);
 
     let active = true;
 
@@ -79,17 +74,13 @@ export function SubjectDeleteDialog({
     return () => {
       active = false;
     };
-  }, [loadDeleteGuards, open, subject]);
-
-  if (!subject) {
-    return null;
-  }
+  }, [loadDeleteGuards, subject]);
 
   const blocked = hasDependencies(guards);
   const disableDelete = isLoadingGuards || blocked || isDeleting;
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={true} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>

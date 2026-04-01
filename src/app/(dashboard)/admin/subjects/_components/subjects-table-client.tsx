@@ -33,7 +33,6 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
 
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [deleteSubject, setDeleteSubject] = useState<SubjectWithUsage | null>(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const safeType =
@@ -57,7 +56,6 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
 
   const handleDeleteRequest = async (subject: SubjectWithUsage) => {
     setDeleteSubject(subject);
-    setDeleteOpen(true);
   };
 
   const handleDeleteConfirm = async () => {
@@ -69,7 +67,6 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
     try {
       const success = await handleDeleteSubject(deleteSubject);
       if (success) {
-        setDeleteOpen(false);
         setDeleteSubject(null);
       }
     } finally {
@@ -119,19 +116,20 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
         onResetFilters={resetFilters}
       />
 
-      <SubjectDeleteDialog
-        open={deleteOpen}
-        subject={deleteSubject}
-        isDeleting={deleteLoading}
-        loadDeleteGuards={loadDeleteGuards}
-        onOpenChange={(open) => {
-          setDeleteOpen(open);
-          if (!open) {
-            setDeleteSubject(null);
-          }
-        }}
-        onConfirm={handleDeleteConfirm}
-      />
+      {deleteSubject && (
+        <SubjectDeleteDialog
+          key={deleteSubject.id}
+          subject={deleteSubject}
+          isDeleting={deleteLoading}
+          loadDeleteGuards={loadDeleteGuards}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDeleteSubject(null);
+            }
+          }}
+          onConfirm={handleDeleteConfirm}
+        />
+      )}
     </div>
   );
 }
