@@ -163,8 +163,8 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
           )}
         </form.Field>
       </TableCell>
-
-      <TableCell colSpan={2}>
+      <TableCell/>
+      <TableCell>
         <form.Subscribe selector={(state) => [state.isSubmitting, state.values.name] as const}>
           {([isSubmitting, name]) => (
             <div className="flex items-center gap-2">
