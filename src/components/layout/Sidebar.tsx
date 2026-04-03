@@ -43,7 +43,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r bg-white transition-all duration-300 ease-in-out h-screen fixed left-0 top-0 z-40 shrink-0",
+        "fixed left-0 top-0 z-40 flex h-screen shrink-0 flex-col overflow-x-hidden border-r bg-white transition-all duration-300 ease-in-out",
         isExpanded ? SIDEBAR_WIDTH.expanded.width : SIDEBAR_WIDTH.collapsed.width,
       )}
       onMouseEnter={() => setIsHovered(true)}
@@ -91,16 +91,27 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 py-4">
+      <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto px-3 py-4">
         {isPending && <SidebarNavSkeleton />}
         {!isPending && (
-          visibleSections.map((section) => (
-            <SidebarSection
-                key={section.id}
+          visibleSections.map((section, index) => (
+            <div key={section.id} className="relative">
+              {index > 0 ? (
+                <div
+                  className={cn(
+                    "pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 transition-opacity duration-200",
+                    isExpanded ? "opacity-0" : "opacity-100",
+                  )}
+                >
+                  <div className="h-px w-8 bg-border" />
+                </div>
+              ) : null}
+              <SidebarSection
                 isExpanded={isExpanded}
                 pathname={pathname}
                 section={section}
-            />
+              />
+            </div>
           ))
         )}
       </nav>

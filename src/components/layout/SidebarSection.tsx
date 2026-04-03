@@ -18,57 +18,64 @@ export function SidebarSection({
 }: SidebarSectionProps) {
   return (
     <div
-      className="flex flex-col gap-1"
+      className="relative"
       data-testid={`sidebar-section-${section.id}`}
     >
       <div
         className={cn(
-          "px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-all duration-300",
-          isExpanded ? "max-h-6 opacity-100" : "max-h-0 overflow-hidden opacity-0",
+          "pointer-events-none absolute inset-x-0 top-0 whitespace-nowrap px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-opacity duration-200",
+          isExpanded ? "opacity-100 delay-75" : "opacity-0",
         )}
       >
         {section.label}
       </div>
-      {section.items.map((link) => {
-        const isActive =
-          link.href === "/admin"
-            ? pathname === "/admin"
-            : pathname === link.href || pathname?.startsWith(`${link.href}/`);
+      <div
+        className={cn(
+          "flex flex-col gap-1 transition-[padding] duration-300 ease-in-out",
+          isExpanded ? "pt-5" : "pt-0",
+        )}
+      >
+        {section.items.map((link) => {
+          const isActive =
+            link.href === "/admin"
+              ? pathname === "/admin"
+              : pathname === link.href || pathname?.startsWith(`${link.href}/`);
 
-        return (
-          <Link
-            key={link.href}
-            href={link.href}
-            className={cn(
-              "group/link flex h-10 items-center overflow-hidden rounded-md text-sm font-medium transition-colors",
-              isActive
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-            data-testid={`sidebar-link-${link.href.replaceAll("/", "-").replace(/^-/, "")}`}
-            title={!isExpanded ? link.name : undefined}
-          >
-            <div className="flex h-full w-10 shrink-0 items-center justify-center">
-              <link.icon
-                className={cn(
-                  "h-5 w-5",
-                  isActive
-                    ? "text-primary-foreground"
-                    : "text-muted-foreground group-hover/link:text-foreground",
-                )}
-              />
-            </div>
-            <span
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
               className={cn(
-                "whitespace-nowrap transition-all duration-300",
-                isExpanded ? "ml-1 max-w-40 opacity-100" : "ml-0 max-w-0 opacity-0",
+                "group/link flex h-10 items-center overflow-hidden rounded-md text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
+              data-testid={`sidebar-link-${link.href.replaceAll("/", "-").replace(/^-/, "")}`}
+              title={!isExpanded ? link.name : undefined}
             >
-              {link.name}
-            </span>
-          </Link>
-        );
-      })}
+              <div className="flex h-full w-10 shrink-0 items-center justify-center">
+                <link.icon
+                  className={cn(
+                    "h-5 w-5",
+                    isActive
+                      ? "text-primary-foreground"
+                      : "text-muted-foreground group-hover/link:text-foreground",
+                  )}
+                />
+              </div>
+              <span
+                className={cn(
+                  "whitespace-nowrap transition-all duration-300",
+                  isExpanded ? "ml-1 max-w-40 opacity-100" : "ml-0 max-w-0 opacity-0",
+                )}
+              >
+                {link.name}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }

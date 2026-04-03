@@ -34,10 +34,10 @@ export function SidebarUserMenu({
     return (
       <div className="border-t p-3">
         <div
-          className="flex h-12 w-full items-center justify-center overflow-hidden rounded-md px-0"
+          className="relative h-12 w-full overflow-hidden rounded-md px-0"
           data-testid="sidebar-profile-trigger"
         >
-          <div className="flex h-full w-10 shrink-0 items-center justify-center">
+          <div className="absolute left-1/2 top-1/2 flex h-full w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center">
             <Skeleton className="h-8 w-8 rounded-full" data-testid="sidebar-profile-avatar" />
           </div>
         </div>
@@ -48,13 +48,10 @@ export function SidebarUserMenu({
   return (
     <div className="border-t p-3">
       <Popover>
-        <PopoverTrigger
-          className={cn(
-            "flex h-12 w-full items-center overflow-hidden rounded-md px-0 text-left text-foreground transition-colors hover:bg-muted",
-            isExpanded ? "justify-start" : "justify-center",
-          )}
-          data-testid="sidebar-profile-trigger"
-        >
+      <PopoverTrigger
+        className="relative h-12 w-full overflow-hidden rounded-md px-0 text-left text-foreground transition-colors hover:bg-muted"
+        data-testid="sidebar-profile-trigger"
+      >
           <SidebarUserMenuContent isExpanded={isExpanded} user={user} />
         </PopoverTrigger>
         <PopoverContent className="w-56" align="start" side="right" sideOffset={16}>
@@ -92,8 +89,8 @@ function SidebarUserMenuContent({
   const roleSummary = getRoleSummary(user);
 
   return (
-    <>
-      <div className="flex h-full w-10 shrink-0 items-center justify-center">
+    <div className="relative h-full w-full">
+      <div className="absolute left-0 top-1/2 flex h-full w-10 -translate-y-1/2 items-center justify-center">
         <div
           className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-medium text-secondary-foreground"
           data-testid="sidebar-profile-avatar"
@@ -101,14 +98,18 @@ function SidebarUserMenuContent({
           {initials}
         </div>
       </div>
-      {isExpanded ? (
-        <div className="ml-2 flex max-w-40 flex-col items-start overflow-hidden" title={roleSummary}>
-          <span className="w-35 truncate whitespace-nowrap text-sm font-medium">{fullName}</span>
-          <span className="mt-0.5 w-35 truncate whitespace-nowrap text-xs leading-none text-muted-foreground">
+      <div
+        className={cn(
+          "absolute left-12 right-2 top-1/2 flex -translate-y-1/2 flex-col items-start overflow-hidden transition-all duration-200",
+          isExpanded ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+        title={roleSummary}
+      >
+          <span className="block w-full truncate whitespace-nowrap text-sm font-medium">{fullName}</span>
+          <span className="mt-0.5 block w-full truncate whitespace-nowrap text-xs leading-none text-muted-foreground">
             {roleSummary}
           </span>
-        </div>
-      ) : null}
-    </>
+      </div>
+    </div>
   );
 }
