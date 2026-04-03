@@ -68,6 +68,16 @@ async function seedAuthAndUsers() {
     },
   });
 
+  const teacherPassword = await hashPassword("teacher1234");
+  await prisma.account.create({
+    data: {
+      userId: teacherUser.id,
+      accountId: teacherUser.id,
+      providerId: "credential",
+      password: teacherPassword,
+    },
+  });
+
   await prisma.teacher.create({ data: { userId: teacherUser.id } });
 
   const studentUser = await prisma.user.create({
@@ -152,6 +162,36 @@ async function seedGroupsPageFixtures() {
       })
     )
   );
+
+  const teacherParentUser = await prisma.user.create({
+    data: {
+      email: "teacher-parent1@classflow.local",
+      role: "USER",
+      status: "ACTIVE",
+      name: "Марина",
+      surname: "Орлова",
+      patronymicName: "Сергеевна",
+    },
+  });
+
+  const teacherParentPassword = await hashPassword("teacherparent1234");
+  await prisma.account.create({
+    data: {
+      userId: teacherParentUser.id,
+      accountId: teacherParentUser.id,
+      providerId: "credential",
+      password: teacherParentPassword,
+    },
+  });
+
+  await prisma.teacher.create({ data: { userId: teacherParentUser.id } });
+  const parent = await prisma.parent.create({ data: { userId: teacherParentUser.id } });
+  await prisma.studentParents.create({
+    data: {
+      parentId: parent.id,
+      studentId: students[0].id,
+    },
+  });
 
   const class10A = await prisma.group.create({
     data: {

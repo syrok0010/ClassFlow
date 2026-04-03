@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { getDefaultPath } from "@/lib/auth-access";
 
 export default async function Home() {
   const session = await auth.api.getSession({
@@ -11,13 +12,11 @@ export default async function Home() {
     redirect("/login");
   }
 
-  const REDIRECT_ROUTES: Record<string, string> = {
-    ADMIN: "/admin",
-    TEACHER: "/teacher",
-    STUDENT: "/student",
-    PARENT: "/parent",
-  };
+  const targetPath = getDefaultPath(session.user);
 
-  const targetPath = REDIRECT_ROUTES[session.user.role as keyof typeof REDIRECT_ROUTES];
-  redirect(targetPath ? targetPath : "/login");
+  if (!targetPath) {
+    notFound();
+  }
+
+  redirect(targetPath);
 }

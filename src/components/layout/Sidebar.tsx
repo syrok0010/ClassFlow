@@ -1,41 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  BarChart,
-  Building2,
-  CalendarDays,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  Pin,
-  PinOff,
-  Settings,
-  Users,
-  UserSquare2,
-} from "lucide-react";
+import { Menu, Pin, PinOff } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { useSidebarStore } from "@/stores/sidebar-store";
 import { SIDEBAR_WIDTH } from "./constants";
 import { authClient, useSession } from "@/lib/auth-client";
-
-const ADMIN_LINKS = [
-  { name: "Дашборд", href: "/admin", icon: LayoutDashboard },
-  { name: "Расписание", href: "/admin/schedule", icon: CalendarDays },
-  { name: "Помещения", href: "/admin/rooms", icon: Building2 },
-  { name: "Предметы", href: "/admin/subjects", icon: BarChart },
-  { name: "Группы", href: "/admin/groups", icon: Users },
-  { name: "Пользователи", href: "/admin/users", icon: UserSquare2 },
-] as const;
+import { getAccessContexts } from "@/lib/auth-access";
+import { SIDEBAR_SECTIONS } from "./sidebar-config";
+import { SidebarNavSkeleton } from "./SidebarNavSkeleton";
+import { SidebarSection } from "./SidebarSection";
+import { SidebarUserMenu } from "./SidebarUserMenu";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -58,22 +36,20 @@ export function Sidebar() {
   };
 
   const user = session?.user;
-  const initials = user?.name ? `${user.surname?.[0] || ""}${user.name?.[0] || ""}`.toUpperCase() : "CF";
-  const fullName = user ? [user.surname, user.name].filter(Boolean).join(" ") : "Загрузка...";
-  const roleDisplay = user?.role === "ADMIN" ? "Администратор" : "Пользователь";
+  const visibleSections = user
+    ? SIDEBAR_SECTIONS.filter((section) => getAccessContexts(user).includes(section.id))
+    : [];
 
   return (
     <aside
       className={cn(
-        "flex flex-col border-r bg-white transition-all duration-300 ease-in-out h-screen fixed left-0 top-0 z-40 shrink-0",
+        "fixed left-0 top-0 z-40 flex h-screen shrink-0 flex-col overflow-x-hidden border-r bg-white transition-all duration-300 ease-in-out",
         isExpanded ? SIDEBAR_WIDTH.expanded.width : SIDEBAR_WIDTH.collapsed.width,
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* ── Header / Logo ── */}
       <div className="relative flex h-16 w-full items-center overflow-hidden border-b shrink-0">
-        {/* Expanded: logo + name */}
         <div
           className={cn(
             "absolute left-3 flex items-center gap-2 transition-all duration-300",
@@ -86,7 +62,6 @@ export function Sidebar() {
           <span className="font-semibold text-lg tracking-tight whitespace-nowrap">ClassFlow</span>
         </div>
 
-        {/* Collapsed: hamburger icon (click = pin) */}
         <div
           className={cn(
             "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300",
@@ -98,7 +73,6 @@ export function Sidebar() {
           </Button>
         </div>
 
-        {/* Expanded: pin/unpin toggle */}
         <div
           className={cn(
             "absolute right-3 top-1/2 -translate-y-1/2 transition-all duration-300",
@@ -117,95 +91,36 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* ── Navigation Links ── */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 flex flex-col gap-1">
-        {ADMIN_LINKS.map((link) => {
-          const isActive =
-            link.href === "/admin"
-              ? pathname === "/admin"
-              : pathname === link.href || pathname?.startsWith(`${link.href}/`);
-          const Icon = link.icon;
-
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "group/link flex items-center rounded-md text-sm font-medium transition-colors overflow-hidden h-10",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-              title={!isExpanded ? link.name : undefined}
-            >
-              <div className="flex w-10 shrink-0 items-center justify-center h-full">
-                <Icon
+      <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto px-3 py-4">
+        {isPending && <SidebarNavSkeleton />}
+        {!isPending && (
+          visibleSections.map((section, index) => (
+            <div key={section.id} className="relative">
+              {index > 0 ? (
+                <div
                   className={cn(
-                    "h-5 w-5",
-                    isActive
-                      ? "text-primary-foreground"
-                      : "text-muted-foreground group-hover/link:text-foreground",
+                    "pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 transition-opacity duration-200",
+                    isExpanded ? "opacity-0" : "opacity-100",
                   )}
-                />
-              </div>
-              <span
-                className={cn(
-                  "whitespace-nowrap transition-all duration-300",
-                  isExpanded ? "max-w-40 opacity-100 ml-1" : "max-w-0 opacity-0 ml-0",
-                )}
-              >
-                {link.name}
-              </span>
-            </Link>
-          );
-        })}
+                >
+                  <div className="h-px w-8 bg-border" />
+                </div>
+              ) : null}
+              <SidebarSection
+                isExpanded={isExpanded}
+                pathname={pathname}
+                section={section}
+              />
+            </div>
+          ))
+        )}
       </nav>
 
-      {/* ── Footer / User Profile ── */}
-      <div className="border-t p-3">
-        <Popover>
-          <PopoverTrigger
-            className="w-full h-12 flex items-center justify-start overflow-hidden rounded-md hover:bg-muted transition-colors cursor-pointer text-left text-foreground px-0"
-          >
-              <div className="flex w-10 shrink-0 items-center justify-center h-full ml-1">
-                <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-medium text-xs">
-                  {isPending ? "..." : initials}
-                </div>
-              </div>
-              <div
-                className={cn(
-                  "flex flex-col items-start overflow-hidden transition-all duration-300",
-                  isExpanded ? "max-w-40 opacity-100 ml-2" : "max-w-0 opacity-0 ml-0",
-                )}
-              >
-                <span className="text-sm font-medium whitespace-nowrap truncate w-35">
-                  {fullName}
-                </span>
-                <span className="text-xs text-muted-foreground whitespace-nowrap truncate w-35 leading-none mt-0.5">
-                  {roleDisplay}
-                </span>
-              </div>
-          </PopoverTrigger>
-          <PopoverContent className="w-56" align="start" side="right" sideOffset={16}>
-            <div className="flex flex-col gap-1">
-              <div className="px-2 py-1.5 text-sm font-semibold">Мой аккаунт</div>
-              <div className="h-px bg-muted my-1" />
-              <Button variant="ghost" className="w-full justify-start h-9 px-2 text-sm font-normal">
-                <Settings className="mr-2 h-4 w-4" />
-                Настройки
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={handleLogout}
-                className="w-full justify-start h-9 px-2 text-sm font-normal text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Выйти
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+      <SidebarUserMenu
+        isExpanded={isExpanded}
+        user={user ?? null}
+        onLogout={handleLogout}
+      />
     </aside>
   );
 }
