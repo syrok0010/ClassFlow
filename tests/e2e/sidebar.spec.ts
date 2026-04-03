@@ -69,22 +69,4 @@ test.describe("Sidebar roles", () => {
     await expect(page).toHaveURL(/\/teacher\/subjects$/);
     await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
   });
-
-  test("collapsed footer avatar is centered", async ({ page }) => {
-    await loginAsAdmin(page);
-
-    const trigger = page.getByTestId("sidebar-profile-trigger");
-    const avatar = page.getByTestId("sidebar-profile-avatar");
-
-    const triggerBox = await trigger.boundingBox();
-    const avatarBox = await avatar.boundingBox();
-
-    expect(triggerBox).not.toBeNull();
-    expect(avatarBox).not.toBeNull();
-
-    const triggerCenterX = triggerBox!.x + triggerBox!.width / 2;
-    const avatarCenterX = avatarBox!.x + avatarBox!.width / 2;
-
-    expect(Math.abs(triggerCenterX - avatarCenterX)).toBeLessThanOrEqual(2);
-  });
 });

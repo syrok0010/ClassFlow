@@ -5,10 +5,15 @@ import { customSession } from "better-auth/plugins";
 import { prisma } from "./prisma";
 import { getUserDomainRoles } from "./auth-domain-roles";
 
+const isAuthRateLimitDisabled = process.env.DISABLE_AUTH_RATE_LIMIT === "true";
+
 const authOptions = {
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
+  rateLimit: {
+    enabled: !isAuthRateLimitDisabled,
+  },
   emailAndPassword: {
     enabled: true,
   },

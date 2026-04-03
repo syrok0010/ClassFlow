@@ -29,6 +29,7 @@ export default defineConfig({
       ...process.env,
       DATABASE_URL: process.env.DATABASE_URL_E2E || process.env.DATABASE_URL || "",
       BETTER_AUTH_URL: "http://localhost:3000",
+      DISABLE_AUTH_RATE_LIMIT: "true",
     },
   },
   projects: [
