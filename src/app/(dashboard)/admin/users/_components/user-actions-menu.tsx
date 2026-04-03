@@ -1,6 +1,7 @@
 "use client";
 
-import { MoreHorizontal, Copy, UserPlus, Pencil, ShieldOff, ShieldCheck, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { MoreHorizontal, Copy, UserPlus, Pencil, ShieldOff, ShieldCheck, Trash2, BookOpenCheck } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +19,7 @@ import {
 
 export function UserActionsMenu({ user, table }: { user: UserWithRoles; table: Table<UserWithRoles> }) {
   const meta = table.options.meta as UserTableMeta;
+  const router = useRouter();
 
   const isStudent = user.students.length > 0;
   const isPending = user.status === "PENDING_INVITE";
@@ -67,6 +69,13 @@ export function UserActionsMenu({ user, table }: { user: UserWithRoles; table: T
             <Pencil className="mr-2 h-4 w-4" />
             Редактировать профиль
           </DropdownMenuItem>
+
+          {user.teachers.length > 0 ? (
+            <DropdownMenuItem onClick={() => router.push(`/admin/users/${user.id}/teaching`)}>
+              <BookOpenCheck className="mr-2 h-4 w-4" />
+              Компетенции
+            </DropdownMenuItem>
+          ) : null}
 
           {isPending && (
             <DropdownMenuItem onClick={handleCopyInvite}>
