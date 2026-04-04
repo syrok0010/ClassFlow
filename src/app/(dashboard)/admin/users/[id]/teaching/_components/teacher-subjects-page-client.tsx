@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQueryState } from "nuqs";
 import { AlertTriangle } from "lucide-react";
+import type { TeacherSubjectFilterType } from "@/lib/types";
 import { useTeacherSubjectsCrud } from "../_hooks/use-teacher-subjects-crud";
 import { filterAndSortTeacherSubjects } from "../_lib/teacher-subject-table-utils";
-import type { TeachingPageData, TeacherSubjectFilterType, TeacherSubjectRow } from "../_lib/types";
+import type { TeachingPageData, TeacherSubjectRow } from "../_lib/types";
 import { TeacherSubjectDeleteDialog } from "./teacher-subject-delete-dialog";
 import { TeacherSubjectsSummary } from "./teacher-subjects-summary";
 import { TeacherSubjectsTable } from "./teacher-subjects-table";
@@ -52,7 +53,10 @@ export function TeacherSubjectsPageClient({ initialData }: TeacherSubjectsPageCl
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const safeFilterType: TeacherSubjectFilterType =
-    filterType === "ACADEMIC" || filterType === "ELECTIVE" || filterType === "REGIME"
+    filterType === "ACADEMIC"
+    || filterType === "ELECTIVE_REQUIRED"
+    || filterType === "ELECTIVE_OPTIONAL"
+    || filterType === "REGIME"
       ? filterType
       : "ALL";
 

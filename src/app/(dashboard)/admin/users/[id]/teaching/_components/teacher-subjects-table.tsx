@@ -2,6 +2,7 @@ import { useMemo, useState, type KeyboardEvent } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SubjectTypeBadge } from "@/components/ui/subject-type-badge";
 import {
   Table,
   TableBody,
@@ -11,8 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { SubjectOption, TeacherSubjectRow } from "../_lib/types";
-import { TeacherSubjectTypeBadge } from "./teacher-subject-type-badge";
-import { InlineCreateTeacherSubjectRow } from "./inline-create-teacher-subject-row";
+import { InlineCreateRow } from "./inline-create-row";
 import { TeacherSubjectsEmptyState } from "./teacher-subjects-empty-state";
 
 interface TeacherSubjectsTableProps {
@@ -194,7 +194,7 @@ export function TeacherSubjectsTable({
         </TableHeader>
         <TableBody>
           {isAddingRow ? (
-            <InlineCreateTeacherSubjectRow
+            <InlineCreateRow
               subjectOptions={subjectOptions}
               onSave={onCreateSubject}
               onCancel={onCancelAddRow}
@@ -225,7 +225,7 @@ export function TeacherSubjectsTable({
               <TableRow key={id}>
                 <TableCell className="font-medium">{subjectNamesById.get(row.subjectId) ?? row.subjectName}</TableCell>
                 <TableCell>
-                  <TeacherSubjectTypeBadge type={row.subjectType} />
+                  <SubjectTypeBadge type={row.subjectType} />
                 </TableCell>
 
                 <TableCell>

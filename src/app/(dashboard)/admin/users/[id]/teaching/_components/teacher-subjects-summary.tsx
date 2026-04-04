@@ -23,7 +23,10 @@ export function TeacherSubjectsSummary({ summary }: TeacherSubjectsSummaryProps)
           <span className="text-muted-foreground">Academic:</span> {summary.academic}
         </span>
         <span>
-          <span className="text-muted-foreground">Elective:</span> {summary.elective}
+          <span className="text-muted-foreground">Elective required:</span> {summary.electiveRequired}
+        </span>
+        <span>
+          <span className="text-muted-foreground">Elective optional:</span> {summary.electiveOptional}
         </span>
         <span>
           <span className="text-muted-foreground">Regime:</span> {summary.regime}

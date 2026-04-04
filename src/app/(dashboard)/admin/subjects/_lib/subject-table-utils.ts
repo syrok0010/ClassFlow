@@ -1,5 +1,5 @@
 import type { SubjectType } from "@/generated/prisma/client";
-import { SUBJECT_SELECT } from "./constants";
+import { SUBJECT_SELECT } from "@/lib/constants";
 import type {SubjectFilterType, SubjectWithUsage} from "./types";
 
 type TableState = {

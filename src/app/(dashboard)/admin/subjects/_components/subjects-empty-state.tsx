@@ -1,5 +1,4 @@
-import { Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 
 interface SubjectsEmptyStateProps {
   hasFilters: boolean;
@@ -12,25 +11,14 @@ export function SubjectsEmptyState({
   onResetFilters,
   onCreateFirst,
 }: SubjectsEmptyStateProps) {
-  if (hasFilters) {
-    return (
-      <div className="flex h-48 flex-col items-center justify-center gap-2">
-        <Search className="size-10 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">Ничего не найдено</p>
-        <Button variant="link" className="h-auto p-0" onClick={onResetFilters}>
-          Сбросить фильтры
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-56 flex-col items-center justify-center gap-3 text-center">
-      <p className="text-base font-medium">Справочник предметов пока пуст</p>
-      <p className="max-w-xl text-sm text-muted-foreground">
-        Добавьте академические, дополнительные предметы и режимные моменты, чтобы настроить кабинеты и учебный план.
-      </p>
-      <Button onClick={onCreateFirst}>+ Добавить первый предмет</Button>
-    </div>
+    <FilterableEmptyState
+      hasFilters={hasFilters}
+      onResetFilters={onResetFilters}
+      onCreateFirst={onCreateFirst}
+      emptyTitle="Справочник предметов пока пуст"
+      emptyDescription="Добавьте академические, дополнительные предметы и режимные моменты, чтобы настроить кабинеты и учебный план."
+      createFirstLabel="+ Добавить первый предмет"
+    />
   );
 }

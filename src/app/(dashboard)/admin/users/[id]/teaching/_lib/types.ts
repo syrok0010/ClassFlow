@@ -1,5 +1,6 @@
 import type { SubjectType } from "@/generated/prisma/client";
 import type { UserStatus } from "@/generated/prisma/enums";
+import type { TeacherSubjectFilterType as GlobalTeacherSubjectFilterType } from "@/lib/types";
 
 export type TeacherSubjectRow = {
   teacherId: string;
@@ -21,14 +22,13 @@ export type TeacherSubjectsFilters = {
   type?: SubjectType;
 };
 
-export type TeacherSubjectTypeGroup = "ACADEMIC" | "ELECTIVE" | "REGIME";
-
-export type TeacherSubjectFilterType = "ALL" | TeacherSubjectTypeGroup;
+export type TeacherSubjectFilterType = GlobalTeacherSubjectFilterType;
 
 export type TeacherSubjectSummary = {
   total: number;
   academic: number;
-  elective: number;
+  electiveRequired: number;
+  electiveOptional: number;
   regime: number;
   minCoveredGrade: number | null;
   maxCoveredGrade: number | null;
@@ -49,10 +49,3 @@ export type TeachingPageData = {
   subjectOptions: SubjectOption[];
 };
 
-export type SubjectRenderInfo = {
-  value: SubjectType;
-  label: string;
-  labelPlural: string;
-  marker: string;
-  badge: string;
-};

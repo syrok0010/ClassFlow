@@ -2,8 +2,8 @@ import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { SUBJECT_FILTERS } from "../_lib/constants";
-import { SubjectFilterType } from "../_lib/types";
+import { SUBJECT_FILTERS } from "@/lib/constants";
+import type { SubjectFilterType } from "@/lib/types";
 
 interface SubjectsToolbarProps {
   searchQuery: string;

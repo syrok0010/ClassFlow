@@ -1,4 +1,5 @@
 import type { SubjectType } from "@/generated/prisma/client";
+import type { SubjectFilterType as GlobalSubjectFilterType, SubjectRenderInfo as GlobalSubjectRenderInfo } from "@/lib/types";
 
 export type SubjectUsage = {
   roomsCount: number;
@@ -33,12 +34,6 @@ export type SubjectDeleteGuards = {
   scheduleEntriesCount: number;
 };
 
-export type SubjectRenderInfo = {
-  value: SubjectType;
-  label: string,
-  label_plural: string,
-  marker: string,
-  badge: string,
-}
+export type SubjectRenderInfo = GlobalSubjectRenderInfo;
 
-export type SubjectFilterType = "ALL" | SubjectType;
+export type SubjectFilterType = GlobalSubjectFilterType;

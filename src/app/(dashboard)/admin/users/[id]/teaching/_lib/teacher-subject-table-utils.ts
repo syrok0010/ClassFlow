@@ -1,5 +1,3 @@
-import type { SubjectType } from "@/generated/prisma/client";
-import { SUBJECT_TYPE_TO_GROUP } from "./constants";
 import type {
   TeacherSubjectFilterType,
   TeacherSubjectRow,
@@ -18,8 +16,7 @@ export function filterAndSortTeacherSubjects(
   const search = state.search.trim().toLowerCase();
 
   const filtered = rows.filter((row) => {
-    const rowGroup = SUBJECT_TYPE_TO_GROUP[row.subjectType as SubjectType];
-    const matchesType = state.typeFilter === "ALL" || rowGroup === state.typeFilter;
+    const matchesType = state.typeFilter === "ALL" || row.subjectType === state.typeFilter;
     const matchesSearch = !search || row.subjectName.toLowerCase().includes(search);
 
     return matchesType && matchesSearch;
@@ -34,19 +31,21 @@ export function getTeacherSubjectsSummary(rows: TeacherSubjectRow[]): TeacherSub
   const summary: TeacherSubjectSummary = {
     total: rows.length,
     academic: 0,
-    elective: 0,
+    electiveRequired: 0,
+    electiveOptional: 0,
     regime: 0,
     minCoveredGrade: null,
     maxCoveredGrade: null,
   };
 
   for (const row of rows) {
-    const group = SUBJECT_TYPE_TO_GROUP[row.subjectType as SubjectType];
-    if (group === "ACADEMIC") {
+    if (row.subjectType === "ACADEMIC") {
       summary.academic += 1;
-    } else if (group === "ELECTIVE") {
-      summary.elective += 1;
-    } else if (group === "REGIME") {
+    } else if (row.subjectType === "ELECTIVE_REQUIRED") {
+      summary.electiveRequired += 1;
+    } else if (row.subjectType === "ELECTIVE_OPTIONAL") {
+      summary.electiveOptional += 1;
+    } else if (row.subjectType === "REGIME") {
       summary.regime += 1;
     }
 

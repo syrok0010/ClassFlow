@@ -7,6 +7,7 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
+import { SubjectTypeBadge } from "@/components/ui/subject-type-badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,10 +27,9 @@ import type { SubjectWithUsage } from "../_lib/types";
 import { groupSubjectsByType } from "../_lib/subject-table-utils";
 import {
   SUBJECT_LABELS,
-  SUBJECT_SELECT,
   SUBJECT_MARKERS,
-} from "../_lib/constants";
-import { SubjectTypeBadge } from "./subject-type-badge";
+  SUBJECT_SELECT,
+} from "@/lib/constants";
 import { SubjectUsageCell } from "./subject-usage-cell";
 import { InlineCreateRow } from "./inline-create-row";
 import { InlineNameCell } from "./inline-name-cell";

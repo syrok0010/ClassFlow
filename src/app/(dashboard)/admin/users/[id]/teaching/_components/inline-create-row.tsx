@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Button } from "@/components/ui/button";
+import {
+  InlineCreateRowFrame,
+  InlineCreateRowFrameActions,
+} from "@/components/ui/inline-create-row-frame";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -8,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TableCell, TableRow } from "@/components/ui/table";
+import { TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { SubjectOption } from "../_lib/types";
 
@@ -47,7 +50,7 @@ function validateRange(minGrade: number | null, maxGrade: number | null): string
   return null;
 }
 
-export function InlineCreateTeacherSubjectRow({
+export function InlineCreateRow({
   subjectOptions,
   onSave,
   onCancel,
@@ -111,7 +114,7 @@ export function InlineCreateTeacherSubjectRow({
   };
 
   return (
-    <TableRow className="animate-in fade-in-0 slide-in-from-top-1 bg-primary/5">
+    <InlineCreateRowFrame>
       <TableCell>
         <Select
           value={subjectId || null}
@@ -143,7 +146,7 @@ export function InlineCreateTeacherSubjectRow({
         </Select>
       </TableCell>
 
-      <TableCell className="w-[140px]">
+      <TableCell className="w-35">
         <Input
           value={minGradeRaw}
           onChange={(event) => {
@@ -159,7 +162,7 @@ export function InlineCreateTeacherSubjectRow({
         />
       </TableCell>
 
-      <TableCell className="w-[140px]">
+      <TableCell className="w-35">
         <Input
           value={maxGradeRaw}
           onChange={(event) => {
@@ -176,16 +179,15 @@ export function InlineCreateTeacherSubjectRow({
       </TableCell>
 
       <TableCell>
-        <div className="flex items-center justify-end gap-2">
-          <Button size="sm" onClick={() => void submit()} disabled={isSubmitting}>
-            Сохранить
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onCancel} disabled={isSubmitting}>
-            Отмена
-          </Button>
-        </div>
+        <InlineCreateRowFrameActions
+          onSave={() => void submit()}
+          onCancel={onCancel}
+          isSaveDisabled={isSubmitting}
+          isCancelDisabled={isSubmitting}
+          align="end"
+        />
         {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
       </TableCell>
-    </TableRow>
+    </InlineCreateRowFrame>
   );
 }

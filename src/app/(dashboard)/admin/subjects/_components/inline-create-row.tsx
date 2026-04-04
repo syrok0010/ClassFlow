@@ -1,7 +1,10 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import type { SubjectType } from "@/generated/prisma/client";
 import { useForm } from "@tanstack/react-form";
-import { Button } from "@/components/ui/button";
+import {
+  InlineCreateRowFrame,
+  InlineCreateRowFrameActions,
+} from "@/components/ui/inline-create-row-frame";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -10,13 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TableCell, TableRow } from "@/components/ui/table";
+import { TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { SUBJECT_LABELS, SUBJECT_TYPE_OPTIONS } from "@/lib/constants";
 import {
   subjectNameSchema,
   subjectTypeSchema,
 } from "../_lib/subject-schemas";
-import { SUBJECT_LABELS, TYPE_OPTIONS } from "../_lib/constants";
 
 interface InlineCreateRowProps {
   onSave: (data: { name: string; type: SubjectType }) => Promise<boolean>;
@@ -61,7 +64,7 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
   };
 
   return (
-    <TableRow className="animate-in fade-in-0 slide-in-from-top-1 bg-primary/5">
+    <InlineCreateRowFrame>
       <TableCell>
         <form.Field name="name" validators={{ onBlur: subjectNameSchema }}>
           {(field) => (
@@ -102,7 +105,7 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TYPE_OPTIONS.map((option) => (
+                {SUBJECT_TYPE_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -118,21 +121,15 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
       <TableCell>
         <form.Subscribe selector={(state) => [state.isSubmitting, state.values.name] as const}>
           {([isSubmitting, name]) => (
-            <div className="flex items-center justify-end gap-2">
-              <Button
-                size="sm"
-                onClick={() => form.handleSubmit()}
-                disabled={!name.trim() || isSubmitting}
-              >
-                Сохранить
-              </Button>
-              <Button size="sm" variant="ghost" onClick={onCancel}>
-                Отмена
-              </Button>
-            </div>
+            <InlineCreateRowFrameActions
+              onSave={() => form.handleSubmit()}
+              onCancel={onCancel}
+              isSaveDisabled={!name.trim() || isSubmitting}
+              align="end"
+            />
           )}
         </form.Subscribe>
       </TableCell>
-    </TableRow>
+    </InlineCreateRowFrame>
   );
 }

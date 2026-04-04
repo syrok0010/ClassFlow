@@ -2,8 +2,8 @@ import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { TEACHING_FILTERS } from "../_lib/constants";
-import type { TeacherSubjectFilterType } from "../_lib/types";
+import { SUBJECT_FILTERS } from "@/lib/constants";
+import type { TeacherSubjectFilterType } from "@/lib/types";
 
 interface TeacherSubjectsToolbarProps {
   searchQuery: string;
@@ -34,12 +34,12 @@ export function TeacherSubjectsToolbar({
         />
       </div>
 
-      <SegmentedControl
-        value={filterType}
-        onChange={onFilterTypeChange}
-        options={TEACHING_FILTERS}
-        size="sm"
-      />
+        <SegmentedControl
+          value={filterType}
+          onChange={onFilterTypeChange}
+          options={SUBJECT_FILTERS}
+          size="sm"
+        />
 
       {!isAddingRow ? (
         <Button className="ml-auto" onClick={onAddSubject}>
