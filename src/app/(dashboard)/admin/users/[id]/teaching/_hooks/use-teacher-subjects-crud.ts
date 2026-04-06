@@ -8,17 +8,18 @@ import {
   updateTeacherSubjectAction,
 } from "../_actions/teacher-subject-actions";
 import type {
+  CreateTeacherSubjectFormInput,
+  UpdateTeacherSubjectInput,
+} from "../_lib/schemas";
+import type {
   SubjectOption,
   TeacherSubjectRow,
   TeacherSubjectSummary,
 } from "../_lib/types";
 import { getTeacherSubjectsSummary } from "../_lib/teacher-subject-table-utils";
 
-type CreatePayload = {
-  subjectId: string;
-  minGrade: number;
-  maxGrade: number;
-};
+type CreatePayload = CreateTeacherSubjectFormInput;
+type UpdatePayload = UpdateTeacherSubjectInput;
 
 export function useTeacherSubjectsCrud(initialRows: TeacherSubjectRow[], teacherId: string) {
   const [rows, setRows] = useState(initialRows);
@@ -51,16 +52,13 @@ export function useTeacherSubjectsCrud(initialRows: TeacherSubjectRow[], teacher
   );
 
   const handleUpdateTeacherSubject = useCallback(
-    async (row: TeacherSubjectRow, minGrade: number, maxGrade: number) => {
+    async (row: TeacherSubjectRow, payload: UpdatePayload) => {
       const response = await updateTeacherSubjectAction(
         {
           teacherId: row.teacherId,
           subjectId: row.subjectId,
         },
-        {
-          minGrade,
-          maxGrade,
-        }
+        payload
       );
 
       if (response.error || !response.result) {

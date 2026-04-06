@@ -34,8 +34,6 @@ export function getTeacherSubjectsSummary(rows: TeacherSubjectRow[]): TeacherSub
     electiveRequired: 0,
     electiveOptional: 0,
     regime: 0,
-    minCoveredGrade: null,
-    maxCoveredGrade: null,
   };
 
   for (const row of rows) {
@@ -49,19 +47,6 @@ export function getTeacherSubjectsSummary(rows: TeacherSubjectRow[]): TeacherSub
       summary.regime += 1;
     }
 
-    if (row.minGrade !== null) {
-      summary.minCoveredGrade =
-        summary.minCoveredGrade === null
-          ? row.minGrade
-          : Math.min(summary.minCoveredGrade, row.minGrade);
-    }
-
-    if (row.maxGrade !== null) {
-      summary.maxCoveredGrade =
-        summary.maxCoveredGrade === null
-          ? row.maxGrade
-          : Math.max(summary.maxCoveredGrade, row.maxGrade);
-    }
   }
 
   return summary;

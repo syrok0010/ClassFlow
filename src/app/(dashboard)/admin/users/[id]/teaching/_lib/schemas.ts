@@ -25,6 +25,22 @@ export const createTeacherSubjectSchema = z
     }
   });
 
+export const createTeacherSubjectFormSchema = z
+  .object({
+    subjectId: idSchema,
+    minGrade: gradeSchema,
+    maxGrade: gradeSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (value.minGrade > value.maxGrade) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["minGrade"],
+        message: "Класс " + "от" + " не может быть больше " + "до",
+      });
+    }
+  });
+
 export const updateTeacherSubjectSchema = z
   .object({
     minGrade: gradeSchema,
@@ -46,5 +62,6 @@ export const teacherSubjectKeySchema = z.object({
 });
 
 export type CreateTeacherSubjectInput = z.infer<typeof createTeacherSubjectSchema>;
+export type CreateTeacherSubjectFormInput = z.infer<typeof createTeacherSubjectFormSchema>;
 export type UpdateTeacherSubjectInput = z.infer<typeof updateTeacherSubjectSchema>;
 export type TeacherSubjectKeyInput = z.infer<typeof teacherSubjectKeySchema>;

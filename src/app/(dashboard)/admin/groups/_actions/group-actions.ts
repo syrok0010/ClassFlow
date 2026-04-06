@@ -2,8 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { err, ok, type Result } from "@/lib/result";
+import { getActionErrorMessage } from "@/lib/action-error";
 import { revalidatePath } from "next/cache";
-import { z } from "zod/v4";
 import type { GroupType } from "@/generated/prisma/client";
 import {
   assignStudentsSchema,
@@ -31,18 +31,6 @@ type GroupsTreeFilters = {
   search?: string;
   type?: GroupType;
 };
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof z.ZodError) {
-    return error.issues[0]?.message ?? fallback;
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return fallback;
-}
 
 function filterGroupsTree(
   groups: GroupWithDetails[],
@@ -120,7 +108,7 @@ export async function getGroupsTree(
 
     return ok(filterGroupsTree(rootGroups, filters));
   } catch (error) {
-    return err(getErrorMessage(error, "Не удалось загрузить список групп"));
+    return err(getActionErrorMessage(error, "Не удалось загрузить список групп"));
   }
 }
 
@@ -141,7 +129,7 @@ export async function createGroupAction(data: CreateGroupInput) {
     revalidatePath("/admin/groups");
     return ok(group);
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка при создании группы"));
+    return err(getActionErrorMessage(error, "Ошибка при создании группы"));
   }
 }
 
@@ -161,7 +149,7 @@ export async function updateGroupAction(
     revalidatePath("/admin/groups");
     return ok(group);
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка при обновлении группы"));
+    return err(getActionErrorMessage(error, "Ошибка при обновлении группы"));
   }
 }
 
@@ -229,7 +217,7 @@ export async function deleteGroupAction(id: IdInput) {
     revalidatePath("/admin/groups");
     return ok(true);
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка при удалении группы"));
+    return err(getActionErrorMessage(error, "Ошибка при удалении группы"));
   }
 }
 
@@ -352,7 +340,7 @@ export async function getStudentsForAssignment(
       available: available.map(mapStudent),
     });
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка загрузки учеников"));
+    return err(getActionErrorMessage(error, "Ошибка загрузки учеников"));
   }
 }
 
@@ -374,7 +362,7 @@ export async function assignStudentsToGroupAction(
     revalidatePath("/admin/groups");
     return ok(true);
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка при добавлении учеников в группу"));
+    return err(getActionErrorMessage(error, "Ошибка при добавлении учеников в группу"));
   }
 }
 
@@ -414,7 +402,7 @@ export async function removeStudentsFromGroupAction(
     revalidatePath("/admin/groups");
     return ok(true);
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка при удалении учеников из группы"));
+    return err(getActionErrorMessage(error, "Ошибка при удалении учеников из группы"));
   }
 }
 
@@ -452,7 +440,7 @@ export async function getGroupStudents(
       }))
     );
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка загрузки учеников группы"));
+    return err(getActionErrorMessage(error, "Ошибка загрузки учеников группы"));
   }
 }
 
@@ -562,7 +550,7 @@ export async function createSubgroupsFromSplit(data: SplitInput) {
     revalidatePath("/admin/groups");
     return ok(results.result);
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка при создании подгрупп"));
+    return err(getActionErrorMessage(error, "Ошибка при создании подгрупп"));
   }
 }
 
@@ -574,7 +562,7 @@ export async function getSubjects(): Promise<Result<SubjectOption[]>> {
     });
     return ok(subjects);
   } catch (error) {
-    return err(getErrorMessage(error, "Не удалось загрузить предметы"));
+    return err(getActionErrorMessage(error, "Не удалось загрузить предметы"));
   }
 }
 
@@ -664,7 +652,7 @@ export async function getSubgroupEditorData(
       })),
     });
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка загрузки данных подгрупп"));
+    return err(getActionErrorMessage(error, "Ошибка загрузки данных подгрупп"));
   }
 }
 
@@ -799,6 +787,6 @@ export async function saveSubgroupRedistribution(
     revalidatePath("/admin/groups");
     return ok(true);
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка при обновлении подгрупп"));
+    return err(getActionErrorMessage(error, "Ошибка при обновлении подгрупп"));
   }
 }

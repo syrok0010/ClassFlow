@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useQueryState } from "nuqs";
 import { AlertTriangle } from "lucide-react";
 import type { TeacherSubjectFilterType } from "@/lib/types";
+import type { UserStatus } from "@/generated/prisma/enums";
 import { useTeacherSubjectsCrud } from "../_hooks/use-teacher-subjects-crud";
 import { filterAndSortTeacherSubjects } from "../_lib/teacher-subject-table-utils";
 import type { TeachingPageData, TeacherSubjectRow } from "../_lib/types";
@@ -17,17 +18,11 @@ interface TeacherSubjectsPageClientProps {
   initialData: TeachingPageData;
 }
 
-function statusLabel(status: TeachingPageData["teacher"]["status"]) {
-  if (status === "ACTIVE") {
-    return "Активен";
-  }
-
-  if (status === "PENDING_INVITE") {
-    return "Ожидает инвайт";
-  }
-
-  return "Заблокирован";
-}
+const STATUS_LABELS: Record<UserStatus, string> = {
+  ACTIVE: "Активен",
+  PENDING_INVITE: "Ожидает инвайт",
+  DISABLED: "Заблокирован",
+};
 
 export function TeacherSubjectsPageClient({ initialData }: TeacherSubjectsPageClientProps) {
   const { teacher, subjectOptions } = initialData;
@@ -103,7 +98,7 @@ export function TeacherSubjectsPageClient({ initialData }: TeacherSubjectsPageCl
         </p>
         <h1 className="text-3xl font-bold tracking-tight">Компетенции преподавателя</h1>
         <p className="text-sm text-muted-foreground">
-          {teacher.fullName} · {teacher.email ?? "email не указан"} · {teacher.roleLabels.join(", ") || "без ролей"} · {statusLabel(teacher.status)}
+          {teacher.fullName} · {teacher.email ?? "email не указан"} · {teacher.roleLabels.join(", ") || "без ролей"} · {STATUS_LABELS[teacher.status] ?? "Неизвестный статус"}
         </p>
       </div>
 

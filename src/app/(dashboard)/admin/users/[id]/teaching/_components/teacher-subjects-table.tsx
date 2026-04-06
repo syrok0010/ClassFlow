@@ -1,8 +1,12 @@
 import { useMemo, useState, type KeyboardEvent } from "react";
+import { z } from "zod/v4";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import { Input } from "@/components/ui/input";
 import { SubjectTypeBadge } from "@/components/ui/subject-type-badge";
+import type { UpdateTeacherSubjectInput } from "../_lib/schemas";
+import { updateTeacherSubjectSchema } from "../_lib/schemas";
 import {
   Table,
   TableBody,
@@ -13,7 +17,6 @@ import {
 } from "@/components/ui/table";
 import type { SubjectOption, TeacherSubjectRow } from "../_lib/types";
 import { InlineCreateRow } from "./inline-create-row";
-import { TeacherSubjectsEmptyState } from "./teacher-subjects-empty-state";
 
 interface TeacherSubjectsTableProps {
   allRowsCount: number;
@@ -26,7 +29,7 @@ interface TeacherSubjectsTableProps {
     minGrade: number;
     maxGrade: number;
   }) => Promise<boolean>;
-  onUpdateSubject: (row: TeacherSubjectRow, minGrade: number, maxGrade: number) => Promise<boolean>;
+  onUpdateSubject: (row: TeacherSubjectRow, payload: UpdateTeacherSubjectInput) => Promise<boolean>;
   onDeleteRequest: (row: TeacherSubjectRow) => void;
   onCancelAddRow: () => void;
   onCreateFirst: () => void;
@@ -38,33 +41,34 @@ type EditingCell = {
   field: "minGrade" | "maxGrade";
 };
 
-function toGrade(value: string): number | null {
-  if (!value.trim()) {
-    return null;
+const gradeTextSchema = z.string().trim().min(1, "Укажите диапазон классов").pipe(z.coerce.number());
+
+function parseDraftRange(draft: { minGrade: string; maxGrade: string }) {
+  const minResult = gradeTextSchema.safeParse(draft.minGrade);
+  const maxResult = gradeTextSchema.safeParse(draft.maxGrade);
+
+  if (!minResult.success || !maxResult.success) {
+    return { error: "Укажите диапазон классов" } as {
+      error: string;
+    };
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
-    return null;
+  const validated = updateTeacherSubjectSchema.safeParse({
+    minGrade: minResult.data,
+    maxGrade: maxResult.data,
+  });
+
+  if (!validated.success) {
+    return {
+      error: validated.error.issues[0]?.message ?? "Некорректный диапазон классов",
+    } as {
+      error: string;
+    };
   }
 
-  return parsed;
-}
-
-function validateRange(minGrade: number | null, maxGrade: number | null): string | null {
-  if (minGrade === null || maxGrade === null) {
-    return "Укажите диапазон классов";
-  }
-
-  if (minGrade < 0 || maxGrade < 0 || minGrade > 11 || maxGrade > 11) {
-    return "Класс должен быть в диапазоне от 0 до 11";
-  }
-
-  if (minGrade > maxGrade) {
-    return "Класс от не может быть больше класса до";
-  }
-
-  return null;
+  return { value: validated.data } as {
+    value: { minGrade: number; maxGrade: number };
+  };
 }
 
 function rowKey(row: TeacherSubjectRow) {
@@ -125,14 +129,14 @@ export function TeacherSubjectsTable({
   const commitRow = async (row: TeacherSubjectRow) => {
     const id = rowKey(row);
     const draft = getDraft(row);
-    const minGrade = toGrade(draft.minGrade);
-    const maxGrade = toGrade(draft.maxGrade);
 
-    const error = validateRange(minGrade, maxGrade);
-    if (error) {
-      setRowError((prev) => ({ ...prev, [id]: error }));
+    const parsedRange = parseDraftRange(draft);
+    if ("error" in parsedRange) {
+      setRowError((prev) => ({ ...prev, [id]: parsedRange.error }));
       return;
     }
+
+    const { minGrade, maxGrade } = parsedRange.value;
 
     if (row.minGrade === minGrade && row.maxGrade === maxGrade) {
       setEditingCell(null);
@@ -141,7 +145,7 @@ export function TeacherSubjectsTable({
     }
 
     setSavingRowId(id);
-    const success = await onUpdateSubject(row, minGrade as number, maxGrade as number);
+    const success = await onUpdateSubject(row, { minGrade, maxGrade });
     setSavingRowId(null);
 
     if (success) {
@@ -187,9 +191,9 @@ export function TeacherSubjectsTable({
           <TableRow>
             <TableHead>Предмет</TableHead>
             <TableHead>Тип</TableHead>
-            <TableHead className="w-[140px]">От класса</TableHead>
-            <TableHead className="w-[140px]">До класса</TableHead>
-            <TableHead className="w-[72px]" />
+            <TableHead className="w-35">От класса</TableHead>
+            <TableHead className="w-35">До класса</TableHead>
+            <TableHead className="w-45" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -204,10 +208,13 @@ export function TeacherSubjectsTable({
           {!hasRows && !isAddingRow ? (
             <TableRow>
               <TableCell colSpan={5}>
-                <TeacherSubjectsEmptyState
+                <FilterableEmptyState
                   hasFilters={hasActiveFilters && allRowsCount > 0}
                   onResetFilters={onResetFilters}
                   onCreateFirst={onCreateFirst}
+                  emptyTitle="У преподавателя пока не назначено ни одного предмета"
+                  emptyDescription="Добавьте предметы и диапазоны классов, чтобы система могла учитывать этого преподавателя в учебном плане и расписании."
+                  createFirstLabel="+ Добавить первый предмет"
                 />
               </TableCell>
             </TableRow>

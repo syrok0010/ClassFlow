@@ -1,6 +1,7 @@
 import type { SubjectType } from "@/generated/prisma/client";
 import { SUBJECT_SELECT } from "@/lib/constants";
-import type {SubjectFilterType, SubjectWithUsage} from "./types";
+import type { SubjectFilterType } from "@/lib/types";
+import type { SubjectWithUsage } from "./types";
 
 type TableState = {
   search: string;

@@ -1,18 +1,16 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { z } from "zod/v4";
+import { Check, ChevronsUpDown } from "lucide-react";
 import {
   InlineCreateRowFrame,
   InlineCreateRowFrameActions,
 } from "@/components/ui/inline-create-row-frame";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { idSchema, updateTeacherSubjectSchema } from "../_lib/schemas";
 import type { SubjectOption } from "../_lib/types";
 
 interface InlineCreateTeacherSubjectRowProps {
@@ -21,33 +19,50 @@ interface InlineCreateTeacherSubjectRowProps {
   onCancel: () => void;
 }
 
-function toGrade(value: string): number | null {
-  if (!value.trim()) {
-    return null;
+const gradeTextSchema = z.string().trim().min(1, "Укажите диапазон классов").pipe(z.coerce.number());
+
+function parseCreatePayload(payload: {
+  subjectId: string;
+  minGradeRaw: string;
+  maxGradeRaw: string;
+}) {
+  if (!payload.subjectId.trim()) {
+    return { error: "Выберите предмет" } as { error: string };
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
-    return null;
+  const subjectResult = idSchema.safeParse(payload.subjectId);
+  if (!subjectResult.success) {
+    return { error: subjectResult.error.issues[0]?.message ?? "Выберите предмет" } as {
+      error: string;
+    };
   }
 
-  return parsed;
-}
-
-function validateRange(minGrade: number | null, maxGrade: number | null): string | null {
-  if (minGrade === null || maxGrade === null) {
-    return "Укажите диапазон классов";
+  const minResult = gradeTextSchema.safeParse(payload.minGradeRaw);
+  const maxResult = gradeTextSchema.safeParse(payload.maxGradeRaw);
+  if (!minResult.success || !maxResult.success) {
+    return { error: "Укажите диапазон классов" } as { error: string };
   }
 
-  if (minGrade < 0 || maxGrade < 0 || minGrade > 11 || maxGrade > 11) {
-    return "Класс должен быть в диапазоне от 0 до 11";
+  const rangeResult = updateTeacherSubjectSchema.safeParse({
+    minGrade: minResult.data,
+    maxGrade: maxResult.data,
+  });
+
+  if (!rangeResult.success) {
+    return {
+      error: rangeResult.error.issues[0]?.message ?? "Некорректный диапазон классов",
+    } as { error: string };
   }
 
-  if (minGrade > maxGrade) {
-    return "Класс от не может быть больше класса до";
-  }
-
-  return null;
+  return {
+    value: {
+      subjectId: subjectResult.data,
+      minGrade: rangeResult.data.minGrade,
+      maxGrade: rangeResult.data.maxGrade,
+    },
+  } as {
+    value: { subjectId: string; minGrade: number; maxGrade: number };
+  };
 }
 
 export function InlineCreateRow({
@@ -58,39 +73,61 @@ export function InlineCreateRow({
   const [subjectId, setSubjectId] = useState("");
   const [minGradeRaw, setMinGradeRaw] = useState("");
   const [maxGradeRaw, setMaxGradeRaw] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSubjectOpen, setIsSubjectOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const selectTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const subjectTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const subjectSearchRef = useRef<HTMLInputElement | null>(null);
+
+  const selectedSubject = useMemo(
+    () => subjectOptions.find((option) => option.id === subjectId) ?? null,
+    [subjectId, subjectOptions]
+  );
+
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return subjectOptions;
+    }
+
+    return subjectOptions.filter((option) =>
+      option.name.toLowerCase().includes(normalizedQuery)
+    );
+  }, [searchQuery, subjectOptions]);
 
   useEffect(() => {
     requestAnimationFrame(() => {
-      selectTriggerRef.current?.focus();
+      subjectTriggerRef.current?.focus();
     });
   }, []);
 
-  const submit = async () => {
-    if (!subjectId) {
-      setError("Выберите предмет");
+  useEffect(() => {
+    if (!isSubjectOpen) {
       return;
     }
 
-    const minGrade = toGrade(minGradeRaw);
-    const maxGrade = toGrade(maxGradeRaw);
-    const rangeError = validateRange(minGrade, maxGrade);
+    requestAnimationFrame(() => {
+      subjectSearchRef.current?.focus();
+    });
+  }, [isSubjectOpen]);
 
-    if (rangeError) {
-      setError(rangeError);
+  const submit = async () => {
+    const parsed = parseCreatePayload({
+      subjectId,
+      minGradeRaw,
+      maxGradeRaw,
+    });
+
+    if ("error" in parsed) {
+      setError(parsed.error);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const success = await onSave({
-        subjectId,
-        minGrade: minGrade as number,
-        maxGrade: maxGrade as number,
-      });
+      const success = await onSave(parsed.value);
 
       if (success) {
         onCancel();
@@ -103,6 +140,7 @@ export function InlineCreateRow({
   const onFieldKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      setIsSubjectOpen(false);
       onCancel();
       return;
     }
@@ -116,35 +154,65 @@ export function InlineCreateRow({
   return (
     <InlineCreateRowFrame>
       <TableCell>
-        <Select
-          value={subjectId || null}
-          onValueChange={(value) => {
-            setSubjectId(value ?? "");
-            if (error) {
-              setError(null);
-            }
-          }}
-          items={subjectOptions.reduce<Record<string, string>>((acc, option) => {
-            acc[option.id] = option.name;
-            return acc;
-          }, {})}
-        >
-          <SelectTrigger
-            ref={selectTriggerRef}
-            className="w-full"
+        <Popover open={isSubjectOpen} onOpenChange={setIsSubjectOpen}>
+          <PopoverTrigger
+            ref={subjectTriggerRef}
+            className={cn(
+              "flex h-7 w-full items-center justify-between rounded-md border border-input px-2 text-sm",
+              "hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+              error ? "border-destructive" : undefined
+            )}
             onKeyDown={(event) => onFieldKeyDown(event)}
           >
-            <SelectValue placeholder="Выберите предмет" />
-          </SelectTrigger>
-          <SelectContent>
-            {subjectOptions.map((option) => (
-              <SelectItem key={option.id} value={option.id}>
-                {option.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <span className={cn("truncate", !selectedSubject && "text-muted-foreground")}>
+              {selectedSubject?.name ?? "Выберите предмет"}
+            </span>
+            <ChevronsUpDown className="size-4 text-muted-foreground" />
+          </PopoverTrigger>
+          <PopoverContent className="w-105 p-2" align="start">
+            <Input
+              ref={subjectSearchRef}
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => onFieldKeyDown(event)}
+              placeholder="Поиск предмета..."
+              className="h-8"
+            />
+            <div className="max-h-56 overflow-auto">
+              {filteredOptions.length === 0 ? (
+                <p className="px-2 py-3 text-sm text-muted-foreground">Ничего не найдено</p>
+              ) : (
+                filteredOptions.map((option) => (
+                  <Button
+                    key={option.id}
+                    type="button"
+                    variant="ghost"
+                    className="h-8 w-full justify-start px-2"
+                    onClick={() => {
+                      setSubjectId(option.id);
+                      setSearchQuery(option.name);
+                      setIsSubjectOpen(false);
+                      if (error) {
+                        setError(null);
+                      }
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 size-4 text-primary",
+                        subjectId === option.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <span className="truncate">{option.name}</span>
+                  </Button>
+                ))
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       </TableCell>
+
+      <TableCell className="text-muted-foreground">-</TableCell>
 
       <TableCell className="w-35">
         <Input
@@ -178,7 +246,7 @@ export function InlineCreateRow({
         />
       </TableCell>
 
-      <TableCell>
+      <TableCell className="w-45 align-top">
         <InlineCreateRowFrameActions
           onSave={() => void submit()}
           onCancel={onCancel}

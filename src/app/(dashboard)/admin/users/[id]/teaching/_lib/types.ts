@@ -30,8 +30,6 @@ export type TeacherSubjectSummary = {
   electiveRequired: number;
   electiveOptional: number;
   regime: number;
-  minCoveredGrade: number | null;
-  maxCoveredGrade: number | null;
 };
 
 export type TeacherIdentity = {
