@@ -91,10 +91,10 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
 
   return (
     <TableRow
-      className="bg-primary/5 border-primary/30 animate-in fade-in-0 slide-in-from-top-2 zoom-in-[99%] duration-300 h-16"
+      className="bg-primary/5 border-primary/30 animate-in fade-in-0 slide-in-from-top-2 zoom-in-[99%] duration-300"
     >
-      <TableCell className="pl-5">
-        <div className="flex items-center gap-2">
+      <TableCell className="pl-5 align-top py-4">
+        <div className="flex gap-2">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-primary/40 text-primary">
             {isSubmitting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -119,7 +119,7 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
         </div>
       </TableCell>
 
-      <TableCell>
+      <TableCell className="align-top py-4">
         <form.Field name="seatsCount">
           {(field) => (
             <div className="w-24">
@@ -136,13 +136,13 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
         </form.Field>
       </TableCell>
 
-      <TableCell>
-        <span className="text-[11px] text-muted-foreground leading-tight block max-w-[200px]">
+      <TableCell className="align-top pt-6 pb-4">
+        <span className="text-[11px] text-muted-foreground leading-tight block max-w-50">
           Предметы можно настроить после создания
         </span>
       </TableCell>
 
-      <TableCell>
+      <TableCell className="align-top py-4">
         <div className="flex items-center justify-end gap-2">
           <form.Subscribe selector={(state) => ({ values: state.values })}>
             {({ values }) => {
