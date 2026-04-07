@@ -1,12 +1,10 @@
-import { useMemo, useState, type KeyboardEvent } from "react";
-import { z } from "zod/v4";
+import { useMemo, useState } from "react";
+import { useForm } from "@tanstack/react-form";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import { Input } from "@/components/ui/input";
 import { SubjectTypeBadge } from "@/components/ui/subject-type-badge";
-import type { UpdateTeacherSubjectInput } from "../_lib/schemas";
-import { updateTeacherSubjectSchema } from "../_lib/schemas";
 import {
   Table,
   TableBody,
@@ -15,6 +13,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import type {
+  UpdateTeacherSubjectInlineFormValues,
+  UpdateTeacherSubjectInput,
+} from "../_lib/schemas";
+import { updateTeacherSubjectInlineFormSchema } from "../_lib/schemas";
 import type { SubjectOption, TeacherSubjectRow } from "../_lib/types";
 import { InlineCreateRow } from "./inline-create-row";
 
@@ -41,38 +45,198 @@ type EditingCell = {
   field: "minGrade" | "maxGrade";
 };
 
-const gradeTextSchema = z.string().trim().min(1, "Укажите диапазон классов").pipe(z.coerce.number());
-
-function parseDraftRange(draft: { minGrade: string; maxGrade: string }) {
-  const minResult = gradeTextSchema.safeParse(draft.minGrade);
-  const maxResult = gradeTextSchema.safeParse(draft.maxGrade);
-
-  if (!minResult.success || !maxResult.success) {
-    return { error: "Укажите диапазон классов" } as {
-      error: string;
-    };
-  }
-
-  const validated = updateTeacherSubjectSchema.safeParse({
-    minGrade: minResult.data,
-    maxGrade: maxResult.data,
-  });
-
-  if (!validated.success) {
-    return {
-      error: validated.error.issues[0]?.message ?? "Некорректный диапазон классов",
-    } as {
-      error: string;
-    };
-  }
-
-  return { value: validated.data } as {
-    value: { minGrade: number; maxGrade: number };
-  };
-}
-
 function rowKey(row: TeacherSubjectRow) {
   return `${row.teacherId}:${row.subjectId}`;
+}
+
+interface TeacherSubjectDataRowProps {
+  row: TeacherSubjectRow;
+  subjectName: string;
+  onUpdateSubject: (row: TeacherSubjectRow, payload: UpdateTeacherSubjectInput) => Promise<boolean>;
+  onDeleteRequest: (row: TeacherSubjectRow) => void;
+}
+
+function TeacherSubjectDataRow({
+  row,
+  subjectName,
+  onUpdateSubject,
+  onDeleteRequest,
+}: TeacherSubjectDataRowProps) {
+  const [editingCell, setEditingCell] = useState<EditingCell["field"] | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [rowError, setRowError] = useState<string | null>(null);
+
+  const form = useForm({
+    defaultValues: {
+      minGrade: row.minGrade === null ? "" : String(row.minGrade),
+      maxGrade: row.maxGrade === null ? "" : String(row.maxGrade),
+    } as UpdateTeacherSubjectInlineFormValues,
+    onSubmit: async ({ value }) => {
+      const parsed = updateTeacherSubjectInlineFormSchema.safeParse(value);
+      if (!parsed.success) {
+        setRowError(parsed.error.issues[0]?.message ?? "Некорректный диапазон классов");
+        return;
+      }
+
+      if (row.minGrade === parsed.data.minGrade && row.maxGrade === parsed.data.maxGrade) {
+        setRowError(null);
+        setEditingCell(null);
+        return;
+      }
+
+      setIsSaving(true);
+      try {
+        const success = await onUpdateSubject(row, parsed.data);
+
+        if (success) {
+          setRowError(null);
+          setEditingCell(null);
+          return;
+        }
+
+        setRowError("Не удалось сохранить изменения");
+      } finally {
+        setIsSaving(false);
+      }
+    },
+  });
+
+  const beginEdit = (field: EditingCell["field"]) => {
+    setEditingCell(field);
+    setRowError(null);
+    form.reset({
+      minGrade: row.minGrade === null ? "" : String(row.minGrade),
+      maxGrade: row.maxGrade === null ? "" : String(row.maxGrade),
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingCell(null);
+    setRowError(null);
+    form.reset({
+      minGrade: row.minGrade === null ? "" : String(row.minGrade),
+      maxGrade: row.maxGrade === null ? "" : String(row.maxGrade),
+    });
+  };
+
+  const isEditing = editingCell !== null;
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">{subjectName}</TableCell>
+      <TableCell>
+        <SubjectTypeBadge type={row.subjectType} />
+      </TableCell>
+
+      <TableCell>
+        {isEditing ? (
+          <form.Field name="minGrade">
+            {(field) => (
+              <Input
+                autoFocus={editingCell === "minGrade"}
+                inputMode="numeric"
+                className={cn("h-7", field.state.meta.errors.length > 0 && "border-destructive")}
+                value={field.state.value}
+                onChange={(event) => {
+                  field.handleChange(event.target.value);
+                  if (rowError) {
+                    setRowError(null);
+                  }
+                }}
+                onBlur={() => {
+                  if (!isSaving) {
+                    void form.handleSubmit();
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void form.handleSubmit();
+                    return;
+                  }
+
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelEdit();
+                  }
+                }}
+                disabled={isSaving}
+              />
+            )}
+          </form.Field>
+        ) : (
+          <button
+            type="button"
+            className="w-full cursor-pointer rounded px-1 py-1 text-left hover:bg-muted"
+            onClick={() => beginEdit("minGrade")}
+          >
+            {row.minGrade ?? "-"}
+          </button>
+        )}
+      </TableCell>
+
+      <TableCell>
+        {isEditing ? (
+          <form.Field name="maxGrade">
+            {(field) => (
+              <Input
+                autoFocus={editingCell === "maxGrade"}
+                inputMode="numeric"
+                className={cn("h-7", field.state.meta.errors.length > 0 && "border-destructive")}
+                value={field.state.value}
+                onChange={(event) => {
+                  field.handleChange(event.target.value);
+                  if (rowError) {
+                    setRowError(null);
+                  }
+                }}
+                onBlur={() => {
+                  if (!isSaving) {
+                    void form.handleSubmit();
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void form.handleSubmit();
+                    return;
+                  }
+
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelEdit();
+                  }
+                }}
+                disabled={isSaving}
+              />
+            )}
+          </form.Field>
+        ) : (
+          <button
+            type="button"
+            className="w-full cursor-pointer rounded px-1 py-1 text-left hover:bg-muted"
+            onClick={() => beginEdit("maxGrade")}
+          >
+            {row.maxGrade ?? "-"}
+          </button>
+        )}
+      </TableCell>
+
+      <TableCell className="text-right">
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => onDeleteRequest(row)}
+            aria-label="Удалить компетенцию"
+          >
+            <Trash2 className="size-4" />
+          </Button>
+          {rowError ? <span className="text-xs text-destructive">{rowError}</span> : null}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
 }
 
 export function TeacherSubjectsTable({
@@ -88,11 +252,6 @@ export function TeacherSubjectsTable({
   onCreateFirst,
   onResetFilters,
 }: TeacherSubjectsTableProps) {
-  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, { minGrade: string; maxGrade: string }>>({});
-  const [savingRowId, setSavingRowId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<Record<string, string | null>>({});
-
   const hasRows = rows.length > 0;
 
   const subjectNamesById = useMemo(() => {
@@ -102,87 +261,6 @@ export function TeacherSubjectsTable({
     }
     return map;
   }, [subjectOptions]);
-
-  const getDraft = (row: TeacherSubjectRow) => {
-    const id = rowKey(row);
-    const existing = drafts[id];
-    if (existing) {
-      return existing;
-    }
-
-    return {
-      minGrade: row.minGrade === null ? "" : String(row.minGrade),
-      maxGrade: row.maxGrade === null ? "" : String(row.maxGrade),
-    };
-  };
-
-  const beginEdit = (row: TeacherSubjectRow, field: EditingCell["field"]) => {
-    const id = rowKey(row);
-    setDrafts((prev) => ({
-      ...prev,
-      [id]: getDraft(row),
-    }));
-    setEditingCell({ rowId: id, field });
-    setRowError((prev) => ({ ...prev, [id]: null }));
-  };
-
-  const commitRow = async (row: TeacherSubjectRow) => {
-    const id = rowKey(row);
-    const draft = getDraft(row);
-
-    const parsedRange = parseDraftRange(draft);
-    if ("error" in parsedRange) {
-      setRowError((prev) => ({ ...prev, [id]: parsedRange.error }));
-      return;
-    }
-
-    const { minGrade, maxGrade } = parsedRange.value;
-
-    if (row.minGrade === minGrade && row.maxGrade === maxGrade) {
-      setEditingCell(null);
-      setRowError((prev) => ({ ...prev, [id]: null }));
-      return;
-    }
-
-    setSavingRowId(id);
-    const success = await onUpdateSubject(row, { minGrade, maxGrade });
-    setSavingRowId(null);
-
-    if (success) {
-      setEditingCell(null);
-      setRowError((prev) => ({ ...prev, [id]: null }));
-      return;
-    }
-
-    setRowError((prev) => ({ ...prev, [id]: "Не удалось сохранить изменения" }));
-  };
-
-  const cancelEdit = (row: TeacherSubjectRow) => {
-    const id = rowKey(row);
-    setEditingCell(null);
-    setDrafts((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setRowError((prev) => ({ ...prev, [id]: null }));
-  };
-
-  const onInputKeyDown = async (
-    event: KeyboardEvent<HTMLInputElement>,
-    row: TeacherSubjectRow
-  ) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      await commitRow(row);
-      return;
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      cancelEdit(row);
-    }
-  };
 
   return (
     <div className="rounded-xl border bg-card text-card-foreground shadow">
@@ -222,113 +300,16 @@ export function TeacherSubjectsTable({
 
           {rows.map((row) => {
             const id = rowKey(row);
-            const draft = getDraft(row);
-            const editingMin = editingCell?.rowId === id && editingCell.field === "minGrade";
-            const editingMax = editingCell?.rowId === id && editingCell.field === "maxGrade";
-            const isSaving = savingRowId === id;
-            const gradeError = rowError[id];
+            const subjectName = subjectNamesById.get(row.subjectId) ?? row.subjectName;
 
             return (
-              <TableRow key={id}>
-                <TableCell className="font-medium">{subjectNamesById.get(row.subjectId) ?? row.subjectName}</TableCell>
-                <TableCell>
-                  <SubjectTypeBadge type={row.subjectType} />
-                </TableCell>
-
-                <TableCell>
-                  {editingMin || editingMax ? (
-                    <Input
-                      autoFocus={editingMin}
-                      inputMode="numeric"
-                      className={gradeError ? "h-7 border-destructive" : "h-7"}
-                      value={draft.minGrade}
-                      onChange={(event) => {
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [id]: {
-                            ...draft,
-                            minGrade: event.target.value,
-                          },
-                        }));
-                        if (gradeError) {
-                          setRowError((prev) => ({ ...prev, [id]: null }));
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        void onInputKeyDown(event, row);
-                      }}
-                      onBlur={() => {
-                        if (!isSaving) {
-                          void commitRow(row);
-                        }
-                      }}
-                      disabled={isSaving}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="w-full cursor-pointer rounded px-1 py-1 text-left hover:bg-muted"
-                      onClick={() => beginEdit(row, "minGrade")}
-                    >
-                      {row.minGrade ?? "-"}
-                    </button>
-                  )}
-                </TableCell>
-
-                <TableCell>
-                  {editingMin || editingMax ? (
-                    <Input
-                      autoFocus={editingMax}
-                      inputMode="numeric"
-                      className={gradeError ? "h-7 border-destructive" : "h-7"}
-                      value={draft.maxGrade}
-                      onChange={(event) => {
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [id]: {
-                            ...draft,
-                            maxGrade: event.target.value,
-                          },
-                        }));
-                        if (gradeError) {
-                          setRowError((prev) => ({ ...prev, [id]: null }));
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        void onInputKeyDown(event, row);
-                      }}
-                      onBlur={() => {
-                        if (!isSaving) {
-                          void commitRow(row);
-                        }
-                      }}
-                      disabled={isSaving}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="w-full cursor-pointer rounded px-1 py-1 text-left hover:bg-muted"
-                      onClick={() => beginEdit(row, "maxGrade")}
-                    >
-                      {row.maxGrade ?? "-"}
-                    </button>
-                  )}
-                </TableCell>
-
-                <TableCell className="text-right">
-                  <div className="flex flex-col items-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => onDeleteRequest(row)}
-                      aria-label="Удалить компетенцию"
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                    {gradeError ? <span className="text-xs text-destructive">{gradeError}</span> : null}
-                  </div>
-                </TableCell>
-              </TableRow>
+              <TeacherSubjectDataRow
+                key={id}
+                row={row}
+                subjectName={subjectName}
+                onUpdateSubject={onUpdateSubject}
+                onDeleteRequest={onDeleteRequest}
+              />
             );
           })}
         </TableBody>

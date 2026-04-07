@@ -39,9 +39,7 @@ export function TeacherSubjectDeleteDialog({
           <AlertDialogAction
             variant="destructive"
             disabled={isDeleting}
-            onClick={() => {
-              void onConfirm();
-            }}
+            onClick={onConfirm}
           >
             Удалить
           </AlertDialogAction>

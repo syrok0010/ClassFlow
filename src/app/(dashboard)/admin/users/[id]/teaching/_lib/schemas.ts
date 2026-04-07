@@ -8,6 +8,13 @@ export const gradeSchema = z
   .min(0, "Минимальный класс: 0")
   .max(11, "Максимальный класс: 11");
 
+export const gradeTextSchema = z
+  .string()
+  .trim()
+  .min(1, "Укажите диапазон классов")
+  .pipe(z.coerce.number({ message: "Введите число" }))
+  .pipe(gradeSchema);
+
 export const createTeacherSubjectSchema = z
   .object({
     teacherId: idSchema,
@@ -56,6 +63,37 @@ export const updateTeacherSubjectSchema = z
     }
   });
 
+export const createTeacherSubjectInlineFormSchema = z
+  .object({
+    subjectId: idSchema,
+    minGrade: gradeTextSchema,
+    maxGrade: gradeTextSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (value.minGrade > value.maxGrade) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["minGrade"],
+        message: "Класс " + "от" + " не может быть больше " + "до",
+      });
+    }
+  });
+
+export const updateTeacherSubjectInlineFormSchema = z
+  .object({
+    minGrade: gradeTextSchema,
+    maxGrade: gradeTextSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (value.minGrade > value.maxGrade) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["minGrade"],
+        message: "Класс " + "от" + " не может быть больше " + "до",
+      });
+    }
+  });
+
 export const teacherSubjectKeySchema = z.object({
   teacherId: idSchema,
   subjectId: idSchema,
@@ -65,3 +103,6 @@ export type CreateTeacherSubjectInput = z.infer<typeof createTeacherSubjectSchem
 export type CreateTeacherSubjectFormInput = z.infer<typeof createTeacherSubjectFormSchema>;
 export type UpdateTeacherSubjectInput = z.infer<typeof updateTeacherSubjectSchema>;
 export type TeacherSubjectKeyInput = z.infer<typeof teacherSubjectKeySchema>;
+export type CreateTeacherSubjectInlineFormValues = z.input<typeof createTeacherSubjectInlineFormSchema>;
+export type CreateTeacherSubjectInlineFormInput = z.infer<typeof createTeacherSubjectInlineFormSchema>;
+export type UpdateTeacherSubjectInlineFormValues = z.input<typeof updateTeacherSubjectInlineFormSchema>;
