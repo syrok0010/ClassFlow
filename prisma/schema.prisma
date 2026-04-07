@@ -152,8 +152,9 @@ model Group {
 }
 
 model Building {
-  id   String @id @default(cuid())
-  name String
+  id      String  @id @default(cuid())
+  name    String
+  address String?
   
   rooms Room[]
 }
