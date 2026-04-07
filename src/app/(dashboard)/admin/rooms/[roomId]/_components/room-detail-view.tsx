@@ -1,59 +1,50 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
-import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Building2, Save } from "lucide-react";
 import { toast } from "sonner";
+import type { Prisma } from "@/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
-import { getRoomByIdAction, updateRoomAction } from "../../_actions/room-actions";
+import { updateRoomAction } from "../../_actions/room-actions";
 import { RoomSubjectsTransfer } from "../../_components/room-subjects-transfer";
 import { useRoomsData } from "../../_components/rooms-data-context";
 import { updateRoomSchema } from "../../_lib/schemas";
 
+type RoomDetail = Prisma.RoomGetPayload<{
+  include: {
+    building: {
+      select: { id: true; name: true };
+    };
+    roomSubjects: {
+      include: {
+        subject: {
+          select: { id: true; name: true };
+        };
+      };
+    };
+  };
+}>;
+
 type RoomDetailViewProps = {
-  roomId: string;
+  room: RoomDetail;
 };
 
-export function RoomDetailView({ roomId }: RoomDetailViewProps) {
+export function RoomDetailView({ room }: RoomDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { subjects } = useRoomsData();
 
-  const queryKey = useMemo(() => ["rooms", "detail", roomId] as const, [roomId]);
-
-  const roomQuery = useQuery({
-    queryKey,
-    queryFn: async () => {
-      const response = await getRoomByIdAction(roomId);
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (!response.result) {
-        throw new Error("Кабинет не найден");
-      }
-
-      return response.result;
-    },
-    staleTime: 30_000,
-  });
-
-  const room = roomQuery.data;
-
   const form = useForm({
     defaultValues: {
-      name: room?.name ?? "",
-      seatsCount: room?.seatsCount ?? 0,
+      name: room.name,
+      seatsCount: room.seatsCount,
     },
     validators: {
       onChange: updateRoomSchema.omit({ id: true }),
     },
     onSubmit: async ({ value }) => {
-      if (!room) return;
-
       const result = await updateRoomAction({
         id: room.id,
         name: value.name.trim(),
@@ -66,42 +57,9 @@ export function RoomDetailView({ roomId }: RoomDetailViewProps) {
       }
 
       toast.success("Кабинет обновлен");
-      await roomQuery.refetch();
       router.refresh();
     },
   });
-
-  useEffect(() => {
-    if (!room) return;
-    form.setFieldValue("name", room.name);
-    form.setFieldValue("seatsCount", room.seatsCount);
-  }, [form, room]);
-
-  if (roomQuery.isLoading) {
-    return (
-      <div className="rounded-xl border bg-card p-6">
-        <p className="text-sm text-muted-foreground">Загрузка кабинета...</p>
-      </div>
-    );
-  }
-
-  if (roomQuery.isError || !room) {
-    return (
-      <div className="rounded-xl border bg-card p-6">
-        <p className="text-sm text-destructive">Не удалось загрузить кабинет.</p>
-        <Button
-          variant="outline"
-          className="mt-4"
-          onClick={() => {
-            const query = new URLSearchParams(searchParams.toString());
-            router.push(`/admin/rooms?${query.toString()}`);
-          }}
-        >
-          Назад к таблице
-        </Button>
-      </div>
-    );
-  }
 
   const selectedSubjectIds = room.roomSubjects.map((item) => item.subject.id);
 
@@ -176,7 +134,7 @@ export function RoomDetailView({ roomId }: RoomDetailViewProps) {
           roomName={room.name}
           allSubjects={subjects}
           selectedSubjectIds={selectedSubjectIds}
-          queryKey={[...queryKey]}
+          queryKey={["rooms", "detail", room.id]}
         />
       </div>
     </div>
