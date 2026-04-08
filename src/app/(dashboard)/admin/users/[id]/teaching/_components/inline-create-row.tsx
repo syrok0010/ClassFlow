@@ -1,5 +1,5 @@
-import { useState, type KeyboardEvent } from "react";
-import { useForm } from "@tanstack/react-form";
+import { type KeyboardEvent } from "react";
+import { useForm, type AnyFieldApi } from "@tanstack/react-form";
 import {
   Combobox,
   ComboboxCollection,
@@ -9,15 +9,18 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
+import { FormField } from "@/components/ui/form-field";
 import {
   InlineCreateRowFrame,
   InlineCreateRowFrameActions,
 } from "@/components/ui/inline-create-row-frame";
-import { Input } from "@/components/ui/input";
 import { TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
   createTeacherSubjectInlineFormSchema,
+  createTeacherSubjectInlineValidationSchema,
+  gradeTextValidationSchema,
+  idSchema,
   type CreateTeacherSubjectInlineFormInput,
   type CreateTeacherSubjectInlineFormValues,
 } from "../_lib/schemas";
@@ -33,20 +36,22 @@ interface InlineCreateTeacherSubjectRowProps {
   onCancel: () => void;
 }
 
-function getErrorMessage(error: unknown): string | null {
-  if (!error) {
-    return null;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  if (typeof error === "object" && "message" in error) {
-    return (error as { message?: string }).message ?? null;
-  }
-
-  return String(error);
+function collectFieldErrors(field: AnyFieldApi): string[] {
+  return field.state.meta.errors
+    .flatMap((error) => {
+      if (!error) {
+        return [];
+      }
+      if (typeof error === "string") {
+        return [error];
+      }
+      if (typeof error === "object" && "message" in error) {
+        const message = (error as { message?: string }).message;
+        return message ? [message] : [];
+      }
+      return [String(error)];
+    })
+    .filter(Boolean);
 }
 
 export function InlineCreateRow({
@@ -54,22 +59,22 @@ export function InlineCreateRow({
   onSave,
   onCancel,
 }: InlineCreateTeacherSubjectRowProps) {
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
   const form = useForm({
     defaultValues: {
       subjectId: "",
       minGrade: "",
       maxGrade: "",
     } as CreateTeacherSubjectInlineFormValues,
+    validators: {
+      onChange: createTeacherSubjectInlineValidationSchema,
+      onSubmit: createTeacherSubjectInlineValidationSchema,
+    },
     onSubmit: async ({ value }) => {
       const parsed = createTeacherSubjectInlineFormSchema.safeParse(value);
       if (!parsed.success) {
-        setSubmitError(parsed.error.issues[0]?.message ?? "Проверьте корректность данных");
         return;
       }
 
-      setSubmitError(null);
       const success = await onSave(parsed.data as CreateTeacherSubjectInlineFormInput);
 
       if (success) {
@@ -93,110 +98,117 @@ export function InlineCreateRow({
 
   return (
     <InlineCreateRowFrame>
-      <TableCell>
-        <form.Field name="subjectId">
-          {(field) => (
-            <Combobox
-              items={subjectOptions}
-              itemToStringLabel={(item) => item.name}
-              itemToStringValue={(item) => item.id}
-              value={subjectOptions.find((option) => option.id === field.state.value) ?? null}
-                onValueChange={(value) => {
-                  field.handleChange(value?.id ?? "");
-                  setSubmitError(null);
-                }}
-            >
-              <ComboboxInput
-                autoFocus
-                placeholder="Выберите предмет"
-                showClear
-                disabled={form.state.isSubmitting}
-                className={cn(
-                  "h-7",
-                  field.state.meta.errors.length > 0 && "border-destructive"
-                )}
-                onKeyDown={(event) => onFieldKeyDown(event)}
-                onBlur={field.handleBlur}
-              />
-              <ComboboxContent className="w-105 p-0">
-                <ComboboxEmpty className="py-3">Ничего не найдено</ComboboxEmpty>
-                <ComboboxList>
-                  <ComboboxCollection>
-                    {(option: SubjectOption) => (
-                      <ComboboxItem key={option.id} value={option}>
-                        <span className="truncate">{option.name}</span>
-                      </ComboboxItem>
-                    )}
-                  </ComboboxCollection>
-                </ComboboxList>
-              </ComboboxContent>
-            </Combobox>
-          )}
+      <TableCell className="align-top">
+        <form.Field
+          name="subjectId"
+          validators={{ onChange: idSchema, onBlur: idSchema }}
+        >
+          {(field) => {
+            const errors = collectFieldErrors(field);
+            return (
+              <div className="grid gap-1.5">
+                <Combobox
+                  items={subjectOptions}
+                  itemToStringLabel={(item) => item.name}
+                  itemToStringValue={(item) => item.id}
+                  value={subjectOptions.find((option) => option.id === field.state.value) ?? null}
+                  onValueChange={(value) => {
+                    field.handleChange(value?.id ?? "");
+                  }}
+                >
+                  <ComboboxInput
+                    autoFocus
+                    placeholder="Выберите предмет"
+                    showClear
+                    disabled={form.state.isSubmitting}
+                    className={cn("h-7", errors.length > 0 && "border-destructive")}
+                    onKeyDown={(event) => onFieldKeyDown(event)}
+                    onBlur={field.handleBlur}
+                  />
+                  <ComboboxContent className="w-105 p-0">
+                    <ComboboxEmpty className="py-3">Ничего не найдено</ComboboxEmpty>
+                    <ComboboxList>
+                      <ComboboxCollection>
+                        {(option: SubjectOption) => (
+                          <ComboboxItem key={option.id} value={option}>
+                            <span className="truncate">{option.name}</span>
+                          </ComboboxItem>
+                        )}
+                      </ComboboxCollection>
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+                {errors.length > 0 ? (
+                  <p className="text-xs text-destructive">{errors.join(", ")}</p>
+                ) : null}
+              </div>
+            );
+          }}
         </form.Field>
       </TableCell>
 
       <TableCell className="text-muted-foreground">-</TableCell>
 
-      <TableCell className="w-35">
-        <form.Field name="minGrade">
+      <TableCell className="w-44 align-top">
+        <form.Field
+          name="minGrade"
+          validators={{ onChange: gradeTextValidationSchema, onBlur: gradeTextValidationSchema }}
+        >
           {(field) => (
-            <Input
-              value={field.state.value}
-              onChange={(event) => {
-                field.handleChange(event.target.value);
-                setSubmitError(null);
-              }}
-              onBlur={field.handleBlur}
-              onKeyDown={(event) => onFieldKeyDown(event)}
-              inputMode="numeric"
-              placeholder="0"
-              className={cn(
-                "h-7",
-                field.state.meta.errors.length > 0 && "border-destructive"
-              )}
-              disabled={form.state.isSubmitting}
-            />
+            <div className="[&_span]:block [&_span]:normal-case [&_span]:tracking-normal [&_span]:leading-4 [&_span]:whitespace-normal [&_span]:break-words [&_span]:animate-none">
+              <FormField
+                field={field}
+                placeholder="0"
+                required
+                id="inline-create-min-grade"
+              />
+            </div>
           )}
         </form.Field>
       </TableCell>
 
-      <TableCell className="w-35">
-        <form.Field name="maxGrade">
+      <TableCell className="w-44 align-top">
+        <form.Field
+          name="maxGrade"
+          validators={{ onChange: gradeTextValidationSchema, onBlur: gradeTextValidationSchema }}
+        >
           {(field) => (
-            <Input
-              value={field.state.value}
-              onChange={(event) => {
-                field.handleChange(event.target.value);
-                setSubmitError(null);
-              }}
-              onBlur={field.handleBlur}
-              onKeyDown={(event) => onFieldKeyDown(event)}
-              inputMode="numeric"
-              placeholder="11"
-              className={cn(
-                "h-7",
-                field.state.meta.errors.length > 0 && "border-destructive"
-              )}
-              disabled={form.state.isSubmitting}
-            />
+            <div className="[&_span]:block [&_span]:normal-case [&_span]:tracking-normal [&_span]:leading-4 [&_span]:whitespace-normal [&_span]:break-words [&_span]:animate-none">
+              <FormField
+                field={field}
+                placeholder="11"
+                required
+                id="inline-create-max-grade"
+              />
+            </div>
           )}
         </form.Field>
       </TableCell>
 
       <TableCell className="w-45 align-top">
-        <form.Subscribe selector={(state) => ({ isSubmitting: state.isSubmitting })}>
-          {({ isSubmitting }) => (
-            <>
+        <form.Subscribe
+          selector={(state) => ({
+            isSubmitting: state.isSubmitting,
+            canSubmit: state.canSubmit,
+            values: state.values,
+          })}
+        >
+          {({ isSubmitting, canSubmit, values }) => {
+            const hasAllRequired =
+              values.subjectId.trim().length > 0
+              && values.minGrade.trim().length > 0
+              && values.maxGrade.trim().length > 0;
+
+            return (
               <InlineCreateRowFrameActions
                 onSave={() => void form.handleSubmit()}
                 onCancel={onCancel}
-                isSaveDisabled={isSubmitting}
+                isSaveDisabled={!hasAllRequired || !canSubmit || isSubmitting}
                 isCancelDisabled={isSubmitting}
                 align="end"
               />
-              {submitError ? <p className="mt-1 text-xs text-destructive">{submitError}</p> : null}
-            </>
-          )}
+            );
+          }}
         </form.Subscribe>
       </TableCell>
     </InlineCreateRowFrame>

@@ -15,6 +15,15 @@ export const gradeTextSchema = z
   .pipe(z.coerce.number({ message: "Введите число" }))
   .pipe(gradeSchema);
 
+export const gradeTextValidationSchema = z
+  .string()
+  .trim()
+  .min(1, "Укажите диапазон классов")
+  .refine((value) => Number.isFinite(Number(value)), "Введите число")
+  .refine((value) => Number.isInteger(Number(value)), "Только целые числа")
+  .refine((value) => Number(value) >= 0, "Минимальный класс: 0")
+  .refine((value) => Number(value) <= 11, "Максимальный класс: 11");
+
 export const createTeacherSubjectSchema = z
   .object({
     teacherId: idSchema,
@@ -27,7 +36,7 @@ export const createTeacherSubjectSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["minGrade"],
-        message: "Класс " + "от" + " не может быть больше " + "до",
+        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
       });
     }
   });
@@ -43,7 +52,7 @@ export const createTeacherSubjectFormSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["minGrade"],
-        message: "Класс " + "от" + " не может быть больше " + "до",
+        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
       });
     }
   });
@@ -58,7 +67,7 @@ export const updateTeacherSubjectSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["minGrade"],
-        message: "Класс " + "от" + " не может быть больше " + "до",
+        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
       });
     }
   });
@@ -74,7 +83,23 @@ export const createTeacherSubjectInlineFormSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["minGrade"],
-        message: "Класс " + "от" + " не может быть больше " + "до",
+        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
+      });
+    }
+  });
+
+export const createTeacherSubjectInlineValidationSchema = z
+  .object({
+    subjectId: idSchema,
+    minGrade: gradeTextValidationSchema,
+    maxGrade: gradeTextValidationSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (Number(value.minGrade) > Number(value.maxGrade)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["minGrade"],
+        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
       });
     }
   });
@@ -89,7 +114,22 @@ export const updateTeacherSubjectInlineFormSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["minGrade"],
-        message: "Класс " + "от" + " не может быть больше " + "до",
+        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
+      });
+    }
+  });
+
+export const updateTeacherSubjectInlineValidationSchema = z
+  .object({
+    minGrade: gradeTextValidationSchema,
+    maxGrade: gradeTextValidationSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (Number(value.minGrade) > Number(value.maxGrade)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["minGrade"],
+        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
       });
     }
   });
