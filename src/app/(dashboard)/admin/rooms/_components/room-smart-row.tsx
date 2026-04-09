@@ -109,7 +109,9 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
                   field={field}
                   inputRef={nameRef}
                   placeholder="Кабинет 301"
-                  onKeyDown={handleKeyDown}
+                  inputProps={{
+                    onKeyDown: handleKeyDown
+                  }}
                   compact
                   truncateError
                 />
@@ -127,8 +129,9 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
                 field={field}
                 type="number"
                 placeholder="30"
-                inputMode="numeric"
-                onKeyDown={handleKeyDown}
+                inputProps={{
+                  onKeyDown: handleKeyDown
+                }}
                 compact
               />
             </div>

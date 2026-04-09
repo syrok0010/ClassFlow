@@ -1,6 +1,6 @@
 "use client";
 
-import type { InputHTMLAttributes } from "react";
+import type {InputHTMLAttributes, Ref} from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { type AnyFieldApi } from "@tanstack/react-form";
@@ -14,6 +14,7 @@ interface FormFieldProps {
   type?: string;
   id?: string;
   required?: boolean;
+  inputRef?: Ref<HTMLInputElement>;
   inputClassName?: string;
   compact?: boolean;
   truncateError?: boolean;
@@ -30,6 +31,7 @@ export function FormField({
   type = "text", 
   id, 
   required,
+  inputRef,
   inputClassName,
   compact,
   truncateError,
@@ -50,6 +52,7 @@ export function FormField({
       )}
       <div className={cn("grid", compact ? "gap-0.5" : "gap-1")}>
         <Input
+          ref={inputRef}
           id={fieldId}
           name={field.name}
           type={type}
