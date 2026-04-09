@@ -8,131 +8,65 @@ export const gradeSchema = z
   .min(0, "Минимальный класс: 0")
   .max(11, "Максимальный класс: 11");
 
-export const gradeTextSchema = z
+export const gradeInputSchema = z
   .string()
   .trim()
   .min(1, "Укажите диапазон классов")
   .pipe(z.coerce.number({ message: "Введите число" }))
   .pipe(gradeSchema);
 
-export const gradeTextValidationSchema = z
-  .string()
-  .trim()
-  .min(1, "Укажите диапазон классов")
-  .refine((value) => Number.isFinite(Number(value)), "Введите число")
-  .refine((value) => Number.isInteger(Number(value)), "Только целые числа")
-  .refine((value) => Number(value) >= 0, "Минимальный класс: 0")
-  .refine((value) => Number(value) <= 11, "Максимальный класс: 11");
+function addGradeRangeValidation<T extends z.ZodObject<z.ZodRawShape>>(schema: T) {
+  return schema.superRefine((value, ctx) => {
+    const payload = value as { minGrade: number; maxGrade: number };
+    if (payload.minGrade > payload.maxGrade) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["minGrade"],
+        message: "Класс \"от\" не может быть больше \"до\"",
+      });
+    }
+  });
+}
 
-export const createTeacherSubjectSchema = z
-  .object({
+const teacherSubjectBaseObjectSchema = z.object({
+  subjectId: idSchema,
+  minGrade: gradeSchema,
+  maxGrade: gradeSchema,
+});
+
+const teacherSubjectFormBaseObjectSchema = z.object({
+  subjectId: idSchema,
+  minGrade: gradeInputSchema,
+  maxGrade: gradeInputSchema,
+});
+
+export const createTeacherSubjectSchema = addGradeRangeValidation(
+  teacherSubjectBaseObjectSchema.extend({
     teacherId: idSchema,
-    subjectId: idSchema,
-    minGrade: gradeSchema,
-    maxGrade: gradeSchema,
   })
-  .superRefine((value, ctx) => {
-    if (value.minGrade > value.maxGrade) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["minGrade"],
-        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
-      });
-    }
-  });
+);
 
-export const createTeacherSubjectFormSchema = z
-  .object({
-    subjectId: idSchema,
-    minGrade: gradeSchema,
-    maxGrade: gradeSchema,
-  })
-  .superRefine((value, ctx) => {
-    if (value.minGrade > value.maxGrade) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["minGrade"],
-        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
-      });
-    }
-  });
+export const createTeacherSubjectFormSchema = addGradeRangeValidation(teacherSubjectFormBaseObjectSchema);
 
-export const updateTeacherSubjectSchema = z
-  .object({
-    minGrade: gradeSchema,
-    maxGrade: gradeSchema,
+export const updateTeacherSubjectSchema = addGradeRangeValidation(
+  teacherSubjectBaseObjectSchema.pick({
+    minGrade: true,
+    maxGrade: true,
   })
-  .superRefine((value, ctx) => {
-    if (value.minGrade > value.maxGrade) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["minGrade"],
-        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
-      });
-    }
-  });
+);
 
-export const createTeacherSubjectInlineFormSchema = z
-  .object({
-    subjectId: idSchema,
-    minGrade: gradeTextSchema,
-    maxGrade: gradeTextSchema,
-  })
-  .superRefine((value, ctx) => {
-    if (value.minGrade > value.maxGrade) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["minGrade"],
-        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
-      });
-    }
-  });
+export const createTeacherSubjectInlineFormSchema = createTeacherSubjectFormSchema;
 
-export const createTeacherSubjectInlineValidationSchema = z
-  .object({
-    subjectId: idSchema,
-    minGrade: gradeTextValidationSchema,
-    maxGrade: gradeTextValidationSchema,
-  })
-  .superRefine((value, ctx) => {
-    if (Number(value.minGrade) > Number(value.maxGrade)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["minGrade"],
-        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
-      });
-    }
-  });
+export const createTeacherSubjectInlineValidationSchema = createTeacherSubjectInlineFormSchema;
 
-export const updateTeacherSubjectInlineFormSchema = z
-  .object({
-    minGrade: gradeTextSchema,
-    maxGrade: gradeTextSchema,
+export const updateTeacherSubjectInlineFormSchema = addGradeRangeValidation(
+  z.object({
+    minGrade: gradeInputSchema,
+    maxGrade: gradeInputSchema,
   })
-  .superRefine((value, ctx) => {
-    if (value.minGrade > value.maxGrade) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["minGrade"],
-        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
-      });
-    }
-  });
+);
 
-export const updateTeacherSubjectInlineValidationSchema = z
-  .object({
-    minGrade: gradeTextValidationSchema,
-    maxGrade: gradeTextValidationSchema,
-  })
-  .superRefine((value, ctx) => {
-    if (Number(value.minGrade) > Number(value.maxGrade)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["minGrade"],
-        message: "Класс " + "\"от\"" + " не может быть больше " + "\"до\"",
-      });
-    }
-  });
+export const updateTeacherSubjectInlineValidationSchema = updateTeacherSubjectInlineFormSchema;
 
 export const teacherSubjectKeySchema = z.object({
   teacherId: idSchema,

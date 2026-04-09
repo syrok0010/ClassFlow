@@ -1,5 +1,5 @@
 import { type KeyboardEvent } from "react";
-import { useForm, type AnyFieldApi } from "@tanstack/react-form";
+import { useForm } from "@tanstack/react-form";
 import {
   Combobox,
   ComboboxCollection,
@@ -10,6 +10,7 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox";
 import { FormField } from "@/components/ui/form-field";
+import { getFieldErrorMessages } from "@/lib/form-errors";
 import {
   InlineCreateRowFrame,
   InlineCreateRowFrameActions,
@@ -19,7 +20,7 @@ import { cn } from "@/lib/utils";
 import {
   createTeacherSubjectInlineFormSchema,
   createTeacherSubjectInlineValidationSchema,
-  gradeTextValidationSchema,
+  gradeInputSchema,
   idSchema,
   type CreateTeacherSubjectInlineFormInput,
   type CreateTeacherSubjectInlineFormValues,
@@ -34,24 +35,6 @@ interface InlineCreateTeacherSubjectRowProps {
     maxGrade: number;
   }) => Promise<boolean>;
   onCancel: () => void;
-}
-
-function collectFieldErrors(field: AnyFieldApi): string[] {
-  return field.state.meta.errors
-    .flatMap((error) => {
-      if (!error) {
-        return [];
-      }
-      if (typeof error === "string") {
-        return [error];
-      }
-      if (typeof error === "object" && "message" in error) {
-        const message = (error as { message?: string }).message;
-        return message ? [message] : [];
-      }
-      return [String(error)];
-    })
-    .filter(Boolean);
 }
 
 export function InlineCreateRow({
@@ -104,7 +87,7 @@ export function InlineCreateRow({
           validators={{ onChange: idSchema, onBlur: idSchema }}
         >
           {(field) => {
-            const errors = collectFieldErrors(field);
+            const errors = getFieldErrorMessages(field);
             return (
               <div className="grid gap-1.5">
                 <Combobox
@@ -114,6 +97,7 @@ export function InlineCreateRow({
                   value={subjectOptions.find((option) => option.id === field.state.value) ?? null}
                   onValueChange={(value) => {
                     field.handleChange(value?.id ?? "");
+                    field.handleBlur();
                   }}
                 >
                   <ComboboxInput
@@ -149,36 +133,40 @@ export function InlineCreateRow({
 
       <TableCell className="text-muted-foreground">-</TableCell>
 
-      <TableCell className="w-44 align-top">
+      <TableCell className="w-52 align-top">
         <form.Field
           name="minGrade"
-          validators={{ onChange: gradeTextValidationSchema, onBlur: gradeTextValidationSchema }}
+          validators={{ onChange: gradeInputSchema, onBlur: gradeInputSchema }}
         >
           {(field) => (
-            <div className="[&_span]:block [&_span]:normal-case [&_span]:tracking-normal [&_span]:leading-4 [&_span]:whitespace-normal [&_span]:break-words [&_span]:animate-none">
+            <div className="grid gap-1.5">
               <FormField
                 field={field}
                 placeholder="0"
                 required
                 id="inline-create-min-grade"
+                type="number"
+                inputProps={{ min: 0, max: 11, step: 1 }}
               />
             </div>
           )}
         </form.Field>
       </TableCell>
 
-      <TableCell className="w-44 align-top">
+      <TableCell className="w-52 align-top">
         <form.Field
           name="maxGrade"
-          validators={{ onChange: gradeTextValidationSchema, onBlur: gradeTextValidationSchema }}
+          validators={{ onChange: gradeInputSchema, onBlur: gradeInputSchema }}
         >
           {(field) => (
-            <div className="[&_span]:block [&_span]:normal-case [&_span]:tracking-normal [&_span]:leading-4 [&_span]:whitespace-normal [&_span]:break-words [&_span]:animate-none">
+            <div className="grid gap-1.5">
               <FormField
                 field={field}
                 placeholder="11"
                 required
                 id="inline-create-max-grade"
+                type="number"
+                inputProps={{ min: 0, max: 11, step: 1 }}
               />
             </div>
           )}
@@ -189,21 +177,23 @@ export function InlineCreateRow({
         <form.Subscribe
           selector={(state) => ({
             isSubmitting: state.isSubmitting,
-            canSubmit: state.canSubmit,
             values: state.values,
           })}
         >
-          {({ isSubmitting, canSubmit, values }) => {
+          {({ isSubmitting, values }) => {
             const hasAllRequired =
               values.subjectId.trim().length > 0
               && values.minGrade.trim().length > 0
               && values.maxGrade.trim().length > 0;
 
+            const isValidBySchema = createTeacherSubjectInlineValidationSchema.safeParse(values)
+              .success;
+
             return (
               <InlineCreateRowFrameActions
                 onSave={() => void form.handleSubmit()}
                 onCancel={onCancel}
-                isSaveDisabled={!hasAllRequired || !canSubmit || isSubmitting}
+                isSaveDisabled={!hasAllRequired || !isValidBySchema || isSubmitting}
                 isCancelDisabled={isSubmitting}
                 align="end"
               />

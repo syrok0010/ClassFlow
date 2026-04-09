@@ -3,13 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SUBJECT_FILTERS } from "@/lib/constants";
-import type { TeacherSubjectFilterType } from "@/lib/types";
+import type { SubjectFilterType } from "@/lib/types";
 
 interface TeacherSubjectsToolbarProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
-  filterType: TeacherSubjectFilterType;
-  onFilterTypeChange: (value: TeacherSubjectFilterType) => void;
+  filterType: SubjectFilterType;
+  onFilterTypeChange: (value: SubjectFilterType) => void;
   onAddSubject: () => void;
   isAddingRow: boolean;
 }
@@ -34,12 +34,12 @@ export function TeacherSubjectsToolbar({
         />
       </div>
 
-        <SegmentedControl
-          value={filterType}
-          onChange={onFilterTypeChange}
-          options={SUBJECT_FILTERS}
-          size="sm"
-        />
+      <SegmentedControl
+        value={filterType}
+        onChange={onFilterTypeChange}
+        options={SUBJECT_FILTERS}
+        size="sm"
+      />
 
       {!isAddingRow ? (
         <Button className="ml-auto" onClick={onAddSubject}>

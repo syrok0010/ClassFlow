@@ -103,17 +103,8 @@ function mapTeacherSubjectRow(row: {
   };
 }
 
-async function revalidateTeachingPathByTeacherId(teacherId: string) {
-  const teacher = await prisma.teacher.findUnique({
-    where: { id: teacherId },
-    select: { userId: true },
-  });
-
-  if (!teacher) {
-    return;
-  }
-
-  revalidatePath(`/admin/users/${teacher.userId}/teaching`);
+function revalidateTeachingPath(userId: string) {
+  revalidatePath(`/admin/users/${userId}/teaching`);
 }
 
 export async function getTeachingPageDataAction(userId: string): Promise<Result<TeachingPageData>> {
@@ -217,7 +208,7 @@ export async function createTeacherSubjectAction(
 
     const teacher = await prisma.teacher.findUnique({
       where: { id: teacherId },
-      select: { id: true },
+      select: { userId: true },
     });
 
     if (!teacher) {
@@ -264,7 +255,7 @@ export async function createTeacherSubjectAction(
       },
     });
 
-    await revalidateTeachingPathByTeacherId(teacherId);
+    revalidateTeachingPath(teacher.userId);
     return ok(mapTeacherSubjectRow(created));
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при добавлении компетенции"));
@@ -300,7 +291,11 @@ export async function updateTeacherSubjectAction(
         },
       },
       select: {
-        teacherId: true,
+        teacher: {
+          select: {
+            userId: true,
+          },
+        },
       },
     });
 
@@ -329,7 +324,7 @@ export async function updateTeacherSubjectAction(
       },
     });
 
-    await revalidateTeachingPathByTeacherId(teacherId);
+    revalidateTeachingPath(existing.teacher.userId);
     return ok(mapTeacherSubjectRow(updated));
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при обновлении диапазона классов"));
@@ -362,7 +357,13 @@ export async function deleteTeacherSubjectAction(
           subjectId: validated.subjectId,
         },
       },
-      select: { teacherId: true },
+      select: {
+        teacher: {
+          select: {
+            userId: true,
+          },
+        },
+      },
     });
 
     if (!existing) {
@@ -378,7 +379,7 @@ export async function deleteTeacherSubjectAction(
       },
     });
 
-    await revalidateTeachingPathByTeacherId(teacherId);
+    revalidateTeachingPath(existing.teacher.userId);
     return ok(true);
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при удалении компетенции"));

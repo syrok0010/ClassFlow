@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQueryState } from "nuqs";
 import { AlertTriangle } from "lucide-react";
-import type { TeacherSubjectFilterType } from "@/lib/types";
+import type { SubjectFilterType } from "@/lib/types";
 import type { UserStatus } from "@/generated/prisma/enums";
 import { useTeacherSubjectsCrud } from "../_hooks/use-teacher-subjects-crud";
 import { filterAndSortTeacherSubjects } from "../_lib/teacher-subject-table-utils";
@@ -45,9 +45,8 @@ export function TeacherSubjectsPageClient({ initialData }: TeacherSubjectsPageCl
 
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [deleteRow, setDeleteRow] = useState<TeacherSubjectRow | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const safeFilterType: TeacherSubjectFilterType =
+  const safeFilterType: SubjectFilterType =
     filterType === "ACADEMIC"
     || filterType === "ELECTIVE_REQUIRED"
     || filterType === "ELECTIVE_OPTIONAL"
@@ -69,22 +68,6 @@ export function TeacherSubjectsPageClient({ initialData }: TeacherSubjectsPageCl
   const resetFilters = () => {
     void setSearchQuery(null);
     void setFilterType(null);
-  };
-
-  const onDeleteConfirm = async () => {
-    if (!deleteRow) {
-      return;
-    }
-
-    setDeleteLoading(true);
-    try {
-      const success = await handleDeleteTeacherSubject(deleteRow);
-      if (success) {
-        setDeleteRow(null);
-      }
-    } finally {
-      setDeleteLoading(false);
-    }
   };
 
   return (
@@ -134,13 +117,12 @@ export function TeacherSubjectsPageClient({ initialData }: TeacherSubjectsPageCl
       {deleteRow ? (
         <TeacherSubjectDeleteDialog
           row={deleteRow}
-          isDeleting={deleteLoading}
           onOpenChange={(open) => {
             if (!open) {
               setDeleteRow(null);
             }
           }}
-          onConfirm={onDeleteConfirm}
+          onConfirm={handleDeleteTeacherSubject}
         />
       ) : null}
     </div>

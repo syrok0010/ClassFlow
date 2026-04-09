@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,17 +15,33 @@ import type { TeacherSubjectRow } from "../_lib/types";
 
 interface TeacherSubjectDeleteDialogProps {
   row: TeacherSubjectRow;
-  isDeleting: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: (row: TeacherSubjectRow) => Promise<boolean>;
 }
 
 export function TeacherSubjectDeleteDialog({
   row,
-  isDeleting,
   onOpenChange,
   onConfirm,
 }: TeacherSubjectDeleteDialogProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirm = async () => {
+    if (isDeleting) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const success = await onConfirm(row);
+      if (success) {
+        onOpenChange(false);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <AlertDialog open={true} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -39,7 +56,7 @@ export function TeacherSubjectDeleteDialog({
           <AlertDialogAction
             variant="destructive"
             disabled={isDeleting}
-            onClick={onConfirm}
+            onClick={handleConfirm}
           >
             Удалить
           </AlertDialogAction>

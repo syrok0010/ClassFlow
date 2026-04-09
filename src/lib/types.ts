@@ -9,5 +9,3 @@ export type SubjectRenderInfo = {
 };
 
 export type SubjectFilterType = "ALL" | SubjectType;
-
-export type TeacherSubjectFilterType = SubjectFilterType;

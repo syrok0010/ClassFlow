@@ -1,12 +1,12 @@
 import type {
-  TeacherSubjectFilterType,
   TeacherSubjectRow,
   TeacherSubjectSummary,
 } from "./types";
+import { SubjectFilterType } from "@/lib/types";
 
 type TableState = {
   search: string;
-  typeFilter: TeacherSubjectFilterType;
+  typeFilter: SubjectFilterType;
 };
 
 export function filterAndSortTeacherSubjects(
