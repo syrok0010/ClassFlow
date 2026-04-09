@@ -33,12 +33,3 @@ export type SubjectDeleteGuards = {
   scheduleEntriesCount: number;
 };
 
-export type SubjectRenderInfo = {
-  value: SubjectType;
-  label: string,
-  label_plural: string,
-  marker: string,
-  badge: string,
-}
-
-export type SubjectFilterType = "ALL" | SubjectType;

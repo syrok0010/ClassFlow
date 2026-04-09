@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod/v4";
 import { prisma } from "@/lib/prisma";
 import { err, ok, type Result } from "@/lib/result";
+import { getActionErrorMessage } from "@/lib/action-error";
 import type { SubjectType } from "@/generated/prisma/client";
 import {
   createSubjectSchema,
@@ -21,18 +21,6 @@ import type {
 } from "../_lib/types";
 
 const SUBJECTS_PATH = "/admin/subjects";
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof z.ZodError) {
-    return error.issues[0]?.message ?? fallback;
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return fallback;
-}
 
 function applyFilters(subjects: SubjectWithUsage[], filters: SubjectListFilters) {
   const search = filters.search?.trim().toLowerCase();
@@ -133,7 +121,7 @@ export async function getSubjectsAction(
     const mapped = subjects.map(toSubjectWithUsage);
     return ok(applyFilters(mapped, filters));
   } catch (error) {
-    return err(getErrorMessage(error, "Не удалось загрузить список предметов"));
+    return err(getActionErrorMessage(error, "Не удалось загрузить список предметов"));
   }
 }
 
@@ -165,7 +153,7 @@ export async function createSubjectAction(data: CreateSubjectInput) {
     revalidatePath(SUBJECTS_PATH);
     return ok(created);
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка при создании предмета"));
+    return err(getActionErrorMessage(error, "Ошибка при создании предмета"));
   }
 }
 
@@ -199,7 +187,7 @@ export async function updateSubjectAction(id: IdInput, data: UpdateSubjectInput)
     revalidatePath(SUBJECTS_PATH);
     return ok(updated);
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка при обновлении предмета"));
+    return err(getActionErrorMessage(error, "Ошибка при обновлении предмета"));
   }
 }
 
@@ -238,7 +226,7 @@ export async function getSubjectDeleteGuardsAction(
       })
     );
   } catch (error) {
-    return err(getErrorMessage(error, "Не удалось проверить связи предмета"));
+    return err(getActionErrorMessage(error, "Не удалось проверить связи предмета"));
   }
 }
 
@@ -291,7 +279,7 @@ export async function getSubjectUsageDetailsAction(
 
     return ok({ rooms, teachers });
   } catch (error) {
-    return err(getErrorMessage(error, "Не удалось загрузить данные использования"));
+    return err(getActionErrorMessage(error, "Не удалось загрузить данные использования"));
   }
 }
 
@@ -315,6 +303,6 @@ export async function deleteSubjectAction(id: IdInput): Promise<Result<true>> {
     revalidatePath(SUBJECTS_PATH);
     return ok(true);
   } catch (error) {
-    return err(getErrorMessage(error, "Ошибка при удалении предмета"));
+    return err(getActionErrorMessage(error, "Ошибка при удалении предмета"));
   }
 }

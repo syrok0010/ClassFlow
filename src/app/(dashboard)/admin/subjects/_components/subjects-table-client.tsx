@@ -5,9 +5,10 @@ import { useQueryState } from "nuqs";
 import { SubjectDeleteDialog } from "./subject-delete-dialog";
 import { SubjectsTable } from "./subjects-table";
 import { SubjectsToolbar } from "./subjects-toolbar";
+import type { SubjectFilterType } from "@/lib/types";
 import { useSubjectsCrud } from "../_hooks/use-subjects-crud";
 import { filterAndSortSubjects } from "../_lib/subject-table-utils";
-import type { SubjectFilterType, SubjectWithUsage } from "../_lib/types";
+import type { SubjectWithUsage } from "../_lib/types";
 
 interface SubjectsTableClientProps {
   initialSubjects: SubjectWithUsage[];

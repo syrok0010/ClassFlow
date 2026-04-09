@@ -1,7 +1,10 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { useForm } from "@tanstack/react-form";
 import type { GroupType } from "@/generated/prisma/client";
-import { Button } from "@/components/ui/button";
+import {
+  InlineCreateRowFrame,
+  InlineCreateRowFrameActions,
+} from "@/components/ui/inline-create-row-frame";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -10,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TableCell, TableRow } from "@/components/ui/table";
+import { TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
   groupGradeInputSchema,
@@ -73,7 +76,7 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
   };
 
   return (
-    <TableRow className="bg-primary/5 animate-in fade-in-0 slide-in-from-top-1">
+    <InlineCreateRowFrame>
       <TableCell />
       <TableCell>
         <form.Field
@@ -167,23 +170,16 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
       <TableCell>
         <form.Subscribe selector={(state) => [state.isSubmitting, state.values.name] as const}>
           {([isSubmitting, name]) => (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => form.handleSubmit()}
-                disabled={!name.trim() || isSubmitting}
-              >
-                Сохранить
-              </Button>
-              <Button size="sm" variant="ghost" onClick={onCancel}>
-                Отмена
-              </Button>
-            </div>
+            <InlineCreateRowFrameActions
+              onSave={() => form.handleSubmit()}
+              onCancel={onCancel}
+              isSaveDisabled={!name.trim() || isSubmitting}
+            />
           )}
         </form.Subscribe>
       </TableCell>
 
       <TableCell />
-    </TableRow>
+    </InlineCreateRowFrame>
   );
 }

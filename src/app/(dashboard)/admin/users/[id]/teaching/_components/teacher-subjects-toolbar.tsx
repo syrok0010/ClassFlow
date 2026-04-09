@@ -5,7 +5,7 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SUBJECT_FILTERS } from "@/lib/constants";
 import type { SubjectFilterType } from "@/lib/types";
 
-interface SubjectsToolbarProps {
+interface TeacherSubjectsToolbarProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   filterType: SubjectFilterType;
@@ -14,20 +14,20 @@ interface SubjectsToolbarProps {
   isAddingRow: boolean;
 }
 
-export function SubjectsToolbar({
+export function TeacherSubjectsToolbar({
   searchQuery,
   onSearchQueryChange,
   filterType,
   onFilterTypeChange,
   onAddSubject,
   isAddingRow,
-}: SubjectsToolbarProps) {
+}: TeacherSubjectsToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <div className="relative min-w-56 flex-1 max-w-sm">
+      <div className="relative min-w-56 max-w-sm flex-1">
         <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Поиск по названию..."
+          placeholder="Поиск по названию предмета..."
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.target.value)}
           className="pl-8"
@@ -41,14 +41,12 @@ export function SubjectsToolbar({
         size="sm"
       />
 
-      <div className="ml-auto">
-        {!isAddingRow ? (
-          <Button onClick={onAddSubject}>
-            <Plus className="size-4" data-icon="inline-start" />
-            Добавить предмет
-          </Button>
-        ) : null}
-      </div>
+      {!isAddingRow ? (
+        <Button className="ml-auto" onClick={onAddSubject}>
+          <Plus className="size-4" data-icon="inline-start" />
+          Добавить предмет
+        </Button>
+      ) : null}
     </div>
   );
 }

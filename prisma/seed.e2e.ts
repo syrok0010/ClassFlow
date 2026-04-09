@@ -38,6 +38,7 @@ async function clearData() {
 async function seedAuthAndUsers() {
   const admin = await prisma.user.create({
     data: {
+      id: "e2e-admin-user",
       email: "admin1@classflow.local",
       role: "ADMIN",
       status: "ACTIVE",
@@ -59,6 +60,7 @@ async function seedAuthAndUsers() {
 
   const teacherUser = await prisma.user.create({
     data: {
+      id: "e2e-teacher-user",
       email: "teacher1@classflow.local",
       role: "USER",
       status: "ACTIVE",
@@ -78,7 +80,12 @@ async function seedAuthAndUsers() {
     },
   });
 
-  await prisma.teacher.create({ data: { userId: teacherUser.id } });
+  const teacher = await prisma.teacher.create({
+    data: {
+      id: "e2e-teacher-profile",
+      userId: teacherUser.id,
+    },
+  });
 
   const studentUser = await prisma.user.create({
     data: {
@@ -90,9 +97,14 @@ async function seedAuthAndUsers() {
   });
 
   await prisma.student.create({ data: { userId: studentUser.id } });
+
+  return {
+    teacherId: teacher.id,
+    teacherUserId: teacherUser.id,
+  };
 }
 
-async function seedGroupsPageFixtures() {
+async function seedGroupsPageFixtures(teacherId: string) {
   const english = await prisma.subject.create({
     data: {
       name: "Английский язык",
@@ -100,10 +112,24 @@ async function seedGroupsPageFixtures() {
     },
   });
 
-  await prisma.subject.create({
+  const roboticsSubject = await prisma.subject.create({
     data: {
       name: "Робототехника",
-      type: "ACADEMIC",
+      type: "ELECTIVE_REQUIRED",
+    },
+  });
+
+  const mediaStudio = await prisma.subject.create({
+    data: {
+      name: "Медиастудия",
+      type: "ELECTIVE_OPTIONAL",
+    },
+  });
+
+  const classroomHour = await prisma.subject.create({
+    data: {
+      name: "Классный час",
+      type: "REGIME",
     },
   });
 
@@ -209,7 +235,7 @@ async function seedGroupsPageFixtures() {
     },
   });
 
-  const robotics = await prisma.group.create({
+  const roboticsGroup = await prisma.group.create({
     data: {
       name: "Робототехника",
       type: "ELECTIVE_GROUP",
@@ -223,17 +249,39 @@ async function seedGroupsPageFixtures() {
       { studentId: students[2].id, groupId: class10A.id },
       { studentId: students[3].id, groupId: class10B.id },
       { studentId: students[4].id, groupId: class10B.id },
-      { studentId: students[3].id, groupId: robotics.id },
+      { studentId: students[3].id, groupId: roboticsGroup.id },
     ],
   });
 
-  return { english };
+  await prisma.teacherSubject.createMany({
+    data: [
+      {
+        teacherId,
+        subjectId: english.id,
+        minGrade: 5,
+        maxGrade: 11,
+      },
+      {
+        teacherId,
+        subjectId: classroomHour.id,
+        minGrade: 0,
+        maxGrade: 11,
+      },
+    ],
+  });
+
+  return {
+    english,
+    robotics: roboticsSubject,
+    mediaStudio,
+    classroomHour,
+  };
 }
 
 async function main() {
   await clearData();
-  await seedAuthAndUsers();
-  await seedGroupsPageFixtures();
+  const authFixtures = await seedAuthAndUsers();
+  await seedGroupsPageFixtures(authFixtures.teacherId);
 }
 
 main()

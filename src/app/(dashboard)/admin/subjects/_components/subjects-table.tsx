@@ -7,6 +7,8 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
+import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
+import { SubjectTypeBadge } from "@/components/ui/subject-type-badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,14 +28,12 @@ import type { SubjectWithUsage } from "../_lib/types";
 import { groupSubjectsByType } from "../_lib/subject-table-utils";
 import {
   SUBJECT_LABELS,
-  SUBJECT_SELECT,
   SUBJECT_MARKERS,
-} from "../_lib/constants";
-import { SubjectTypeBadge } from "./subject-type-badge";
+  SUBJECT_SELECT,
+} from "@/lib/constants";
 import { SubjectUsageCell } from "./subject-usage-cell";
 import { InlineCreateRow } from "./inline-create-row";
 import { InlineNameCell } from "./inline-name-cell";
-import { SubjectsEmptyState } from "./subjects-empty-state";
 
 interface SubjectsTableProps {
   allSubjectsCount: number;
@@ -176,10 +176,13 @@ export function SubjectsTable({
           {!hasRows && !isAddingRow ? (
             <TableRow>
               <TableCell colSpan={columns.length}>
-                <SubjectsEmptyState
+                <FilterableEmptyState
                   hasFilters={hasActiveFilters && allSubjectsCount > 0}
                   onResetFilters={onResetFilters}
                   onCreateFirst={onCreateFirst}
+                  emptyTitle="Справочник предметов пока пуст"
+                  emptyDescription="Добавьте академические, дополнительные предметы и режимные моменты, чтобы настроить кабинеты и учебный план."
+                  createFirstLabel="+ Добавить первый предмет"
                 />
               </TableCell>
             </TableRow>

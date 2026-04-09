@@ -1,10 +1,11 @@
 "use client";
 
+import type {InputHTMLAttributes, Ref} from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { type AnyFieldApi } from "@tanstack/react-form";
+import { getFirstFieldErrorMessage } from "@/lib/form-errors";
 import { cn } from "@/lib/utils";
-import type { HTMLAttributes, KeyboardEventHandler, Ref } from "react";
 
 interface FormFieldProps {
   field: AnyFieldApi;
@@ -13,21 +14,15 @@ interface FormFieldProps {
   type?: string;
   id?: string;
   required?: boolean;
+  inputRef?: Ref<HTMLInputElement>;
+  inputClassName?: string;
   compact?: boolean;
   truncateError?: boolean;
-  inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
-  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
-  inputRef?: Ref<HTMLInputElement>;
+  inputProps?: Omit<
+    InputHTMLAttributes<HTMLInputElement>,
+    "id" | "name" | "type" | "placeholder" | "value" | "disabled" | "className"
+  >;
 }
-
-const getErrorMessage = (err: unknown) => {
-  if (!err) return null;
-  if (typeof err === 'string') return err;
-  if (typeof err === 'object' && 'message' in err) {
-    return (err as { message: string }).message;
-  }
-  return String(err);
-};
 
 export function FormField({ 
   field, 
@@ -36,16 +31,16 @@ export function FormField({
   type = "text", 
   id, 
   required,
+  inputRef,
+  inputClassName,
   compact,
   truncateError,
-  inputMode,
-  onKeyDown,
-  inputRef,
+  inputProps,
 }: FormFieldProps) {
   const fieldId = id || field.name;
-  const error = field.state.meta.errors[0];
-  const errorMessage = getErrorMessage(error);
+  const errorMessage = getFirstFieldErrorMessage(field);
   const hasError = field.state.meta.errors.length > 0;
+  const { onBlur, onChange, ...restInputProps } = inputProps ?? {};
 
   return (
     <div className={cn("grid", compact ? "gap-0.5" : "gap-1.5")}>
@@ -61,17 +56,26 @@ export function FormField({
           id={fieldId}
           name={field.name}
           type={type}
-          inputMode={inputMode}
           placeholder={placeholder}
-          value={field.state.value === 0 ? "" : String(field.state.value)}
-          onBlur={field.handleBlur}
-          onKeyDown={onKeyDown}
+          value={field.state.value as string}
+          onBlur={(event) => {
+            field.handleBlur();
+            onBlur?.(event);
+          }}
           onChange={(e) => {
-            const val = e.target.value;
-            field.handleChange(type === "number" ? (val === "" ? 0 : Number(val)) : val);
+            if (type === "number") {
+              field.handleChange(e.target.valueAsNumber);
+            } else {
+              field.handleChange(e.target.value);
+            }
+            onChange?.(e);
           }}
           disabled={field.form.state.isSubmitting}
-          className={hasError ? "border-destructive focus-visible:ring-destructive" : "focus-visible:ring-primary"}
+          {...restInputProps}
+          className={cn(
+            hasError ? "border-destructive focus-visible:ring-destructive" : "focus-visible:ring-primary",
+            inputClassName
+          )}
         />
         {hasError && (
           <span
