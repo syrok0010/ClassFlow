@@ -2,23 +2,28 @@ import { z } from "zod/v4";
 
 export const idSchema = z.string().trim().min(1, "ID обязателен");
 
-export const gradeSchema = z
-  .number({ message: "Введите число" })
-  .int("Только целые числа")
-  .min(0, "Минимальный класс: 0")
-  .max(11, "Максимальный класс: 11");
+export const gradeSchema = z.preprocess(
+  (value) => {
+    if (typeof value === "string" && value.trim().length === 0) {
+      return Number.NaN;
+    }
 
-export const gradeInputSchema = z
-  .string()
-  .trim()
-  .min(1, "Укажите диапазон классов")
-  .pipe(z.coerce.number({ message: "Введите число" }))
-  .pipe(gradeSchema);
+    return value;
+  },
+  z
+    .coerce.number({ message: "Введите число" })
+    .int("Только целые числа")
+    .min(0, "Минимальный класс: 0")
+    .max(11, "Максимальный класс: 11")
+);
 
-function addGradeRangeValidation<T extends z.ZodObject<z.ZodRawShape>>(schema: T) {
-  return schema.superRefine((value, ctx) => {
-    const payload = value as { minGrade: number; maxGrade: number };
-    if (payload.minGrade > payload.maxGrade) {
+export const gradeRangeSchema = z
+  .object({
+    minGrade: gradeSchema,
+    maxGrade: gradeSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (value.minGrade > value.maxGrade) {
       ctx.addIssue({
         code: "custom",
         path: ["minGrade"],
@@ -26,47 +31,14 @@ function addGradeRangeValidation<T extends z.ZodObject<z.ZodRawShape>>(schema: T
       });
     }
   });
-}
 
-const teacherSubjectBaseObjectSchema = z.object({
+export const subjectGradeRangeSchema = gradeRangeSchema.extend({
   subjectId: idSchema,
-  minGrade: gradeSchema,
-  maxGrade: gradeSchema,
 });
 
-const teacherSubjectFormBaseObjectSchema = z.object({
-  subjectId: idSchema,
-  minGrade: gradeInputSchema,
-  maxGrade: gradeInputSchema,
+export const createTeacherSubjectSchema = subjectGradeRangeSchema.extend({
+  teacherId: idSchema,
 });
-
-export const createTeacherSubjectSchema = addGradeRangeValidation(
-  teacherSubjectBaseObjectSchema.extend({
-    teacherId: idSchema,
-  })
-);
-
-export const createTeacherSubjectFormSchema = addGradeRangeValidation(teacherSubjectFormBaseObjectSchema);
-
-export const updateTeacherSubjectSchema = addGradeRangeValidation(
-  teacherSubjectBaseObjectSchema.pick({
-    minGrade: true,
-    maxGrade: true,
-  })
-);
-
-export const createTeacherSubjectInlineFormSchema = createTeacherSubjectFormSchema;
-
-export const createTeacherSubjectInlineValidationSchema = createTeacherSubjectInlineFormSchema;
-
-export const updateTeacherSubjectInlineFormSchema = addGradeRangeValidation(
-  z.object({
-    minGrade: gradeInputSchema,
-    maxGrade: gradeInputSchema,
-  })
-);
-
-export const updateTeacherSubjectInlineValidationSchema = updateTeacherSubjectInlineFormSchema;
 
 export const teacherSubjectKeySchema = z.object({
   teacherId: idSchema,
@@ -74,9 +46,6 @@ export const teacherSubjectKeySchema = z.object({
 });
 
 export type CreateTeacherSubjectInput = z.infer<typeof createTeacherSubjectSchema>;
-export type CreateTeacherSubjectFormInput = z.infer<typeof createTeacherSubjectFormSchema>;
-export type UpdateTeacherSubjectInput = z.infer<typeof updateTeacherSubjectSchema>;
+export type CreateTeacherSubjectFormInput = z.infer<typeof subjectGradeRangeSchema>;
+export type UpdateTeacherSubjectInput = z.infer<typeof gradeRangeSchema>;
 export type TeacherSubjectKeyInput = z.infer<typeof teacherSubjectKeySchema>;
-export type CreateTeacherSubjectInlineFormValues = z.input<typeof createTeacherSubjectInlineFormSchema>;
-export type CreateTeacherSubjectInlineFormInput = z.infer<typeof createTeacherSubjectInlineFormSchema>;
-export type UpdateTeacherSubjectInlineFormValues = z.input<typeof updateTeacherSubjectInlineFormSchema>;

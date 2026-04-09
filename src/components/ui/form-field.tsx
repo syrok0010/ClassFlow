@@ -15,11 +15,11 @@ interface FormFieldProps {
   type?: string;
   id?: string;
   required?: boolean;
+  inputClassName?: string;
+  onFieldBlur?: () => void;
+  onFieldChange?: (value: string) => void;
   compact?: boolean;
   truncateError?: boolean;
-  inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
-  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
-  inputRef?: Ref<HTMLInputElement>;
   inputProps?: Omit<
     InputHTMLAttributes<HTMLInputElement>,
     "id" | "name" | "type" | "placeholder" | "value" | "onBlur" | "onChange" | "disabled" | "className"
@@ -33,9 +33,11 @@ export function FormField({
   type = "text", 
   id, 
   required,
+  inputClassName,
+  onFieldBlur,
+  onFieldChange,
   compact,
   truncateError,
-  onKeyDown,
   inputProps,
 }: FormFieldProps) {
   const fieldId = id || field.name;
@@ -57,12 +59,19 @@ export function FormField({
           type={type}
           placeholder={placeholder}
           value={field.state.value as string}
-          onBlur={field.handleBlur}
-          onChange={(e) => field.handleChange(e.target.value)}
+          onBlur={() => {
+            field.handleBlur();
+            onFieldBlur?.();
+          }}
+          onChange={(e) => {
+            field.handleChange(e.target.value);
+            onFieldChange?.(e.target.value);
+          }}
           disabled={field.form.state.isSubmitting}
           {...inputProps}
           className={cn(
-            hasError ? "border-destructive focus-visible:ring-destructive" : "focus-visible:ring-primary"
+            hasError ? "border-destructive focus-visible:ring-destructive" : "focus-visible:ring-primary",
+            inputClassName
           )}
         />
         {hasError && (

@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import { useForm } from "@tanstack/react-form";
+import { z } from "zod/v4";
 import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import {
   Table,
@@ -8,7 +10,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { UpdateTeacherSubjectInput } from "../_lib/schemas";
+import type {
+  CreateTeacherSubjectFormInput,
+  UpdateTeacherSubjectInput,
+} from "../_lib/schemas";
+import { subjectGradeRangeSchema } from "../_lib/schemas";
 import type { SubjectOption, TeacherSubjectRow } from "../_lib/types";
 import { InlineCreateRow } from "./inline-create-row";
 import { TeacherSubjectDataRow } from "./teacher-subject-data-row";
@@ -19,11 +25,7 @@ interface TeacherSubjectsTableProps {
   subjectOptions: SubjectOption[];
   isAddingRow: boolean;
   hasActiveFilters: boolean;
-  onCreateSubject: (payload: {
-    subjectId: string;
-    minGrade: number;
-    maxGrade: number;
-  }) => Promise<boolean>;
+  onCreateSubject: (payload: CreateTeacherSubjectFormInput) => Promise<boolean>;
   onUpdateSubject: (row: TeacherSubjectRow, payload: UpdateTeacherSubjectInput) => Promise<boolean>;
   onDeleteRequest: (row: TeacherSubjectRow) => void;
   onCancelAddRow: () => void;
@@ -50,6 +52,31 @@ export function TeacherSubjectsTable({
 }: TeacherSubjectsTableProps) {
   const hasRows = rows.length > 0;
 
+  const createResultRef = useRef(false);
+
+  const createSubjectForm = useForm({
+    defaultValues: {
+      subjectId: "",
+      minGrade: "",
+      maxGrade: "",
+    } as z.input<typeof subjectGradeRangeSchema>,
+    validators: {
+      onChange: subjectGradeRangeSchema,
+      onSubmit: subjectGradeRangeSchema,
+    },
+    onSubmit: async ({ value }) => {
+      const parsed = subjectGradeRangeSchema.parse(value);
+      createResultRef.current = await onCreateSubject(parsed as CreateTeacherSubjectFormInput);
+    },
+  });
+
+  const handleCreateSubjectWithTableValidation = async (payload: CreateTeacherSubjectFormInput) => {
+    createResultRef.current = false;
+    createSubjectForm.reset(payload as z.input<typeof subjectGradeRangeSchema>);
+    await createSubjectForm.handleSubmit();
+    return createResultRef.current;
+  };
+
   const subjectNamesById = useMemo(() => {
     const map = new Map<string, string>();
     for (const option of subjectOptions) {
@@ -74,7 +101,7 @@ export function TeacherSubjectsTable({
           {isAddingRow ? (
             <InlineCreateRow
               subjectOptions={subjectOptions}
-              onSave={onCreateSubject}
+              onSave={handleCreateSubjectWithTableValidation}
               onCancel={onCancelAddRow}
             />
           ) : null}

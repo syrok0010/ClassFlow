@@ -10,7 +10,7 @@ import { err, ok, type Result } from "@/lib/result";
 import {
   createTeacherSubjectSchema,
   teacherSubjectKeySchema,
-  updateTeacherSubjectSchema,
+  gradeRangeSchema,
   type CreateTeacherSubjectInput,
   type TeacherSubjectKeyInput,
   type UpdateTeacherSubjectInput,
@@ -273,7 +273,7 @@ export async function updateTeacherSubjectAction(
     }
 
     const validatedKey = teacherSubjectKeySchema.parse(key);
-    const validatedInput = updateTeacherSubjectSchema.parse(input);
+    const validatedInput = gradeRangeSchema.parse(input);
     const teacherId =
       scopeResponse.result.role === "teacher"
         ? scopeResponse.result.teacherId

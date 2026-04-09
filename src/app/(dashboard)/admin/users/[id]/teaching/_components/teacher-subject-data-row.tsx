@@ -1,17 +1,14 @@
 import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
+import { z } from "zod/v4";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FormField } from "@/components/ui/form-field";
 import { SubjectTypeBadge } from "@/components/ui/subject-type-badge";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { getFieldErrorMessages } from "@/lib/form-errors";
-import { cn } from "@/lib/utils";
 import {
-  gradeInputSchema,
-  updateTeacherSubjectInlineFormSchema,
-  updateTeacherSubjectInlineValidationSchema,
-  type UpdateTeacherSubjectInlineFormValues,
+  gradeSchema,
+  gradeRangeSchema,
   type UpdateTeacherSubjectInput,
 } from "../_lib/schemas";
 import type { TeacherSubjectRow } from "../_lib/types";
@@ -32,21 +29,19 @@ export function TeacherSubjectDataRow({
   onDeleteRequest,
 }: TeacherSubjectDataRowProps) {
   const [editingCell, setEditingCell] = useState<EditingField | null>(null);
-  const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm({
     defaultValues: {
       minGrade: row.minGrade === null ? "" : String(row.minGrade),
       maxGrade: row.maxGrade === null ? "" : String(row.maxGrade),
-    } as UpdateTeacherSubjectInlineFormValues,
+    } as z.input<typeof gradeRangeSchema>,
     validators: {
-      onSubmit: updateTeacherSubjectInlineValidationSchema,
+      onSubmit: gradeRangeSchema,
     },
     onSubmit: async ({ value }) => {
-      const parsed = updateTeacherSubjectInlineFormSchema.parse(value);
+      const parsed = gradeRangeSchema.parse(value);
 
       if (row.minGrade === parsed.minGrade && row.maxGrade === parsed.maxGrade) {
-        setServerError(null);
         setEditingCell(null);
         return;
       }
@@ -54,18 +49,13 @@ export function TeacherSubjectDataRow({
       const success = await onUpdateSubject(row, parsed);
 
       if (success) {
-        setServerError(null);
         setEditingCell(null);
-        return;
       }
-
-      setServerError("Не удалось сохранить изменения");
     },
   });
 
   const beginEdit = (field: EditingField) => {
     setEditingCell(field);
-    setServerError(null);
     form.reset({
       minGrade: row.minGrade === null ? "" : String(row.minGrade),
       maxGrade: row.maxGrade === null ? "" : String(row.maxGrade),
@@ -74,7 +64,6 @@ export function TeacherSubjectDataRow({
 
   const cancelEdit = () => {
     setEditingCell(null);
-    setServerError(null);
     form.reset({
       minGrade: row.minGrade === null ? "" : String(row.minGrade),
       maxGrade: row.maxGrade === null ? "" : String(row.maxGrade),
@@ -90,36 +79,23 @@ export function TeacherSubjectDataRow({
         <SubjectTypeBadge type={row.subjectType} />
       </TableCell>
 
-      <TableCell>
-        {isEditing ? (
-          <form.Field name="minGrade" validators={{ onBlur: gradeInputSchema }}>
-            {(field) => {
-              const errors = getFieldErrorMessages(field);
-
-              return (
-                <div className="grid gap-1">
-                  <Input
-                    autoFocus={editingCell === "minGrade"}
-                    type="number"
-                    min={0}
-                    max={11}
-                    step={1}
-                    inputMode="numeric"
-                    className={cn("h-7", errors.length > 0 && "border-destructive")}
-                    value={field.state.value}
-                    onChange={(event) => {
-                      field.handleChange(event.target.value);
-                      if (serverError) {
-                        setServerError(null);
-                      }
-                    }}
-                    onBlur={() => {
-                      field.handleBlur();
-                      if (!form.state.isSubmitting) {
-                        void form.handleSubmit();
-                      }
-                    }}
-                    onKeyDown={(event) => {
+      {isEditing ? (
+        <>
+          <TableCell>
+            <form.Field name="minGrade" validators={{ onBlur: gradeSchema }}>
+              {(field) => (
+                <FormField
+                  field={field}
+                  id={`teacher-subject-${row.subjectId}-min-grade`}
+                  type="number"
+                  inputClassName="h-7"
+                  inputProps={{
+                    autoFocus: editingCell === "minGrade",
+                    min: 0,
+                    max: 11,
+                    step: 1,
+                    inputMode: "numeric",
+                    onKeyDown: (event) => {
                       if (event.key === "Enter") {
                         event.preventDefault();
                         void form.handleSubmit();
@@ -130,57 +106,33 @@ export function TeacherSubjectDataRow({
                         event.preventDefault();
                         cancelEdit();
                       }
-                    }}
-                    disabled={form.state.isSubmitting}
-                  />
-                  {errors.length > 0 ? (
-                    <p className="text-xs text-destructive">{errors.join(", ")}</p>
-                  ) : null}
-                </div>
-              );
-            }}
-          </form.Field>
-        ) : (
-          <button
-            type="button"
-            className="w-full cursor-pointer rounded px-1 py-1 text-left hover:bg-muted"
-            onClick={() => beginEdit("minGrade")}
-          >
-            {row.minGrade ?? "-"}
-          </button>
-        )}
-      </TableCell>
+                    },
+                  }}
+                  onFieldBlur={() => {
+                    if (!form.state.isSubmitting) {
+                      void form.handleSubmit();
+                    }
+                  }}
+                />
+              )}
+            </form.Field>
+          </TableCell>
 
-      <TableCell>
-        {isEditing ? (
-          <form.Field name="maxGrade" validators={{ onBlur: gradeInputSchema }}>
-            {(field) => {
-              const errors = getFieldErrorMessages(field);
-
-              return (
-                <div className="grid gap-1">
-                  <Input
-                    autoFocus={editingCell === "maxGrade"}
-                    type="number"
-                    min={0}
-                    max={11}
-                    step={1}
-                    inputMode="numeric"
-                    className={cn("h-7", errors.length > 0 && "border-destructive")}
-                    value={field.state.value}
-                    onChange={(event) => {
-                      field.handleChange(event.target.value);
-                      if (serverError) {
-                        setServerError(null);
-                      }
-                    }}
-                    onBlur={() => {
-                      field.handleBlur();
-                      if (!form.state.isSubmitting) {
-                        void form.handleSubmit();
-                      }
-                    }}
-                    onKeyDown={(event) => {
+          <TableCell>
+            <form.Field name="maxGrade" validators={{ onBlur: gradeSchema }}>
+              {(field) => (
+                <FormField
+                  field={field}
+                  id={`teacher-subject-${row.subjectId}-max-grade`}
+                  type="number"
+                  inputClassName="h-7"
+                  inputProps={{
+                    autoFocus: editingCell === "maxGrade",
+                    min: 0,
+                    max: 11,
+                    step: 1,
+                    inputMode: "numeric",
+                    onKeyDown: (event) => {
                       if (event.key === "Enter") {
                         event.preventDefault();
                         void form.handleSubmit();
@@ -191,29 +143,44 @@ export function TeacherSubjectDataRow({
                         event.preventDefault();
                         cancelEdit();
                       }
-                    }}
-                    disabled={form.state.isSubmitting}
-                  />
-                  {errors.length > 0 ? (
-                    <p className="text-xs text-destructive">{errors.join(", ")}</p>
-                  ) : null}
-                </div>
-              );
-            }}
-          </form.Field>
-        ) : (
-          <button
-            type="button"
-            className="w-full cursor-pointer rounded px-1 py-1 text-left hover:bg-muted"
-            onClick={() => beginEdit("maxGrade")}
-          >
-            {row.maxGrade ?? "-"}
-          </button>
-        )}
-      </TableCell>
+                    },
+                  }}
+                  onFieldBlur={() => {
+                    if (!form.state.isSubmitting) {
+                      void form.handleSubmit();
+                    }
+                  }}
+                />
+              )}
+            </form.Field>
+          </TableCell>
+        </>
+      ) : (
+        <>
+          <TableCell>
+            <button
+              type="button"
+              className="w-full cursor-pointer rounded px-1 py-1 text-left hover:bg-muted"
+              onClick={() => beginEdit("minGrade")}
+            >
+              {row.minGrade ?? "-"}
+            </button>
+          </TableCell>
+
+          <TableCell>
+            <button
+              type="button"
+              className="w-full cursor-pointer rounded px-1 py-1 text-left hover:bg-muted"
+              onClick={() => beginEdit("maxGrade")}
+            >
+              {row.maxGrade ?? "-"}
+            </button>
+          </TableCell>
+        </>
+      )}
 
       <TableCell className="text-right">
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex items-start justify-end">
           <Button
             variant="ghost"
             size="icon-xs"
@@ -222,7 +189,6 @@ export function TeacherSubjectDataRow({
           >
             <Trash2 className="size-4" />
           </Button>
-          {serverError ? <span className="text-xs text-destructive">{serverError}</span> : null}
         </div>
       </TableCell>
     </TableRow>

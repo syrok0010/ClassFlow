@@ -1,5 +1,6 @@
 import { type KeyboardEvent } from "react";
 import { useForm } from "@tanstack/react-form";
+import { z } from "zod/v4";
 import {
   Combobox,
   ComboboxCollection,
@@ -18,22 +19,16 @@ import {
 import { TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
-  createTeacherSubjectInlineFormSchema,
-  createTeacherSubjectInlineValidationSchema,
-  gradeInputSchema,
+  subjectGradeRangeSchema,
+  gradeSchema,
   idSchema,
-  type CreateTeacherSubjectInlineFormInput,
-  type CreateTeacherSubjectInlineFormValues,
+  type CreateTeacherSubjectFormInput,
 } from "../_lib/schemas";
 import type { SubjectOption } from "../_lib/types";
 
 interface InlineCreateTeacherSubjectRowProps {
   subjectOptions: SubjectOption[];
-  onSave: (payload: {
-    subjectId: string;
-    minGrade: number;
-    maxGrade: number;
-  }) => Promise<boolean>;
+  onSave: (payload: CreateTeacherSubjectFormInput) => Promise<boolean>;
   onCancel: () => void;
 }
 
@@ -47,18 +42,14 @@ export function InlineCreateRow({
       subjectId: "",
       minGrade: "",
       maxGrade: "",
-    } as CreateTeacherSubjectInlineFormValues,
+    } as z.input<typeof subjectGradeRangeSchema>,
     validators: {
-      onChange: createTeacherSubjectInlineValidationSchema,
-      onSubmit: createTeacherSubjectInlineValidationSchema,
+      onChange: subjectGradeRangeSchema,
+      onSubmit: subjectGradeRangeSchema,
     },
     onSubmit: async ({ value }) => {
-      const parsed = createTeacherSubjectInlineFormSchema.safeParse(value);
-      if (!parsed.success) {
-        return;
-      }
-
-      const success = await onSave(parsed.data as CreateTeacherSubjectInlineFormInput);
+      const parsed = subjectGradeRangeSchema.parse(value);
+      const success = await onSave(parsed as CreateTeacherSubjectFormInput);
 
       if (success) {
         onCancel();
@@ -123,7 +114,7 @@ export function InlineCreateRow({
                   </ComboboxContent>
                 </Combobox>
                 {errors.length > 0 ? (
-                  <p className="text-xs text-destructive">{errors.join(", ")}</p>
+                  <p className="text-[10px] text-destructive font-medium uppercase tracking-wider animate-in fade-in slide-in-from-top-1 duration-200">{errors.join(", ")}</p>
                 ) : null}
               </div>
             );
@@ -136,7 +127,7 @@ export function InlineCreateRow({
       <TableCell className="w-52 align-top">
         <form.Field
           name="minGrade"
-          validators={{ onChange: gradeInputSchema, onBlur: gradeInputSchema }}
+          validators={{ onChange: gradeSchema, onBlur: gradeSchema }}
         >
           {(field) => (
             <div className="grid gap-1.5">
@@ -146,6 +137,7 @@ export function InlineCreateRow({
                 required
                 id="inline-create-min-grade"
                 type="number"
+                inputClassName="h-7"
                 inputProps={{ min: 0, max: 11, step: 1 }}
               />
             </div>
@@ -156,7 +148,7 @@ export function InlineCreateRow({
       <TableCell className="w-52 align-top">
         <form.Field
           name="maxGrade"
-          validators={{ onChange: gradeInputSchema, onBlur: gradeInputSchema }}
+          validators={{ onChange: gradeSchema, onBlur: gradeSchema }}
         >
           {(field) => (
             <div className="grid gap-1.5">
@@ -166,6 +158,7 @@ export function InlineCreateRow({
                 required
                 id="inline-create-max-grade"
                 type="number"
+                inputClassName="h-7"
                 inputProps={{ min: 0, max: 11, step: 1 }}
               />
             </div>
@@ -176,24 +169,18 @@ export function InlineCreateRow({
       <TableCell className="w-45 align-top">
         <form.Subscribe
           selector={(state) => ({
+            canSubmit: state.canSubmit,
+            isValid: state.isValid,
             isSubmitting: state.isSubmitting,
-            values: state.values,
+            isPristine: state.isPristine,
           })}
         >
-          {({ isSubmitting, values }) => {
-            const hasAllRequired =
-              values.subjectId.trim().length > 0
-              && values.minGrade.trim().length > 0
-              && values.maxGrade.trim().length > 0;
-
-            const isValidBySchema = createTeacherSubjectInlineValidationSchema.safeParse(values)
-              .success;
-
+          {({ canSubmit, isValid, isSubmitting, isPristine }) => {
             return (
               <InlineCreateRowFrameActions
                 onSave={() => void form.handleSubmit()}
                 onCancel={onCancel}
-                isSaveDisabled={!hasAllRequired || !isValidBySchema || isSubmitting}
+                isSaveDisabled={!canSubmit || !isValid || isSubmitting || isPristine}
                 isCancelDisabled={isSubmitting}
                 align="end"
               />
