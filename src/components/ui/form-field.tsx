@@ -15,12 +15,11 @@ interface FormFieldProps {
   id?: string;
   required?: boolean;
   inputClassName?: string;
-  onFieldBlur?: () => void;
   compact?: boolean;
   truncateError?: boolean;
   inputProps?: Omit<
     InputHTMLAttributes<HTMLInputElement>,
-    "id" | "name" | "type" | "placeholder" | "value" | "onBlur" | "onChange" | "disabled" | "className"
+    "id" | "name" | "type" | "placeholder" | "value" | "disabled" | "className"
   >;
 }
 
@@ -32,7 +31,6 @@ export function FormField({
   id, 
   required,
   inputClassName,
-  onFieldBlur,
   compact,
   truncateError,
   inputProps,
@@ -40,6 +38,7 @@ export function FormField({
   const fieldId = id || field.name;
   const errorMessage = getFirstFieldErrorMessage(field);
   const hasError = field.state.meta.errors.length > 0;
+  const { onBlur, onChange, ...restInputProps } = inputProps ?? {};
 
   return (
     <div className={cn("grid", compact ? "gap-0.5" : "gap-1.5")}>
@@ -56,19 +55,20 @@ export function FormField({
           type={type}
           placeholder={placeholder}
           value={field.state.value as string}
-          onBlur={() => {
+          onBlur={(event) => {
             field.handleBlur();
-            onFieldBlur?.();
+            onBlur?.(event);
           }}
           onChange={(e) => {
             if (type === "number") {
               field.handleChange(e.target.valueAsNumber);
-              return;
+            } else {
+              field.handleChange(e.target.value);
             }
-            field.handleChange(e.target.value);
+            onChange?.(e);
           }}
           disabled={field.form.state.isSubmitting}
-          {...inputProps}
+          {...restInputProps}
           className={cn(
             hasError ? "border-destructive focus-visible:ring-destructive" : "focus-visible:ring-primary",
             inputClassName

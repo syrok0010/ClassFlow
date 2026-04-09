@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type KeyboardEvent, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,13 +6,21 @@ import { FormField } from "@/components/ui/form-field";
 import { SubjectTypeBadge } from "@/components/ui/subject-type-badge";
 import { TableCell, TableRow } from "@/components/ui/table";
 import {
-  gradeSchema,
   gradeRangeSchema,
   type UpdateTeacherSubjectInput,
 } from "../_lib/schemas";
 import type { TeacherSubjectRow } from "../_lib/types";
 
 type EditingField = "minGrade" | "maxGrade";
+
+const GRADE_FIELDS: EditingField[] = ["minGrade", "maxGrade"];
+
+function getResetValues(row: TeacherSubjectRow): UpdateTeacherSubjectInput {
+  return {
+    minGrade: row.minGrade ?? 1,
+    maxGrade: row.maxGrade ?? 11,
+  };
+}
 
 interface TeacherSubjectDataRowProps {
   row: TeacherSubjectRow;
@@ -30,10 +38,7 @@ export function TeacherSubjectDataRow({
   const [editingCell, setEditingCell] = useState<EditingField | null>(null);
 
   const form = useForm({
-    defaultValues: {
-      minGrade: row.minGrade,
-      maxGrade: row.maxGrade,
-    } as UpdateTeacherSubjectInput,
+    defaultValues: getResetValues(row),
     validators: {
       onBlur: gradeRangeSchema,
       onChange: gradeRangeSchema,
@@ -55,20 +60,60 @@ export function TeacherSubjectDataRow({
     },
   });
 
+  const resetForm = () => {
+    form.reset(getResetValues(row));
+  };
+
   const beginEdit = (field: EditingField) => {
     setEditingCell(field);
-    form.reset({
-      minGrade: row.minGrade || 1,
-      maxGrade: row.maxGrade || 11,
-    });
+    resetForm();
   };
 
   const cancelEdit = () => {
     setEditingCell(null);
-    form.reset({
-      minGrade: row.minGrade || 1,
-      maxGrade: row.maxGrade || 11,
-    });
+    resetForm();
+  };
+
+  const submitIfIdle = () => {
+    if (!form.state.isSubmitting) {
+      void form.handleSubmit();
+    }
+  };
+
+  const handleGradeKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void form.handleSubmit();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelEdit();
+    }
+  };
+
+  const renderGradeInput = (fieldName: EditingField) => {
+    return (
+      <form.Field name={fieldName}>
+        {(field) => (
+          <FormField
+            field={field}
+            id={`teacher-subject-${row.subjectId}-${fieldName}`}
+            type="number"
+            inputProps={{
+              autoFocus: editingCell === fieldName,
+              min: 0,
+              max: 11,
+              step: 1,
+              inputMode: "numeric",
+              onBlur: submitIfIdle,
+              onKeyDown: handleGradeKeyDown,
+            }}
+          />
+        )}
+      </form.Field>
+    );
   };
 
   const isEditing = editingCell !== null;
@@ -82,76 +127,9 @@ export function TeacherSubjectDataRow({
 
       {isEditing ? (
         <>
-          <TableCell>
-            <form.Field name="minGrade">
-              {(field) => (
-                <FormField
-                  field={field}
-                  id={`teacher-subject-${row.subjectId}-min-grade`}
-                  type="number"
-                  inputProps={{
-                    autoFocus: editingCell === "minGrade",
-                    min: 0,
-                    max: 11,
-                    step: 1,
-                    onKeyDown: (event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void form.handleSubmit();
-                        return;
-                      }
-
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        cancelEdit();
-                      }
-                    },
-                  }}
-                  onFieldBlur={() => {
-                    if (!form.state.isSubmitting) {
-                      void form.handleSubmit();
-                    }
-                  }}
-                />
-              )}
-            </form.Field>
-          </TableCell>
-
-          <TableCell>
-            <form.Field name="maxGrade">
-              {(field) => (
-                <FormField
-                  field={field}
-                  id={`teacher-subject-${row.subjectId}-max-grade`}
-                  type="number"
-                  inputProps={{
-                    autoFocus: editingCell === "maxGrade",
-                    min: 0,
-                    max: 11,
-                    step: 1,
-                    inputMode: "numeric",
-                    onKeyDown: (event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void form.handleSubmit();
-                        return;
-                      }
-
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        cancelEdit();
-                      }
-                    },
-                  }}
-                  onFieldBlur={() => {
-                    if (!form.state.isSubmitting) {
-                      void form.handleSubmit();
-                    }
-                  }}
-                />
-              )}
-            </form.Field>
-          </TableCell>
+          {GRADE_FIELDS.map((fieldName) => (
+            <TableCell key={fieldName}>{renderGradeInput(fieldName)}</TableCell>
+          ))}
         </>
       ) : (
         <>
