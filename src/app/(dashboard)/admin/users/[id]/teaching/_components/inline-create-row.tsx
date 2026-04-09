@@ -1,6 +1,5 @@
 import { type KeyboardEvent } from "react";
 import { useForm } from "@tanstack/react-form";
-import { z } from "zod/v4";
 import {
   Combobox,
   ComboboxCollection,
@@ -20,8 +19,6 @@ import { TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
   subjectGradeRangeSchema,
-  gradeSchema,
-  idSchema,
   type CreateTeacherSubjectFormInput,
 } from "../_lib/schemas";
 import type { SubjectOption } from "../_lib/types";
@@ -40,10 +37,11 @@ export function InlineCreateRow({
   const form = useForm({
     defaultValues: {
       subjectId: "",
-      minGrade: "",
-      maxGrade: "",
-    } as z.input<typeof subjectGradeRangeSchema>,
+      minGrade: 1,
+      maxGrade: 11,
+    } as CreateTeacherSubjectFormInput,
     validators: {
+      onBlur: subjectGradeRangeSchema,
       onChange: subjectGradeRangeSchema,
       onSubmit: subjectGradeRangeSchema,
     },
@@ -73,10 +71,7 @@ export function InlineCreateRow({
   return (
     <InlineCreateRowFrame>
       <TableCell className="align-top">
-        <form.Field
-          name="subjectId"
-          validators={{ onChange: idSchema, onBlur: idSchema }}
-        >
+        <form.Field name="subjectId">
           {(field) => {
             const errors = getFieldErrorMessages(field);
             return (
@@ -125,19 +120,15 @@ export function InlineCreateRow({
       <TableCell className="text-muted-foreground">-</TableCell>
 
       <TableCell className="w-52 align-top">
-        <form.Field
-          name="minGrade"
-          validators={{ onChange: gradeSchema, onBlur: gradeSchema }}
-        >
+        <form.Field name="minGrade">
           {(field) => (
-            <div className="grid gap-1.5">
+            <div className="grid">
               <FormField
                 field={field}
                 placeholder="0"
                 required
                 id="inline-create-min-grade"
                 type="number"
-                inputClassName="h-7"
                 inputProps={{ min: 0, max: 11, step: 1 }}
               />
             </div>
@@ -146,10 +137,7 @@ export function InlineCreateRow({
       </TableCell>
 
       <TableCell className="w-52 align-top">
-        <form.Field
-          name="maxGrade"
-          validators={{ onChange: gradeSchema, onBlur: gradeSchema }}
-        >
+        <form.Field name="maxGrade">
           {(field) => (
             <div className="grid gap-1.5">
               <FormField
@@ -158,7 +146,6 @@ export function InlineCreateRow({
                 required
                 id="inline-create-max-grade"
                 type="number"
-                inputClassName="h-7"
                 inputProps={{ min: 0, max: 11, step: 1 }}
               />
             </div>
@@ -178,7 +165,7 @@ export function InlineCreateRow({
           {({ canSubmit, isValid, isSubmitting, isPristine }) => {
             return (
               <InlineCreateRowFrameActions
-                onSave={() => void form.handleSubmit()}
+                onSave={form.handleSubmit}
                 onCancel={onCancel}
                 isSaveDisabled={!canSubmit || !isValid || isSubmitting || isPristine}
                 isCancelDisabled={isSubmitting}

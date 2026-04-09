@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { type AnyFieldApi } from "@tanstack/react-form";
 import { getFirstFieldErrorMessage } from "@/lib/form-errors";
 import { cn } from "@/lib/utils";
-import type { HTMLAttributes, KeyboardEventHandler, Ref } from "react";
 
 interface FormFieldProps {
   field: AnyFieldApi;
@@ -17,7 +16,6 @@ interface FormFieldProps {
   required?: boolean;
   inputClassName?: string;
   onFieldBlur?: () => void;
-  onFieldChange?: (value: string) => void;
   compact?: boolean;
   truncateError?: boolean;
   inputProps?: Omit<
@@ -35,7 +33,6 @@ export function FormField({
   required,
   inputClassName,
   onFieldBlur,
-  onFieldChange,
   compact,
   truncateError,
   inputProps,
@@ -64,8 +61,11 @@ export function FormField({
             onFieldBlur?.();
           }}
           onChange={(e) => {
+            if (type === "number") {
+              field.handleChange(e.target.valueAsNumber);
+              return;
+            }
             field.handleChange(e.target.value);
-            onFieldChange?.(e.target.value);
           }}
           disabled={field.form.state.isSubmitting}
           {...inputProps}

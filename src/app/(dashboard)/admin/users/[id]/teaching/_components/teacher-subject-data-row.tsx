@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
-import { z } from "zod/v4";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
@@ -32,10 +31,12 @@ export function TeacherSubjectDataRow({
 
   const form = useForm({
     defaultValues: {
-      minGrade: row.minGrade === null ? "" : String(row.minGrade),
-      maxGrade: row.maxGrade === null ? "" : String(row.maxGrade),
-    } as z.input<typeof gradeRangeSchema>,
+      minGrade: row.minGrade,
+      maxGrade: row.maxGrade,
+    } as UpdateTeacherSubjectInput,
     validators: {
+      onBlur: gradeRangeSchema,
+      onChange: gradeRangeSchema,
       onSubmit: gradeRangeSchema,
     },
     onSubmit: async ({ value }) => {
@@ -57,16 +58,16 @@ export function TeacherSubjectDataRow({
   const beginEdit = (field: EditingField) => {
     setEditingCell(field);
     form.reset({
-      minGrade: row.minGrade === null ? "" : String(row.minGrade),
-      maxGrade: row.maxGrade === null ? "" : String(row.maxGrade),
+      minGrade: row.minGrade || 1,
+      maxGrade: row.maxGrade || 11,
     });
   };
 
   const cancelEdit = () => {
     setEditingCell(null);
     form.reset({
-      minGrade: row.minGrade === null ? "" : String(row.minGrade),
-      maxGrade: row.maxGrade === null ? "" : String(row.maxGrade),
+      minGrade: row.minGrade || 1,
+      maxGrade: row.maxGrade || 11,
     });
   };
 
@@ -82,19 +83,17 @@ export function TeacherSubjectDataRow({
       {isEditing ? (
         <>
           <TableCell>
-            <form.Field name="minGrade" validators={{ onBlur: gradeSchema }}>
+            <form.Field name="minGrade">
               {(field) => (
                 <FormField
                   field={field}
                   id={`teacher-subject-${row.subjectId}-min-grade`}
                   type="number"
-                  inputClassName="h-7"
                   inputProps={{
                     autoFocus: editingCell === "minGrade",
                     min: 0,
                     max: 11,
                     step: 1,
-                    inputMode: "numeric",
                     onKeyDown: (event) => {
                       if (event.key === "Enter") {
                         event.preventDefault();
@@ -119,13 +118,12 @@ export function TeacherSubjectDataRow({
           </TableCell>
 
           <TableCell>
-            <form.Field name="maxGrade" validators={{ onBlur: gradeSchema }}>
+            <form.Field name="maxGrade">
               {(field) => (
                 <FormField
                   field={field}
                   id={`teacher-subject-${row.subjectId}-max-grade`}
                   type="number"
-                  inputClassName="h-7"
                   inputProps={{
                     autoFocus: editingCell === "maxGrade",
                     min: 0,

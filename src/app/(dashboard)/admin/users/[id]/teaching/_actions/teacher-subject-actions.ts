@@ -103,10 +103,6 @@ function mapTeacherSubjectRow(row: {
   };
 }
 
-function revalidateTeachingPath(userId: string) {
-  revalidatePath(`/admin/users/${userId}/teaching`);
-}
-
 export async function getTeachingPageDataAction(userId: string): Promise<Result<TeachingPageData>> {
   try {
     const scopeResponse = await getTeacherScope();
@@ -255,7 +251,7 @@ export async function createTeacherSubjectAction(
       },
     });
 
-    revalidateTeachingPath(teacher.userId);
+    revalidatePath(`/admin/users/${teacher.userId}/teaching`);
     return ok(mapTeacherSubjectRow(created));
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при добавлении компетенции"));
@@ -324,7 +320,7 @@ export async function updateTeacherSubjectAction(
       },
     });
 
-    revalidateTeachingPath(existing.teacher.userId);
+    revalidatePath(`/admin/users/${existing.teacher.userId}/teaching`);
     return ok(mapTeacherSubjectRow(updated));
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при обновлении диапазона классов"));
@@ -379,7 +375,7 @@ export async function deleteTeacherSubjectAction(
       },
     });
 
-    revalidateTeachingPath(existing.teacher.userId);
+    revalidatePath(`/admin/users/${existing.teacher.userId}/teaching`);
     return ok(true);
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при удалении компетенции"));

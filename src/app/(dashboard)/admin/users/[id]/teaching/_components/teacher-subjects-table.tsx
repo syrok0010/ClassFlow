@@ -57,8 +57,8 @@ export function TeacherSubjectsTable({
   const createSubjectForm = useForm({
     defaultValues: {
       subjectId: "",
-      minGrade: "",
-      maxGrade: "",
+      minGrade: 1,
+      maxGrade: 11,
     } as z.input<typeof subjectGradeRangeSchema>,
     validators: {
       onChange: subjectGradeRangeSchema,

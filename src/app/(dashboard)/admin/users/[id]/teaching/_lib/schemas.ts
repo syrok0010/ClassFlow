@@ -2,20 +2,11 @@ import { z } from "zod/v4";
 
 export const idSchema = z.string().trim().min(1, "ID обязателен");
 
-export const gradeSchema = z.preprocess(
-  (value) => {
-    if (typeof value === "string" && value.trim().length === 0) {
-      return Number.NaN;
-    }
-
-    return value;
-  },
-  z
-    .coerce.number({ message: "Введите число" })
+export const gradeSchema = z
+    .number({ message: "Введите число" })
     .int("Только целые числа")
     .min(0, "Минимальный класс: 0")
-    .max(11, "Максимальный класс: 11")
-);
+    .max(11, "Максимальный класс: 11");
 
 export const gradeRangeSchema = z
   .object({
