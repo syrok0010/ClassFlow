@@ -9,8 +9,9 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useQueryState } from "nuqs";
-import { Search, UserPlus, X } from "lucide-react";
+import { Search, UserPlus, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
@@ -170,21 +171,19 @@ export function UsersTableClient({ users }: UsersTableClientProps) {
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-48">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <Search className="h-10 w-10 text-muted-foreground/40" />
-                    <p className="text-sm font-medium text-muted-foreground">
-                      Пользователи не найдены
-                    </p>
-                    {hasActiveFilters && (
-                      <Button
-                        variant="link"
-                        onClick={clearFilters}
-                        className="text-sm h-auto p-0"
-                      >
-                        Сбросить фильтры
-                      </Button>
-                    )}
-                  </div>
+                  <FilterableEmptyState
+                    hasFilters={Boolean(hasActiveFilters)}
+                    empty={{
+                      icon: <Users />,
+                      title: "Пользователи пока не добавлены",
+                      description:
+                        "Добавьте первого пользователя, чтобы назначать роли и работать с приглашениями.",
+                      action: !smartRowActive ? (
+                        <Button onClick={handleActivateSmartRow}>+ Добавить пользователя</Button>
+                      ) : null,
+                    }}
+                    onResetFilters={clearFilters}
+                  />
                 </TableCell>
               </TableRow>
             )}

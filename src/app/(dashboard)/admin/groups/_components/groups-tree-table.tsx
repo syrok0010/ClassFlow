@@ -52,12 +52,17 @@ import {
   Trash2,
   UserPlus,
   Check,
+  FolderOpen,
 } from "lucide-react";
+import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import { cn } from "@/lib/utils";
 
 interface GroupsTreeTableProps {
   groups: GroupWithDetails[];
   isAddingRow: boolean;
+  hasActiveFilters: boolean;
+  onResetFilters: () => void;
+  onStartAddRow: () => void;
   onCancelAddRow: () => void;
   onCreateGroup: (data: {
     name: string;
@@ -88,6 +93,9 @@ const TYPE_STYLES: Record<string, string> = {
 export function GroupsTreeTable({
   groups,
   isAddingRow,
+  hasActiveFilters,
+  onResetFilters,
+  onStartAddRow,
   onCancelAddRow,
   onCreateGroup,
   onRenameGroup,
@@ -352,11 +360,17 @@ export function GroupsTreeTable({
 
             {table.getRowModel().rows.length === 0 && !isAddingRow && (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-10">
-                  <p className="text-muted-foreground">
-                    Нет групп. Нажмите &laquo;Добавить класс/группу&raquo; для
-                    начала.
-                  </p>
+                <TableCell colSpan={columns.length}>
+                  <FilterableEmptyState
+                    hasFilters={hasActiveFilters}
+                    empty={{
+                      icon: <FolderOpen />,
+                      title: "Нет групп",
+                      description: "Нажмите \"Добавить класс/группу\", чтобы начать.",
+                      action: <Button onClick={onStartAddRow}>+ Добавить класс/группу</Button>,
+                    }}
+                    onResetFilters={onResetFilters}
+                  />
                 </TableCell>
               </TableRow>
             )}

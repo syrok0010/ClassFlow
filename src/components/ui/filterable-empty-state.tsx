@@ -1,40 +1,66 @@
 import { Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import type { ReactNode } from "react";
 
-interface FilterableEmptyStateProps {
+import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+
+type EmptyStateConfig = {
+  title: string;
+  description?: ReactNode;
+  icon?: ReactNode;
+  action?: ReactNode;
+  className?: string;
+};
+
+type FilterableEmptyStateProps = {
   hasFilters: boolean;
-  onResetFilters: () => void;
-  onCreateFirst: () => void;
-  emptyTitle: string;
-  emptyDescription: string;
-  createFirstLabel: string;
-}
+  empty: EmptyStateConfig;
+  onResetFilters?: () => void;
+};
 
 export function FilterableEmptyState({
   hasFilters,
+  empty,
   onResetFilters,
-  onCreateFirst,
-  emptyTitle,
-  emptyDescription,
-  createFirstLabel,
 }: FilterableEmptyStateProps) {
   if (hasFilters) {
     return (
-      <div className="flex h-48 flex-col items-center justify-center gap-2">
-        <Search className="size-10 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">Ничего не найдено</p>
-        <Button variant="link" className="h-auto p-0" onClick={onResetFilters}>
-          Сбросить фильтры
-        </Button>
-      </div>
+      <Empty className="min-h-48 py-8">
+        <EmptyHeader>
+          <EmptyMedia variant="icon" className="bg-muted/60">
+            <Search className="size-5" />
+          </EmptyMedia>
+          <EmptyTitle>Ничего не найдено</EmptyTitle>
+          <EmptyDescription>
+            Измените условия поиска или сбросьте фильтры.
+          </EmptyDescription>
+        </EmptyHeader>
+        {onResetFilters ? (
+          <EmptyContent>
+            <Button variant="link" onClick={onResetFilters}>
+              Сбросить фильтры
+            </Button>
+          </EmptyContent>
+        ) : null}
+      </Empty>
     );
   }
 
   return (
-    <div className="flex h-56 flex-col items-center justify-center gap-3 text-center">
-      <p className="text-base font-medium">{emptyTitle}</p>
-      <p className="max-w-2xl text-sm text-muted-foreground">{emptyDescription}</p>
-      <Button onClick={onCreateFirst}>{createFirstLabel}</Button>
-    </div>
+    <Empty className={empty.className ?? "min-h-56"}>
+      <EmptyHeader>
+        {empty.icon ? <EmptyMedia variant="icon">{empty.icon}</EmptyMedia> : null}
+        <EmptyTitle>{empty.title}</EmptyTitle>
+        {empty.description ? <EmptyDescription>{empty.description}</EmptyDescription> : null}
+      </EmptyHeader>
+      {empty.action ? <EmptyContent>{empty.action}</EmptyContent> : null}
+    </Empty>
   );
 }
