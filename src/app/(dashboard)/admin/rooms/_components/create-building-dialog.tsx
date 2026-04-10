@@ -7,7 +7,6 @@ import { Building2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
-import { z } from "zod";
 import {
   Dialog,
   DialogContent,
@@ -18,11 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { createBuildingAction } from "../_actions/room-actions";
-import { createBuildingSchema } from "../_lib/schemas";
-
-const createBuildingFormSchema = createBuildingSchema.extend({
-  address: z.string().trim().max(100, "Максимум 100 символов"),
-});
+import { CreateBuildingInput, createBuildingSchema } from "@/app/(dashboard)/admin/rooms/_lib/schemas";
 
 type CreateBuildingDialogProps = {
   triggerVariant?: "icon" | "button";
@@ -36,9 +31,9 @@ export function CreateBuildingDialog({ triggerVariant = "icon" }: CreateBuilding
     defaultValues: {
       name: "",
       address: "",
-    },
+    } as CreateBuildingInput,
     validators: {
-      onChange: createBuildingFormSchema,
+      onChange: createBuildingSchema,
     },
     onSubmit: async ({ value }) => {
       const result = await createBuildingAction(value);
