@@ -12,9 +12,10 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Minus, Search } from "lucide-react";
+import { Inbox, Minus, Plus, Search } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -183,7 +184,19 @@ export function RoomSubjectsTransfer({
                 />
               ))
             ) : (
-              <p className="text-xs text-muted-foreground">Нет доступных предметов</p>
+              <Empty className="min-h-28 justify-center gap-3 px-3 py-4">
+                <EmptyHeader className="gap-2">
+                  <EmptyMedia
+                    variant="icon"
+                    className="size-10 bg-muted/60 [&_svg:not([class*='size-'])]:size-4"
+                  >
+                    <Inbox />
+                  </EmptyMedia>
+                  <EmptyTitle className="text-xs font-medium">
+                    Нет доступных предметов
+                  </EmptyTitle>
+                </EmptyHeader>
+              </Empty>
             )}
           </SubjectBucket>
 
@@ -198,7 +211,19 @@ export function RoomSubjectsTransfer({
                 />
               ))
             ) : (
-              <p className="text-xs text-muted-foreground">Пока не выбрано ни одного предмета</p>
+              <Empty className="min-h-28 justify-center gap-3 px-3 py-4">
+                <EmptyHeader className="gap-2">
+                  <EmptyMedia
+                    variant="icon"
+                    className="size-10 bg-muted/60 [&_svg:not([class*='size-'])]:size-4"
+                  >
+                    <Inbox />
+                  </EmptyMedia>
+                  <EmptyTitle className="text-xs font-medium">
+                    Пока не выбрано ни одного предмета
+                  </EmptyTitle>
+                </EmptyHeader>
+              </Empty>
             )}
           </SubjectBucket>
         </div>

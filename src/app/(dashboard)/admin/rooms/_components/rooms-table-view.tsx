@@ -12,6 +12,15 @@ import {
 } from "@tanstack/react-table";
 import { Building2, DoorOpen, Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -41,13 +50,13 @@ export function RoomsTableView() {
 
   const buildingFilter = searchParams.get("building") ?? ALL_BUILDINGS;
 
-  const roomRows = useMemo<RoomListItem[]>(() => {
+  const scopedRoomRows = useMemo<RoomListItem[]>(() => {
     const sourceBuildings =
       buildingFilter === ALL_BUILDINGS
         ? buildings
         : buildings.filter((building) => building.id === buildingFilter);
 
-    const list = sourceBuildings.flatMap((building) =>
+    return sourceBuildings.flatMap((building) =>
       building.rooms.map((room) => ({
         id: room.id,
         name: room.name,
@@ -60,6 +69,10 @@ export function RoomsTableView() {
         })),
       })),
     );
+  }, [buildingFilter, buildings]);
+
+  const roomRows = useMemo<RoomListItem[]>(() => {
+    const list = scopedRoomRows;
 
     const needle = search.trim().toLowerCase();
     const minSeats = Number(capacityFilter);
@@ -69,7 +82,7 @@ export function RoomsTableView() {
       const seatsOk = !capacityFilter || (Number.isFinite(minSeats) && room.seatsCount >= minSeats);
       return searchOk && seatsOk;
     });
-  }, [buildingFilter, buildings, capacityFilter, search]);
+  }, [capacityFilter, scopedRoomRows, search]);
 
   const selectedBuilding = buildings.find((item) => item.id === buildingFilter);
   const title =
@@ -98,19 +111,21 @@ export function RoomsTableView() {
 
   if (!buildings.length) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center rounded-xl border bg-card p-8">
-        <div className="mx-auto max-w-xl text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <Building2 className="h-8 w-8" />
-          </div>
-          <h1 className="text-2xl font-bold">Создайте первое здание</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Для добавления кабинетов необходимо сначала добавить хотя бы один учебный корпус.
-          </p>
-          <div className="mt-6 flex justify-center">
+      <div className="flex min-h-full items-center justify-center rounded-xl border bg-card p-8">
+        <Empty className="max-w-xl rounded-xl">
+          <EmptyHeader>
+            <EmptyMedia variant="icon" className="size-16 bg-primary/10 text-primary">
+              <Building2 className="size-8" />
+            </EmptyMedia>
+            <EmptyTitle className="text-2xl font-bold">Создайте первое здание</EmptyTitle>
+            <EmptyDescription>
+              Для добавления кабинетов необходимо сначала добавить хотя бы один учебный корпус.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
             <CreateBuildingDialog triggerVariant="button" />
-          </div>
-        </div>
+          </EmptyContent>
+        </Empty>
       </div>
     );
   }
@@ -216,19 +231,30 @@ export function RoomsTableView() {
             ) : (
               <TableRow>
                 <TableCell colSpan={4} className="h-56">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <DoorOpen className="h-10 w-10 text-muted-foreground/40" />
-                    <p className="text-sm font-medium text-muted-foreground">
-                      {buildingFilter === ALL_BUILDINGS
-                        ? "Кабинеты не найдены"
-                        : "В этом здании пока нет кабинетов"}
-                    </p>
-                    {buildingFilter !== ALL_BUILDINGS ? (
-                      <Button size="sm" onClick={() => setSmartRowActive(true)}>
-                        + Добавить первый кабинет
-                      </Button>
-                    ) : null}
-                  </div>
+                  <FilterableEmptyState
+                    hasFilters={Boolean(search) || Boolean(capacityFilter)}
+                    empty={{
+                      icon: <DoorOpen className="size-5" />,
+                      title:
+                        buildingFilter === ALL_BUILDINGS
+                          ? "Кабинеты пока не созданы"
+                          : "В этом здании пока нет кабинетов",
+                      description:
+                        buildingFilter === ALL_BUILDINGS
+                          ? "Выберите здание слева или создайте кабинеты внутри конкретного корпуса."
+                          : "Добавьте первый кабинет, чтобы назначать предметы и заполнять расписание.",
+                      action:
+                        buildingFilter !== ALL_BUILDINGS ? (
+                          <Button size="sm" onClick={() => setSmartRowActive(true)}>
+                            + Добавить первый кабинет
+                          </Button>
+                        ) : null,
+                    }}
+                    onResetFilters={() => {
+                      void setSearch(null);
+                      void setCapacityFilter(null);
+                    }}
+                  />
                 </TableCell>
               </TableRow>
             )}

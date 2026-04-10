@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import {
   flexRender,
   getCoreRowModel,
@@ -177,12 +177,15 @@ export function SubjectsTable({
             <TableRow>
               <TableCell colSpan={columns.length}>
                 <FilterableEmptyState
-                  hasFilters={hasActiveFilters && allSubjectsCount > 0}
+                  hasFilters={hasActiveFilters}
+                  empty={{
+                    icon: <BookOpen />,
+                    title: "Справочник предметов пока пуст",
+                    description:
+                      "Добавьте академические, дополнительные предметы и режимные моменты, чтобы настроить кабинеты и учебный план.",
+                    action: <Button onClick={onCreateFirst}>+ Добавить первый предмет</Button>,
+                  }}
                   onResetFilters={onResetFilters}
-                  onCreateFirst={onCreateFirst}
-                  emptyTitle="Справочник предметов пока пуст"
-                  emptyDescription="Добавьте академические, дополнительные предметы и режимные моменты, чтобы настроить кабинеты и учебный план."
-                  createFirstLabel="+ Добавить первый предмет"
                 />
               </TableCell>
             </TableRow>

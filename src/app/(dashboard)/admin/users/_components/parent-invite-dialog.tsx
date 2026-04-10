@@ -10,6 +10,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import {
@@ -180,9 +187,17 @@ export function ParentInviteDialog({
                 <p className="py-4 text-center text-sm text-muted-foreground">Поиск...</p>
               )}
               {!isSearching && searchQuery.length >= 2 && searchResults.length === 0 && (
-                <p className="py-4 text-center text-sm text-muted-foreground">
-                  Ничего не найдено
-                </p>
+                <Empty className="py-4">
+                  <EmptyHeader className="gap-2">
+                    <EmptyMedia variant="icon" className="size-10 bg-muted/60">
+                      <Search className="size-4" />
+                    </EmptyMedia>
+                    <EmptyTitle>Ничего не найдено</EmptyTitle>
+                    <EmptyDescription className="text-xs">
+                      Попробуйте уточнить ФИО родителя.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               )}
               {searchResults.map((parent) => {
                 const fullName = [parent.user.surname, parent.user.name, parent.user.patronymicName]

@@ -1,6 +1,8 @@
 import { useMemo, useRef } from "react";
 import { useForm } from "@tanstack/react-form";
+import { BookOpen } from "lucide-react";
 import { z } from "zod/v4";
+import { Button } from "@/components/ui/button";
 import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import {
   Table,
@@ -110,12 +112,15 @@ export function TeacherSubjectsTable({
             <TableRow>
               <TableCell colSpan={5}>
                 <FilterableEmptyState
-                  hasFilters={hasActiveFilters && allRowsCount > 0}
+                  hasFilters={hasActiveFilters}
+                  empty={{
+                    icon: <BookOpen />,
+                    title: "У преподавателя пока не назначено ни одного предмета",
+                    description:
+                      "Добавьте предметы и диапазоны классов, чтобы система могла учитывать этого преподавателя в учебном плане и расписании.",
+                    action: <Button onClick={onCreateFirst}>+ Добавить первый предмет</Button>,
+                  }}
                   onResetFilters={onResetFilters}
-                  onCreateFirst={onCreateFirst}
-                  emptyTitle="У преподавателя пока не назначено ни одного предмета"
-                  emptyDescription="Добавьте предметы и диапазоны классов, чтобы система могла учитывать этого преподавателя в учебном плане и расписании."
-                  createFirstLabel="+ Добавить первый предмет"
                 />
               </TableCell>
             </TableRow>
