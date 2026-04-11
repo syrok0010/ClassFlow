@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -13,6 +13,7 @@ import { Search, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { getUserFullName } from "@/lib/auth-access";
 import {
   Table,
   TableBody,
@@ -50,7 +51,7 @@ export function UsersTableClient({ users }: UsersTableClientProps) {
   const [search, setSearch] = useQueryState("search", { defaultValue: "", shallow: false });
   const [domainRoleFilter, setDomainRoleFilter] = useQueryState("role", { defaultValue: "all", shallow: false });
   const [statusFilter, setStatusFilter] = useQueryState("status", { defaultValue: "all", shallow: false });
-  const [inviteId, setInviteId] = useQueryState("invite_id", { shallow: false });
+  const [inviteId, setInviteId] = useState<string | null>(null);
   const [smartRowActive, setSmartRowActive] = useState(false);
   const [modal, setModal] = useState<{
     type: "profile" | "delete";
@@ -71,6 +72,11 @@ export function UsersTableClient({ users }: UsersTableClientProps) {
     },
     meta: { setModal, setInviteId } as UserTableMeta,
   });
+
+  const selectedInviteUser = useMemo(
+    () => users.find((user) => user.students[0]?.id === inviteId) ?? null,
+    [inviteId, users]
+  );
 
   const hasActiveFilters = search || domainRoleFilter !== "all" || statusFilter !== "all";
 
@@ -197,9 +203,10 @@ export function UsersTableClient({ users }: UsersTableClientProps) {
           open={true}
           onOpenChange={(open) => !open && setInviteId(null)}
           studentId={inviteId}
-          studentName={users.find(u => u.students[0]?.id === inviteId) 
-            ? [users.find(u => u.students[0]?.id === inviteId)?.surname, users.find(u => u.students[0]?.id === inviteId)?.name].filter(Boolean).join(" ")
-            : "Ученик"
+          studentName={
+            selectedInviteUser
+              ? getUserFullName(selectedInviteUser)
+              : "Ученик"
           }
         />
       )}
