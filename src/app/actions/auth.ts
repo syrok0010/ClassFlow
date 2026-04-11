@@ -23,39 +23,46 @@ export async function activateInviteAction(
     return { success: false, error: "Неверный или просроченный код приглашения" };
   }
 
-  const userId = verification.identifier;
-
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user || user.status !== "PENDING_INVITE") {
-    return { success: false, error: "Пользователь не найден или уже активен" };
-  }
-
   try {
-     const hashedPassword = await hashPassword(validatedData.password);
-     
-     await prisma.user.update({
-       where: { id: userId },
-       data: {
-         name: validatedData.name,
-         surname: validatedData.surname,
-         patronymicName: validatedData.patronymicName,
-         email: validatedData.email,
-         status: "ACTIVE"
-       }
-     });
-     
-     await prisma.account.create({
-       data: {
-         userId: userId,
-         accountId: userId,
-         providerId: "credential",
-         password: hashedPassword
-       }
-     });
-     
-     await prisma.verification.delete({ where: { id: verification.id } });
-     
-     return { success: true };
+    const userId = verification.identifier;
+    const hashedPassword = await hashPassword(validatedData.password);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, status: true },
+      });
+
+      if (!user || user.status !== "PENDING_INVITE") {
+        return { success: false, error: "Пользователь не найден или уже активен" } as const;
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          name: validatedData.name,
+          surname: validatedData.surname,
+          patronymicName: validatedData.patronymicName,
+          email: validatedData.email,
+          status: "ACTIVE"
+        }
+      });
+
+      await tx.account.create({
+        data: {
+          userId,
+          accountId: userId,
+          providerId: "credential",
+          password: hashedPassword
+        }
+      });
+
+      await tx.verification.delete({ where: { id: verification.id } });
+
+      return { success: true } as const;
+    });
+
+    return result;
   } catch (err) {
     console.error(err);
     return { success: false, error: "Ошибка при активации аккаунта" };
