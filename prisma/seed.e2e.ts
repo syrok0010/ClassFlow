@@ -35,6 +35,17 @@ async function clearData() {
   await prisma.user.deleteMany();
 }
 
+async function createCredentialAccount(userId: string, password: string) {
+  await prisma.account.create({
+    data: {
+      userId,
+      accountId: userId,
+      providerId: "credential",
+      password: await hashPassword(password),
+    },
+  });
+}
+
 async function seedAuthAndUsers() {
   const admin = await prisma.user.create({
     data: {
@@ -48,15 +59,7 @@ async function seedAuthAndUsers() {
     },
   });
 
-  const password = await hashPassword("admin1234");
-  await prisma.account.create({
-    data: {
-      userId: admin.id,
-      accountId: admin.id,
-      providerId: "credential",
-      password,
-    },
-  });
+  await createCredentialAccount(admin.id, "admin1234");
 
   const teacherUser = await prisma.user.create({
     data: {
@@ -70,15 +73,7 @@ async function seedAuthAndUsers() {
     },
   });
 
-  const teacherPassword = await hashPassword("teacher1234");
-  await prisma.account.create({
-    data: {
-      userId: teacherUser.id,
-      accountId: teacherUser.id,
-      providerId: "credential",
-      password: teacherPassword,
-    },
-  });
+  await createCredentialAccount(teacherUser.id, "teacher1234");
 
   const teacher = await prisma.teacher.create({
     data: {
@@ -87,16 +82,76 @@ async function seedAuthAndUsers() {
     },
   });
 
-  const studentUser = await prisma.user.create({
+  const parentUser = await prisma.user.create({
     data: {
+      email: "parent1@classflow.local",
       role: "USER",
-      status: "PENDING_INVITE",
+      status: "ACTIVE",
+      name: "Елена",
+      surname: "Смирнова",
+      patronymicName: "Петровна",
+    },
+  });
+  await createCredentialAccount(parentUser.id, "parent1234");
+  const parent = await prisma.parent.create({ data: { userId: parentUser.id } });
+
+  const studentPortalUser = await prisma.user.create({
+    data: {
+      email: "student1@classflow.local",
+      role: "USER",
+      status: "ACTIVE",
       name: "Дарья",
       surname: "Волкова",
+      patronymicName: "Игоревна",
+    },
+  });
+  await createCredentialAccount(studentPortalUser.id, "student1234");
+  const studentPortalProfile = await prisma.student.create({ data: { userId: studentPortalUser.id } });
+
+  await prisma.studentParents.create({
+    data: {
+      parentId: parent.id,
+      studentId: studentPortalProfile.id,
     },
   });
 
-  await prisma.student.create({ data: { userId: studentUser.id } });
+  const pendingInviteTeacher = await prisma.user.create({
+    data: {
+      id: "e2e-invite-teacher-user",
+      email: "pending-invite-teacher@classflow.local",
+      role: "USER",
+      status: "PENDING_INVITE",
+      name: "Ожидает",
+      surname: "Активации",
+    },
+  });
+  await prisma.teacher.create({ data: { userId: pendingInviteTeacher.id } });
+  await prisma.verification.create({
+    data: {
+      identifier: pendingInviteTeacher.id,
+      value: "E2E-HAPPY-INVITE",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const rollbackInviteTeacher = await prisma.user.create({
+    data: {
+      id: "e2e-invite-teacher-rollback-user",
+      email: "pending-rollback-teacher@classflow.local",
+      role: "USER",
+      status: "PENDING_INVITE",
+      name: "Повторная",
+      surname: "Активация",
+    },
+  });
+  await prisma.teacher.create({ data: { userId: rollbackInviteTeacher.id } });
+  await prisma.verification.create({
+    data: {
+      identifier: rollbackInviteTeacher.id,
+      value: "E2E-ROLLBACK-INVITE",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  });
 
   return {
     teacherId: teacher.id,
@@ -267,6 +322,53 @@ async function seedGroupsPageFixtures(teacherId: string) {
         minGrade: 0,
         maxGrade: 11,
       },
+    ],
+  });
+
+  const mainBuilding = await prisma.building.create({
+    data: {
+      name: "Главный корпус",
+      address: "ул. Школьная, 1",
+    },
+  });
+
+  const labBuilding = await prisma.building.create({
+    data: {
+      name: "Лабораторный корпус",
+      address: "ул. Школьная, 3",
+    },
+  });
+
+  const room101 = await prisma.room.create({
+    data: {
+      name: "Кабинет 101",
+      seatsCount: 24,
+      buildingId: mainBuilding.id,
+    },
+  });
+
+  const room102 = await prisma.room.create({
+    data: {
+      name: "Кабинет 102",
+      seatsCount: 18,
+      buildingId: mainBuilding.id,
+    },
+  });
+
+  const roboticsLab = await prisma.room.create({
+    data: {
+      name: "Лаборатория робототехники",
+      seatsCount: 12,
+      buildingId: labBuilding.id,
+    },
+  });
+
+  await prisma.roomSubject.createMany({
+    data: [
+      { roomId: room101.id, subjectId: english.id },
+      { roomId: room102.id, subjectId: classroomHour.id },
+      { roomId: roboticsLab.id, subjectId: roboticsSubject.id },
+      { roomId: roboticsLab.id, subjectId: mediaStudio.id },
     ],
   });
 

@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import {
   loginAsAdmin,
+  loginAsParent,
+  loginAsStudent,
   loginAsTeacher,
   loginAsTeacherParent,
 } from "./helpers/auth";
@@ -40,9 +42,7 @@ test.describe("Sidebar roles", () => {
   test("multi-role footer shows all roles", async ({ page }) => {
     await loginAsTeacherParent(page);
 
-    await page.getByTestId("sidebar-profile-trigger").hover();
-
-    await expect(page.getByText("Учитель, Родитель")).toBeVisible();
+    await expect(page.getByTestId("sidebar-profile-trigger")).toContainText("Учитель, Родитель");
   });
 
   test("root redirects by access priority", async ({ page }) => {
@@ -59,6 +59,16 @@ test.describe("Sidebar roles", () => {
     await loginAsTeacherParent(page);
     await page.goto("/");
     await expect(page).toHaveURL(/\/teacher$/);
+
+    await page.context().clearCookies();
+    await loginAsParent(page);
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/parent$/);
+
+    await page.context().clearCookies();
+    await loginAsStudent(page);
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/student$/);
   });
 
   test("planned teacher route without page opens 404", async ({ page }) => {
