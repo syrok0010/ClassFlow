@@ -43,8 +43,8 @@ export function RoomsTableView() {
   const searchParams = useSearchParams();
   const { buildings } = useRoomsData();
 
-  const [search, setSearch] = useQueryState("search", { defaultValue: "", shallow: false });
-  const [capacityFilter, setCapacityFilter] = useQueryState("capacity", { defaultValue: "", shallow: false });
+  const [search, setSearch] = useQueryState("search", { defaultValue: "", shallow: true });
+  const [capacityFilter, setCapacityFilter] = useQueryState("capacity", { defaultValue: "", shallow: true });
   const [sorting, setSorting] = useState<SortingState>([]);
   const [smartRowActive, setSmartRowActive] = useState(false);
 
