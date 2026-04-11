@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { copyInviteUrl } from "@/lib/invite";
 import {
   generateParentInviteAction,
   linkExistingParentAction,
@@ -72,9 +73,13 @@ export function ParentInviteDialog({
 
   const handleCopyCode = async () => {
     if (!generatedCode) return;
-    const inviteUrl = `${window.location.origin}/invite/${generatedCode}`;
-    await navigator.clipboard.writeText(inviteUrl);
-    toast.success("Ссылка скопирована в буфер обмена");
+
+    try {
+      await copyInviteUrl(generatedCode);
+      toast.success("Ссылка скопирована в буфер обмена");
+    } catch {
+      toast.error("Не удалось скопировать ссылку");
+    }
   };
 
   const handleSearch = useCallback(

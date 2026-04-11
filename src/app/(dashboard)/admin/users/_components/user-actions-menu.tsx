@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { type Table } from "@tanstack/react-table";
+import { copyInviteUrl } from "@/lib/invite";
 import type { UserWithRoles, UserTableMeta } from "../_lib/types";
 import {
   toggleUserStatusAction,
@@ -33,8 +34,7 @@ export function UserActionsMenu({ user, table }: { user: UserWithRoles; table: T
         return;
       }
       if (result.token) {
-        const inviteUrl = `${window.location.origin}/invite/${result.token}`;
-        await navigator.clipboard.writeText(inviteUrl);
+        await copyInviteUrl(result.token);
         toast.success("Ссылка-инвайт скопирована");
       }
     } catch {
