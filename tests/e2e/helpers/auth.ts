@@ -15,6 +15,16 @@ export const teacherParentCredentials = {
   password: "teacherparent1234",
 };
 
+export const parentCredentials = {
+  email: "parent1@classflow.local",
+  password: "parent1234",
+};
+
+export const studentCredentials = {
+  email: "student1@classflow.local",
+  password: "student1234",
+};
+
 async function login(page: Page, email: string, password: string, expectedPath: RegExp) {
   await page.goto("/login");
   await page.getByLabel("Электронная почта").fill(email);
@@ -37,4 +47,12 @@ export async function loginAsTeacher(page: Page) {
 
 export async function loginAsTeacherParent(page: Page) {
   await login(page, teacherParentCredentials.email, teacherParentCredentials.password, /\/teacher$/);
+}
+
+export async function loginAsParent(page: Page) {
+  await login(page, parentCredentials.email, parentCredentials.password, /\/parent$/);
+}
+
+export async function loginAsStudent(page: Page) {
+  await login(page, studentCredentials.email, studentCredentials.password, /\/student$/);
 }

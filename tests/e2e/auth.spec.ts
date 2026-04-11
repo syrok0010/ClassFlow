@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { loginAsAdmin } from "./helpers/auth";
+import {
+  loginAsAdmin,
+  loginAsParent,
+  loginAsStudent,
+  loginAsTeacher,
+} from "./helpers/auth";
 
 test.describe("Auth smoke", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -28,5 +33,26 @@ test.describe("Auth smoke", () => {
     await page.goto("/admin/users");
     await expect(page).toHaveURL(/\/admin\/users$/);
     await expect(page.getByRole("heading", { name: "Пользователи" })).toBeVisible();
+  });
+
+  test("redirects teacher to teacher dashboard after login", async ({ page }) => {
+    await loginAsTeacher(page);
+
+    await expect(page).toHaveURL(/\/teacher$/);
+    await expect(page.getByRole("heading", { name: "Кабинет преподавателя" })).toBeVisible();
+  });
+
+  test("redirects parent to parent dashboard after login", async ({ page }) => {
+    await loginAsParent(page);
+
+    await expect(page).toHaveURL(/\/parent$/);
+    await expect(page.getByRole("heading", { name: "Кабинет родителя" })).toBeVisible();
+  });
+
+  test("redirects student to student dashboard after login", async ({ page }) => {
+    await loginAsStudent(page);
+
+    await expect(page).toHaveURL(/\/student$/);
+    await expect(page.getByRole("heading", { name: "Кабинет ученика" })).toBeVisible();
   });
 });
