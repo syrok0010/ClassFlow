@@ -39,6 +39,7 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
     shallow: false,
   });
   const [isAddingRow, setIsAddingRow] = useState(false);
+  const hasActiveFilters = Boolean(searchQuery) || filterType !== "all";
 
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferGroup, setTransferGroup] = useState<GroupWithDetails | null>(null);
@@ -135,6 +136,11 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
     [handleSubgroupRedistributionSave]
   );
 
+  const resetFilters = useCallback(() => {
+    void setSearchQuery(null);
+    void setFilterType(null);
+  }, [setFilterType, setSearchQuery]);
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -159,6 +165,9 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
       <GroupsTreeTable
         groups={groups}
         isAddingRow={isAddingRow}
+        hasActiveFilters={hasActiveFilters}
+        onResetFilters={resetFilters}
+        onStartAddRow={() => setIsAddingRow(true)}
         onCancelAddRow={() => setIsAddingRow(false)}
         onCreateGroup={handleCreateGroup}
         onRenameGroup={handleRenameGroup}

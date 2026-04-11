@@ -1,5 +1,7 @@
 import { Children, type ReactNode } from "react";
 import { useDroppable } from "@dnd-kit/core";
+import { Inbox } from "lucide-react";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
 type StudentBucketPanelProps = {
@@ -59,9 +61,21 @@ export function StudentBucketPanel({
         )}
       >
         {emptyMessage && !hasChildren ? (
-          <p className={cn("text-xs text-muted-foreground text-center py-4", emptyMessageClassName)}>
-            {emptyMessage}
-          </p>
+          <Empty className="min-h-full justify-center gap-3 px-3 py-4">
+            <EmptyHeader className="gap-2">
+              <EmptyMedia
+                variant="icon"
+                className="size-10 bg-muted/60 [&_svg:not([class*='size-'])]:size-4"
+              >
+                <Inbox />
+              </EmptyMedia>
+              <EmptyTitle
+                className={cn("text-center text-xs font-medium", emptyMessageClassName)}
+              >
+                {emptyMessage}
+              </EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         ) : (
           children
         )}
