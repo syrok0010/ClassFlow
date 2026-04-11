@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Copy, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { copyInviteUrl } from "@/lib/invite";
 import { createUserAction } from "../_actions/user-actions";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { createUserSchema } from "../_lib/schemas";
@@ -101,10 +102,14 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
 
   const handleCopyLastInvite = async () => {
     if (!lastInviteToken) return;
-    const inviteUrl = `${window.location.origin}/invite/${lastInviteToken}`;
-    await navigator.clipboard.writeText(inviteUrl);
-    toast.success("Инвайт-ссылка скопирована");
-    setLastInviteToken(null);
+
+    try {
+      await copyInviteUrl(lastInviteToken);
+      toast.success("Инвайт-ссылка скопирована");
+      setLastInviteToken(null);
+    } catch {
+      toast.error("Не удалось скопировать инвайт-ссылку");
+    }
   };
 
   if (!active) return null;
