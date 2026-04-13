@@ -2,26 +2,17 @@ import { LogOut, Settings } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
   getRoleSummary,
   getUserFullName,
   getUserInitials,
-  type DomainRole,
+  type SessionAccessUser,
 } from "@/lib/auth-access";
-
-type SidebarUser = {
-  role?: "ADMIN" | "USER" | string | null;
-  domainRoles?: DomainRole[] | null;
-  surname?: string | null;
-  name?: string | null;
-  patronymicName?: string | null;
-};
 
 type SidebarUserMenuProps = {
   isExpanded: boolean;
-  user?: SidebarUser | null;
+  user: SessionAccessUser;
   onLogout: () => Promise<void>;
 };
 
@@ -30,21 +21,6 @@ export function SidebarUserMenu({
   user,
   onLogout,
 }: SidebarUserMenuProps) {
-  if (!user) {
-    return (
-      <div className="border-t p-3">
-        <div
-          className="relative h-12 w-full overflow-hidden rounded-md px-0"
-          data-testid="sidebar-profile-trigger"
-        >
-          <div className="absolute left-1/2 top-1/2 flex h-full w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center">
-            <Skeleton className="h-8 w-8 rounded-full" data-testid="sidebar-profile-avatar" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="border-t p-3">
       <Popover>
@@ -82,7 +58,7 @@ function SidebarUserMenuContent({
   user,
 }: {
   isExpanded: boolean;
-  user: SidebarUser;
+  user: SessionAccessUser;
 }) {
   const initials = getUserInitials(user);
   const fullName = getUserFullName(user);
