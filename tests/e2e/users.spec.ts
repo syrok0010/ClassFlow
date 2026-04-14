@@ -14,8 +14,9 @@ test.describe("Users smoke", () => {
   });
 
   test("renders seeded users rows", async ({ page }) => {
-    await expect(page.getByText("Сироткин Сергей Владимирович")).toBeVisible();
-    await expect(page.getByText("admin1@classflow.local")).toBeVisible();
+    const table = page.getByRole("table");
+    await expect(table.getByText("Сироткин Сергей Владимирович")).toBeVisible();
+    await expect(table.getByText("admin1@classflow.local")).toBeVisible();
   });
 
   test("creates user with Smart Row", async ({ page }) => {

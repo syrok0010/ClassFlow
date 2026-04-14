@@ -4,6 +4,9 @@ export type AccessContext = "admin" | DomainRole;
 export type SessionAccessUser = {
   role?: "ADMIN" | "USER" | string | null;
   domainRoles?: DomainRole[] | null;
+  surname?: string | null;
+  name?: string | null;
+  patronymicName?: string | null;
 };
 
 const CONTEXT_ORDER: AccessContext[] = ["admin", "teacher", "parent", "student"];

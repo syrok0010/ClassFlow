@@ -8,19 +8,21 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useSidebarStore } from "@/stores/sidebar-store";
 import { SIDEBAR_WIDTH } from "./constants";
-import { authClient, useSession } from "@/lib/auth-client";
-import { getAccessContexts } from "@/lib/auth-access";
+import { authClient } from "@/lib/auth-client";
 import { SIDEBAR_SECTIONS } from "./sidebar-config";
-import { SidebarNavSkeleton } from "./SidebarNavSkeleton";
 import { SidebarSection } from "./SidebarSection";
 import { SidebarUserMenu } from "./SidebarUserMenu";
+import { getAccessContexts, type SessionAccessUser } from "@/lib/auth-access";
 
-export function Sidebar() {
+type SidebarProps = {
+  user: SessionAccessUser;
+};
+
+export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);
   const { isPinned, togglePin, setPin } = useSidebarStore();
-  const { data: session, isPending } = useSession();
 
   const isExpanded = isHovered || isPinned;
 
@@ -35,10 +37,9 @@ export function Sidebar() {
     });
   };
 
-  const user = session?.user;
-  const visibleSections = user
-    ? SIDEBAR_SECTIONS.filter((section) => getAccessContexts(user).includes(section.id))
-    : [];
+  const visibleSections = SIDEBAR_SECTIONS.filter((section) =>
+    getAccessContexts(user).includes(section.id)
+  );
 
   return (
     <aside
@@ -92,33 +93,30 @@ export function Sidebar() {
       </div>
 
       <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto px-3 py-4">
-        {isPending && <SidebarNavSkeleton />}
-        {!isPending && (
-          visibleSections.map((section, index) => (
-            <div key={section.id} className="relative">
-              {index > 0 ? (
-                <div
-                  className={cn(
-                    "pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 transition-opacity duration-200",
-                    isExpanded ? "opacity-0" : "opacity-100",
-                  )}
-                >
-                  <div className="h-px w-8 bg-border" />
-                </div>
-              ) : null}
-              <SidebarSection
-                isExpanded={isExpanded}
-                pathname={pathname}
-                section={section}
-              />
-            </div>
-          ))
-        )}
+        {visibleSections.map((section, index) => (
+          <div key={section.id} className="relative">
+            {index > 0 ? (
+              <div
+                className={cn(
+                  "pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 transition-opacity duration-200",
+                  isExpanded ? "opacity-0" : "opacity-100",
+                )}
+              >
+                <div className="h-px w-8 bg-border" />
+              </div>
+            ) : null}
+            <SidebarSection
+              isExpanded={isExpanded}
+              pathname={pathname}
+              section={section}
+            />
+          </div>
+        ))}
       </nav>
 
       <SidebarUserMenu
         isExpanded={isExpanded}
-        user={user ?? null}
+        user={user}
         onLogout={handleLogout}
       />
     </aside>
