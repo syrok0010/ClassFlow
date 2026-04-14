@@ -38,9 +38,8 @@ export type TeacherIdentity = {
   roleLabels: string[];
 };
 
-export type TeachingPageData = {
+export type TeacherSubjectsPageData = {
   teacher: TeacherIdentity;
   teacherSubjects: TeacherSubjectRow[];
   subjectOptions: SubjectOption[];
 };
-

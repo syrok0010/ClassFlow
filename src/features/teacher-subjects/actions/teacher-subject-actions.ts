@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import type { Prisma } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { getUserFullName } from "@/lib/auth-access";
 import { getActionErrorMessage } from "@/lib/action-error";
@@ -9,13 +10,19 @@ import { prisma } from "@/lib/prisma";
 import { err, ok, type Result } from "@/lib/result";
 import {
   createTeacherSubjectSchema,
-  teacherSubjectKeySchema,
   gradeRangeSchema,
+  teacherSubjectKeySchema,
+  teacherSubjectsQuerySchema,
   type CreateTeacherSubjectInput,
   type TeacherSubjectKeyInput,
+  type TeacherSubjectsQueryInput,
   type UpdateTeacherSubjectInput,
-} from "../_lib/schemas";
-import type { SubjectOption, TeacherIdentity, TeacherSubjectRow, TeachingPageData } from "../_lib/types";
+} from "../lib/schemas";
+import type {
+  TeacherIdentity,
+  TeacherSubjectsPageData,
+  TeacherSubjectRow,
+} from "../lib/types";
 
 const AUTH_ERROR_MESSAGE = "Недостаточно прав для выполнения действия";
 
@@ -103,52 +110,106 @@ function mapTeacherSubjectRow(row: {
   };
 }
 
-export async function getTeachingPageDataAction(userId: string): Promise<Result<TeachingPageData>> {
+async function resolveTeacherIdForScope(
+  scope: TeacherScope,
+  requestedTeacherId?: string
+): Promise<Result<string>> {
+  if (scope.role === "teacher") {
+    return ok(scope.teacherId);
+  }
+
+  if (!requestedTeacherId) {
+    return err(AUTH_ERROR_MESSAGE);
+  }
+
+  const teacher = await prisma.teacher.findUnique({
+    where: { id: requestedTeacherId },
+    select: { id: true },
+  });
+
+  if (!teacher) {
+    return err("Преподаватель не найден");
+  }
+
+  return ok(teacher.id);
+}
+
+export async function getTeacherSubjectsAction(
+  input: TeacherSubjectsQueryInput = {}
+): Promise<Result<TeacherSubjectsPageData>> {
   try {
     const scopeResponse = await getTeacherScope();
     if (scopeResponse.error || !scopeResponse.result) {
       return err(scopeResponse.error ?? AUTH_ERROR_MESSAGE);
     }
 
-    if (scopeResponse.result.role === "teacher") {
-      const currentTeacher = await prisma.teacher.findUnique({
-        where: { id: scopeResponse.result.teacherId },
-        select: { userId: true },
-      });
+    const validated = teacherSubjectsQuerySchema.parse(input);
+    const teacherIdResponse = await resolveTeacherIdForScope(
+      scopeResponse.result,
+      validated.teacherId
+    );
 
-      if (!currentTeacher || currentTeacher.userId !== userId) {
-        return err(AUTH_ERROR_MESSAGE);
-      }
+    if (teacherIdResponse.error || !teacherIdResponse.result) {
+      return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
+    const teacherId = teacherIdResponse.result;
+
+    const teacher = await prisma.teacher.findUnique({
+      where: { id: teacherId },
       select: {
         id: true,
-        email: true,
-        status: true,
-        surname: true,
-        name: true,
-        patronymicName: true,
-        teachers: { select: { id: true } },
-        students: { select: { id: true } },
-        parents: { select: { id: true } },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            status: true,
+            surname: true,
+            name: true,
+            patronymicName: true,
+            teachers: { select: { id: true } },
+            students: { select: { id: true } },
+            parents: { select: { id: true } },
+          },
+        },
       },
     });
 
-    if (!user) {
-      return err("Пользователь не найден");
+    if (!teacher) {
+      return err("Преподаватель не найден");
     }
 
-    if (user.teachers.length === 0) {
+    if (scopeResponse.result.role === "teacher" && scopeResponse.result.teacherId !== teacher.id) {
+      return err(AUTH_ERROR_MESSAGE);
+    }
+
+    if (teacher.user.teachers.length === 0) {
       return err("У пользователя нет роли преподавателя");
     }
 
-    const teacherId = user.teachers[0].id;
+    const search = validated.filters?.search?.trim();
+    const where: Prisma.TeacherSubjectWhereInput = {
+      teacherId,
+      ...(validated.filters?.type || search
+        ? {
+            subject: {
+              ...(validated.filters?.type ? { type: validated.filters.type } : {}),
+              ...(search
+                ? {
+                    name: {
+                      contains: search,
+                      mode: "insensitive",
+                    },
+                  }
+                : {}),
+            },
+          }
+        : {}),
+    };
 
     const [teacherSubjectsRows, subjectOptions] = await Promise.all([
       prisma.teacherSubject.findMany({
-        where: { teacherId },
+        where,
         include: {
           subject: {
             select: {
@@ -169,14 +230,10 @@ export async function getTeachingPageDataAction(userId: string): Promise<Result<
       }),
     ]);
 
-    const teacher = mapTeacherIdentity(user);
-    const teacherSubjects = teacherSubjectsRows.map(mapTeacherSubjectRow);
-    const options: SubjectOption[] = subjectOptions;
-
     return ok({
-      teacher,
-      teacherSubjects,
-      subjectOptions: options,
+      teacher: mapTeacherIdentity(teacher.user),
+      teacherSubjects: teacherSubjectsRows.map(mapTeacherSubjectRow),
+      subjectOptions,
     });
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось загрузить компетенции преподавателя"));
@@ -193,28 +250,31 @@ export async function createTeacherSubjectAction(
     }
 
     const validated = createTeacherSubjectSchema.parse(input);
-    const teacherId =
-      scopeResponse.result.role === "teacher"
-        ? scopeResponse.result.teacherId
-        : validated.teacherId;
+    const teacherIdResponse = await resolveTeacherIdForScope(
+      scopeResponse.result,
+      validated.teacherId
+    );
 
-    if (!teacherId) {
-      return err(AUTH_ERROR_MESSAGE);
+    if (teacherIdResponse.error || !teacherIdResponse.result) {
+      return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
     }
 
-    const teacher = await prisma.teacher.findUnique({
-      where: { id: teacherId },
-      select: { userId: true },
-    });
+    const teacherId = teacherIdResponse.result;
+
+    const [teacher, subject] = await Promise.all([
+      prisma.teacher.findUnique({
+        where: { id: teacherId },
+        select: { userId: true },
+      }),
+      prisma.subject.findUnique({
+        where: { id: validated.subjectId },
+        select: { id: true },
+      }),
+    ]);
 
     if (!teacher) {
       return err("Преподаватель не найден");
     }
-
-    const subject = await prisma.subject.findUnique({
-      where: { id: validated.subjectId },
-      select: { id: true },
-    });
 
     if (!subject) {
       return err("Предмет не найден");
@@ -252,6 +312,8 @@ export async function createTeacherSubjectAction(
     });
 
     revalidatePath(`/admin/users/${teacher.userId}/teaching`);
+    revalidatePath("/teacher/subjects");
+
     return ok(mapTeacherSubjectRow(created));
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при добавлении компетенции"));
@@ -259,8 +321,7 @@ export async function createTeacherSubjectAction(
 }
 
 export async function updateTeacherSubjectAction(
-  key: TeacherSubjectKeyInput,
-  input: UpdateTeacherSubjectInput
+  input: TeacherSubjectKeyInput & UpdateTeacherSubjectInput
 ): Promise<Result<TeacherSubjectRow>> {
   try {
     const scopeResponse = await getTeacherScope();
@@ -268,16 +329,18 @@ export async function updateTeacherSubjectAction(
       return err(scopeResponse.error ?? AUTH_ERROR_MESSAGE);
     }
 
-    const validatedKey = teacherSubjectKeySchema.parse(key);
+    const validatedKey = teacherSubjectKeySchema.parse(input);
     const validatedInput = gradeRangeSchema.parse(input);
-    const teacherId =
-      scopeResponse.result.role === "teacher"
-        ? scopeResponse.result.teacherId
-        : validatedKey.teacherId;
+    const teacherIdResponse = await resolveTeacherIdForScope(
+      scopeResponse.result,
+      validatedKey.teacherId
+    );
 
-    if (!teacherId) {
-      return err(AUTH_ERROR_MESSAGE);
+    if (teacherIdResponse.error || !teacherIdResponse.result) {
+      return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
     }
+
+    const teacherId = teacherIdResponse.result;
 
     const existing = await prisma.teacherSubject.findUnique({
       where: {
@@ -321,6 +384,8 @@ export async function updateTeacherSubjectAction(
     });
 
     revalidatePath(`/admin/users/${existing.teacher.userId}/teaching`);
+    revalidatePath("/teacher/subjects");
+
     return ok(mapTeacherSubjectRow(updated));
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при обновлении диапазона классов"));
@@ -337,14 +402,16 @@ export async function deleteTeacherSubjectAction(
     }
 
     const validated = teacherSubjectKeySchema.parse(key);
-    const teacherId =
-      scopeResponse.result.role === "teacher"
-        ? scopeResponse.result.teacherId
-        : validated.teacherId;
+    const teacherIdResponse = await resolveTeacherIdForScope(
+      scopeResponse.result,
+      validated.teacherId
+    );
 
-    if (!teacherId) {
-      return err(AUTH_ERROR_MESSAGE);
+    if (teacherIdResponse.error || !teacherIdResponse.result) {
+      return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
     }
+
+    const teacherId = teacherIdResponse.result;
 
     const existing = await prisma.teacherSubject.findUnique({
       where: {
@@ -376,6 +443,8 @@ export async function deleteTeacherSubjectAction(
     });
 
     revalidatePath(`/admin/users/${existing.teacher.userId}/teaching`);
+    revalidatePath("/teacher/subjects");
+
     return ok(true);
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при удалении компетенции"));

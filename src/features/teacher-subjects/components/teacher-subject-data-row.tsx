@@ -5,11 +5,8 @@ import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { SubjectTypeBadge } from "@/components/ui/subject-type-badge";
 import { TableCell, TableRow } from "@/components/ui/table";
-import {
-  gradeRangeSchema,
-  type UpdateTeacherSubjectInput,
-} from "../_lib/schemas";
-import type { TeacherSubjectRow } from "../_lib/types";
+import { gradeRangeSchema, type UpdateTeacherSubjectInput } from "../lib/schemas";
+import type { TeacherSubjectRow } from "../lib/types";
 
 type EditingField = "minGrade" | "maxGrade";
 

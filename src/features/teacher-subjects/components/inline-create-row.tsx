@@ -10,18 +10,18 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox";
 import { FormField } from "@/components/ui/form-field";
-import { getFieldErrorMessages } from "@/lib/form-errors";
 import {
   InlineCreateRowFrame,
   InlineCreateRowFrameActions,
 } from "@/components/ui/inline-create-row-frame";
 import { TableCell } from "@/components/ui/table";
+import { getFieldErrorMessages } from "@/lib/form-errors";
 import { cn } from "@/lib/utils";
 import {
   subjectGradeRangeSchema,
   type CreateTeacherSubjectFormInput,
-} from "../_lib/schemas";
-import type { SubjectOption } from "../_lib/types";
+} from "../lib/schemas";
+import type { SubjectOption } from "../lib/types";
 
 interface InlineCreateTeacherSubjectRowProps {
   subjectOptions: SubjectOption[];
@@ -39,7 +39,7 @@ export function InlineCreateRow({
       subjectId: "",
       minGrade: 1,
       maxGrade: 11,
-    } as CreateTeacherSubjectFormInput,
+    },
     validators: {
       onBlur: subjectGradeRangeSchema,
       onChange: subjectGradeRangeSchema,
@@ -47,7 +47,7 @@ export function InlineCreateRow({
     },
     onSubmit: async ({ value }) => {
       const parsed = subjectGradeRangeSchema.parse(value);
-      const success = await onSave(parsed as CreateTeacherSubjectFormInput);
+      const success = await onSave(parsed);
 
       if (success) {
         onCancel();
@@ -92,7 +92,7 @@ export function InlineCreateRow({
                     showClear
                     disabled={form.state.isSubmitting}
                     className={cn("h-7", errors.length > 0 && "border-destructive")}
-                    onKeyDown={(event) => onFieldKeyDown(event)}
+                    onKeyDown={onFieldKeyDown}
                     onBlur={field.handleBlur}
                   />
                   <ComboboxContent className="w-105 p-0">
@@ -109,7 +109,9 @@ export function InlineCreateRow({
                   </ComboboxContent>
                 </Combobox>
                 {errors.length > 0 ? (
-                  <p className="text-[10px] text-destructive font-medium uppercase tracking-wider animate-in fade-in slide-in-from-top-1 duration-200">{errors.join(", ")}</p>
+                  <p className="animate-in slide-in-from-top-1 fade-in text-[10px] font-medium tracking-wider text-destructive uppercase duration-200">
+                    {errors.join(", ")}
+                  </p>
                 ) : null}
               </div>
             );

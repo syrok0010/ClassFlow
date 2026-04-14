@@ -11,7 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { TeacherSubjectRow } from "../_lib/types";
+import type { TeacherSubjectRow } from "../lib/types";
 
 interface TeacherSubjectDeleteDialogProps {
   row: TeacherSubjectRow;
@@ -46,9 +46,12 @@ export function TeacherSubjectDeleteDialog({
     <AlertDialog open={true} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Удалить связь преподавателя с предметом «{row.subjectName}»?</AlertDialogTitle>
+          <AlertDialogTitle>
+            Удалить связь преподавателя с предметом «{row.subjectName}»?
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            Это действие используется и для исправления неверно выбранного предмета: удалите связь и создайте новую с правильным предметом.
+            Это действие используется и для исправления неверно выбранного предмета: удалите связь и
+            создайте новую с правильным предметом.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

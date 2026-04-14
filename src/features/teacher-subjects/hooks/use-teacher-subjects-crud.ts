@@ -6,26 +6,23 @@ import {
   createTeacherSubjectAction,
   deleteTeacherSubjectAction,
   updateTeacherSubjectAction,
-} from "../_actions/teacher-subject-actions";
+} from "../actions/teacher-subject-actions";
 import type {
   CreateTeacherSubjectFormInput,
   UpdateTeacherSubjectInput,
-} from "../_lib/schemas";
+} from "../lib/schemas";
 import type {
   SubjectOption,
   TeacherSubjectRow,
   TeacherSubjectSummary,
-} from "../_lib/types";
-import { getTeacherSubjectsSummary } from "../_lib/teacher-subject-table-utils";
-
-type CreatePayload = CreateTeacherSubjectFormInput;
-type UpdatePayload = UpdateTeacherSubjectInput;
+} from "../lib/types";
+import { getTeacherSubjectsSummary } from "../lib/teacher-subject-table-utils";
 
 export function useTeacherSubjectsCrud(initialRows: TeacherSubjectRow[], teacherId: string) {
   const [rows, setRows] = useState(initialRows);
 
   const handleCreateTeacherSubject = useCallback(
-    async (payload: CreatePayload, subjectOptions: SubjectOption[]) => {
+    async (payload: CreateTeacherSubjectFormInput, subjectOptions: SubjectOption[]) => {
       const subject = subjectOptions.find((option) => option.id === payload.subjectId);
       if (!subject) {
         toast.error("Выберите предмет");
@@ -52,13 +49,14 @@ export function useTeacherSubjectsCrud(initialRows: TeacherSubjectRow[], teacher
   );
 
   const handleUpdateTeacherSubject = useCallback(
-    async (row: TeacherSubjectRow, payload: UpdatePayload) => {
+    async (row: TeacherSubjectRow, payload: UpdateTeacherSubjectInput) => {
       const response = await updateTeacherSubjectAction(
         {
           teacherId: row.teacherId,
           subjectId: row.subjectId,
+          minGrade: payload.minGrade,
+          maxGrade: payload.maxGrade,
         },
-        payload
       );
 
       if (response.error || !response.result) {
@@ -89,9 +87,7 @@ export function useTeacherSubjectsCrud(initialRows: TeacherSubjectRow[], teacher
     }
 
     setRows((prev) =>
-      prev.filter(
-        (item) => !(item.subjectId === row.subjectId && item.teacherId === row.teacherId)
-      )
+      prev.filter((item) => !(item.subjectId === row.subjectId && item.teacherId === row.teacherId))
     );
     toast.success("Компетенция удалена");
     return true;

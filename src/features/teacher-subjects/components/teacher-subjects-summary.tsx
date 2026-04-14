@@ -1,4 +1,4 @@
-import type { TeacherSubjectSummary } from "../_lib/types";
+import type { TeacherSubjectSummary } from "../lib/types";
 
 interface TeacherSubjectsSummaryProps {
   summary: TeacherSubjectSummary;
