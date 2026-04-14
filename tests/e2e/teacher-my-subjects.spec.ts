@@ -73,8 +73,10 @@ test.describe("Teacher my subjects", () => {
     await expect(row).toBeVisible();
 
     await row.getByRole("button", { name: "Удалить компетенцию" }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByRole("button", { name: "Удалить" }).click();
+    const confirmDialog = page.getByRole("alertdialog");
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole("button", { name: "Удалить" }).click();
+    await expect(confirmDialog).not.toBeVisible();
 
     await expect(page.getByText("Компетенция удалена")).toBeVisible();
     await expect(subjectRow(page, "Классный час")).toHaveCount(0);
