@@ -31,6 +31,7 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     items: [
       { name: "Дашборд", href: "/admin", icon: LayoutDashboard },
       { name: "Расписание", href: "/admin/schedule", icon: CalendarDays },
+      { name: "Доступность", href: "/admin/availability", icon: UserSquare2 },
       { name: "Помещения", href: "/admin/rooms", icon: Building2 },
       { name: "Предметы", href: "/admin/subjects", icon: BarChart },
       { name: "Группы", href: "/admin/groups", icon: Users },
