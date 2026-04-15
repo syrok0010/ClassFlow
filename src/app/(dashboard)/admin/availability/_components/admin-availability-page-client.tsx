@@ -36,7 +36,6 @@ export function AdminAvailabilityPageClient({
     searchQuery,
     selectedTeacherIds,
     selectedTeachers,
-    selectedTeacher,
     effectiveMode,
     templateDialog,
     overrideDialog,
@@ -52,6 +51,7 @@ export function AdminAvailabilityPageClient({
     openOverrideDialog,
     closeOverrideDialog,
   } = useAvailabilityViewState(initialData.teachers);
+  const selectedTeacher = selectedTeachers.length === 1 ? selectedTeachers[0] : null;
   const { isMutating, ...mutations } = useAvailabilityMutations({
     selectedTeacher,
   });

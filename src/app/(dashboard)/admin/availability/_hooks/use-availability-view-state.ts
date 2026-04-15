@@ -55,8 +55,7 @@ export function useAvailabilityViewState(
   const selectedTeachers = teachers.filter((teacher) =>
     selectedTeacherIds.includes(teacher.teacherId),
   );
-  const selectedTeacher = selectedTeachers.length === 1 ? selectedTeachers[0] : null;
-  const effectiveMode: PanelMode = selectedTeacher ? mode : "view";
+  const effectiveMode: PanelMode = selectedTeachers.length === 1 ? mode : "view";
 
   function toggleTeacherSelection(teacherId: string) {
     const nextSelectedTeacherIds = selectedTeacherIds.includes(teacherId)
@@ -103,7 +102,6 @@ export function useAvailabilityViewState(
     searchQuery,
     selectedTeacherIds,
     selectedTeachers,
-    selectedTeacher,
     effectiveMode,
     templateDialog,
     overrideDialog,

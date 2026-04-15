@@ -31,10 +31,6 @@ export function useAvailabilityMutations({
   const router = useRouter();
   const [isMutating, setIsMutating] = useState(false);
 
-  const refreshPage = useCallback(() => {
-    router.refresh();
-  }, [router]);
-
   const mutate = useCallback(
     async (
       callback: () => Promise<{ error: string | null }>,
@@ -49,11 +45,11 @@ export function useAvailabilityMutations({
         return false;
       }
 
-      refreshPage();
+      router.refresh();
       toast.success(successMessage);
       return true;
     },
-    [refreshPage],
+    [router],
   );
 
   const handleTemplateSave = useCallback(
