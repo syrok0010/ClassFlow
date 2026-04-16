@@ -12,7 +12,7 @@ interface TeacherSubjectsToolbarProps {
   onFilterTypeChange: (value: SubjectFilterType) => void;
   onAddSubject: () => void;
   isAddingRow: boolean;
-  addButtonLabel?: string;
+  rowsExist: boolean;
 }
 
 export function TeacherSubjectsToolbar({
@@ -22,7 +22,7 @@ export function TeacherSubjectsToolbar({
   onFilterTypeChange,
   onAddSubject,
   isAddingRow,
-  addButtonLabel = "Добавить предмет",
+  rowsExist,
 }: TeacherSubjectsToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -43,10 +43,10 @@ export function TeacherSubjectsToolbar({
         size="sm"
       />
 
-      {!isAddingRow ? (
+      {!isAddingRow && rowsExist ? (
         <Button className="ml-auto" onClick={onAddSubject}>
           <Plus className="size-4" data-icon="inline-start" />
-          {addButtonLabel}
+          {"Добавить предмет"}
         </Button>
       ) : null}
     </div>

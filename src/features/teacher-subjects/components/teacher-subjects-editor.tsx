@@ -10,13 +10,11 @@ import { TeacherSubjectDeleteDialog } from "./teacher-subject-delete-dialog";
 import { TeacherSubjectsSummary } from "./teacher-subjects-summary";
 import { TeacherSubjectsTable } from "./teacher-subjects-table";
 import { TeacherSubjectsToolbar } from "./teacher-subjects-toolbar";
+import { BookOpen, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface TeacherSubjectsEditorProps {
   initialData: TeacherSubjectsPageData;
-  addButtonLabel?: string;
-  emptyTitle?: string;
-  emptyDescription?: string;
-  createFirstLabel?: string;
 }
 
 function toSubjectFilterType(value: string): SubjectFilterType {
@@ -34,10 +32,6 @@ function toSubjectFilterType(value: string): SubjectFilterType {
 
 export function TeacherSubjectsEditor({
   initialData,
-  addButtonLabel,
-  emptyTitle,
-  emptyDescription,
-  createFirstLabel,
 }: TeacherSubjectsEditorProps) {
   const { teacher, subjectOptions } = initialData;
   const {
@@ -93,7 +87,7 @@ export function TeacherSubjectsEditor({
         }}
         isAddingRow={isAddingRow}
         onAddSubject={() => setIsAddingRow(true)}
-        addButtonLabel={addButtonLabel}
+        rowsExist={rows.length !== 0}
       />
 
       <TeacherSubjectsTable
@@ -105,11 +99,13 @@ export function TeacherSubjectsEditor({
         onUpdateSubject={handleUpdateTeacherSubject}
         onDeleteRequest={setDeleteRow}
         onCancelAddRow={() => setIsAddingRow(false)}
-        onCreateFirst={() => setIsAddingRow(true)}
         onResetFilters={resetFilters}
-        emptyTitle={emptyTitle}
-        emptyDescription={emptyDescription}
-        createFirstLabel={createFirstLabel}
+        emptyStateConfig={{
+          title: "У вас пока не добавлено ни одного предмета",
+          description: "Добавьте предметы и диапазоны классов, чтобы завуч мог учитывать их при составлении расписания",
+          icon: <BookOpen/>,
+          action: <Button onClick={() => setIsAddingRow(true)}><Plus/>{"Добавить предмет"}</Button>
+        }}
       />
 
       {deleteRow ? (

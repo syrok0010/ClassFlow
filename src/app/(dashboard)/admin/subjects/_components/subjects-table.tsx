@@ -36,7 +36,6 @@ import { InlineCreateRow } from "./inline-create-row";
 import { InlineNameCell } from "./inline-name-cell";
 
 interface SubjectsTableProps {
-  allSubjectsCount: number;
   subjects: SubjectWithUsage[];
   isAddingRow: boolean;
   hasActiveFilters: boolean;
@@ -52,7 +51,6 @@ interface SubjectsTableProps {
 }
 
 export function SubjectsTable({
-  allSubjectsCount,
   subjects,
   isAddingRow,
   hasActiveFilters,

@@ -1,5 +1,4 @@
 import { Search } from "lucide-react";
-import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,14 +9,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-
-type EmptyStateConfig = {
-  title: string;
-  description?: ReactNode;
-  icon?: ReactNode;
-  action?: ReactNode;
-  className?: string;
-};
+import {EmptyStateConfig} from "@/lib/types";
 
 type FilterableEmptyStateProps = {
   hasFilters: boolean;

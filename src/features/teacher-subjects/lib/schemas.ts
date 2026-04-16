@@ -28,7 +28,7 @@ export const subjectGradeRangeSchema = gradeRangeSchema.extend({
 });
 
 export const createTeacherSubjectSchema = subjectGradeRangeSchema.extend({
-  teacherId: idSchema.optional(),
+  teacherId: idSchema,
 });
 
 const subjectTypeSchema = z.enum([
@@ -49,7 +49,7 @@ export const teacherSubjectsQuerySchema = z.object({
 });
 
 export const teacherSubjectKeySchema = z.object({
-  teacherId: idSchema.optional(),
+  teacherId: idSchema,
   subjectId: idSchema,
 });
 

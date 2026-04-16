@@ -43,11 +43,7 @@ export default async function MySubjectsPage() {
         </div>
       </div>
 
-      <TeacherSubjectsEditor
-        initialData={response.result}
-        emptyTitle="У вас пока не добавлено ни одного предмета"
-        emptyDescription="Добавьте предметы и диапазоны классов, чтобы завуч мог учитывать вас при составлении расписания"
-      />
+      <TeacherSubjectsEditor initialData={response.result} />
     </div>
   );
 }
