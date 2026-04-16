@@ -23,8 +23,7 @@ import type {
   TeacherSubjectsPageData,
   TeacherSubjectRow,
 } from "../lib/types";
-
-const AUTH_ERROR_MESSAGE = "Недостаточно прав для выполнения действия";
+import {forbidden, notFound} from "next/navigation";
 
 function mapTeacherIdentity(user: {
   id: string;
@@ -73,49 +72,32 @@ function mapTeacherSubjectRow(row: {
   };
 }
 
-async function resolveTeacherUserIdByTeacherId(teacherId?: string): Promise<Result<string | null>> {
-  if (!teacherId) {
-    return ok(null);
-  }
-
-  const teacher = await prisma.teacher.findUnique({
-    where: { id: teacherId },
-    select: { userId: true },
-  });
-
-  if (!teacher) {
-    return err("Преподаватель не найден");
-  }
-
-  return ok(teacher.userId);
-}
-
-async function resolveAuthorizedTeacherId(requestedTeacherUserId: string | null): Promise<Result<string>> {
+async function resolveAuthorizedTeacherId(requestedTeacherId?: string): Promise<string> {
   const session = await auth.api.getSession({ headers: await headers() });
 
   if (!session?.user) {
-    return err("Требуется авторизация");
+    forbidden();
   }
 
   if (session.user.role === "ADMIN") {
-    if (!requestedTeacherUserId) {
-      return err(AUTH_ERROR_MESSAGE);
+    if (!requestedTeacherId) {
+      forbidden();
     }
 
     const teacher = await prisma.teacher.findFirst({
-      where: { userId: requestedTeacherUserId },
+      where: { id: requestedTeacherId },
       select: { id: true },
     });
 
     if (!teacher) {
-      return err("Преподаватель не найден");
+      notFound();
     }
 
-    return ok(teacher.id);
+    return teacher.id;
   }
 
   if (!session.user.domainRoles?.includes("teacher")) {
-    return err(AUTH_ERROR_MESSAGE);
+    forbidden();
   }
 
   const teacher = await prisma.teacher.findFirst({
@@ -124,14 +106,14 @@ async function resolveAuthorizedTeacherId(requestedTeacherUserId: string | null)
   });
 
   if (!teacher) {
-    return err("Не найден профиль преподавателя");
+    notFound();
   }
 
-  if (requestedTeacherUserId && requestedTeacherUserId !== session.user.id) {
-    return err(AUTH_ERROR_MESSAGE);
+  if (requestedTeacherId && requestedTeacherId !== teacher.id) {
+    forbidden();
   }
 
-  return ok(teacher.id);
+  return teacher.id;
 }
 
 export async function getTeacherSubjectsAction(
@@ -139,18 +121,7 @@ export async function getTeacherSubjectsAction(
 ): Promise<Result<TeacherSubjectsPageData>> {
   try {
     const validated = teacherSubjectsQuerySchema.parse(input);
-    const teacherUserIdResponse = await resolveTeacherUserIdByTeacherId(validated.teacherId);
-    if (teacherUserIdResponse.error) {
-      return err(teacherUserIdResponse.error);
-    }
-
-    const teacherIdResponse = await resolveAuthorizedTeacherId(teacherUserIdResponse.result);
-
-    if (teacherIdResponse.error || !teacherIdResponse.result) {
-      return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
-    }
-
-    const teacherId = teacherIdResponse.result;
+    const teacherId = await resolveAuthorizedTeacherId(validated.teacherId);
 
     const teacher = await prisma.teacher.findUnique({
       where: { id: teacherId },
@@ -238,18 +209,7 @@ export async function createTeacherSubjectAction(
 ): Promise<Result<TeacherSubjectRow>> {
   try {
     const validated = createTeacherSubjectSchema.parse(input);
-    const teacherUserIdResponse = await resolveTeacherUserIdByTeacherId(validated.teacherId);
-    if (teacherUserIdResponse.error) {
-      return err(teacherUserIdResponse.error);
-    }
-
-    const teacherIdResponse = await resolveAuthorizedTeacherId(teacherUserIdResponse.result);
-
-    if (teacherIdResponse.error || !teacherIdResponse.result) {
-      return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
-    }
-
-    const teacherId = teacherIdResponse.result;
+    const teacherId = await resolveAuthorizedTeacherId(validated.teacherId);
 
     const [teacher, subject] = await Promise.all([
       prisma.teacher.findUnique({
@@ -316,18 +276,7 @@ export async function updateTeacherSubjectAction(
   try {
     const validatedKey = teacherSubjectKeySchema.parse(input);
     const validatedInput = gradeRangeSchema.parse(input);
-    const teacherUserIdResponse = await resolveTeacherUserIdByTeacherId(validatedKey.teacherId);
-    if (teacherUserIdResponse.error) {
-      return err(teacherUserIdResponse.error);
-    }
-
-    const teacherIdResponse = await resolveAuthorizedTeacherId(teacherUserIdResponse.result);
-
-    if (teacherIdResponse.error || !teacherIdResponse.result) {
-      return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
-    }
-
-    const teacherId = teacherIdResponse.result;
+    const teacherId = await resolveAuthorizedTeacherId(validatedKey.teacherId);
 
     const existing = await prisma.teacherSubject.findUnique({
       where: {
@@ -384,18 +333,7 @@ export async function deleteTeacherSubjectAction(
 ): Promise<Result<true>> {
   try {
     const validated = teacherSubjectKeySchema.parse(key);
-    const teacherUserIdResponse = await resolveTeacherUserIdByTeacherId(validated.teacherId);
-    if (teacherUserIdResponse.error) {
-      return err(teacherUserIdResponse.error);
-    }
-
-    const teacherIdResponse = await resolveAuthorizedTeacherId(teacherUserIdResponse.result);
-
-    if (teacherIdResponse.error || !teacherIdResponse.result) {
-      return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
-    }
-
-    const teacherId = teacherIdResponse.result;
+    const teacherId = await resolveAuthorizedTeacherId(validated.teacherId);
 
     const existing = await prisma.teacherSubject.findUnique({
       where: {
