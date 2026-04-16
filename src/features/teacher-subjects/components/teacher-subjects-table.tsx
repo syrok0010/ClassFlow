@@ -1,6 +1,5 @@
-import { useMemo, useRef } from "react";
-import { useForm } from "@tanstack/react-form";
-import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
+import { useMemo } from "react";
+import { EmptyStateConfig, FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import {
   Table,
   TableBody,
@@ -10,14 +9,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  subjectGradeRangeSchema,
   type CreateTeacherSubjectFormInput,
   type UpdateTeacherSubjectInput,
 } from "../lib/schemas";
 import type { SubjectOption, TeacherSubjectRow } from "../lib/types";
 import { InlineCreateRow } from "./inline-create-row";
 import { TeacherSubjectDataRow } from "./teacher-subject-data-row";
-import { EmptyStateConfig } from "@/lib/types";
 
 interface TeacherSubjectsTableProps {
   rows: TeacherSubjectRow[];
@@ -50,30 +47,6 @@ export function TeacherSubjectsTable({
 }: TeacherSubjectsTableProps) {
   const hasRows = rows.length > 0;
 
-  const createResultRef = useRef(false);
-
-  const createSubjectForm = useForm({
-    defaultValues: {
-      subjectId: "",
-      minGrade: 1,
-      maxGrade: 11,
-    },
-    validators: {
-      onChange: subjectGradeRangeSchema,
-      onSubmit: subjectGradeRangeSchema,
-    },
-    onSubmit: async ({ value }) => {
-      createResultRef.current = await onCreateSubject(value);
-    },
-  });
-
-  const handleCreateSubjectWithTableValidation = async (payload: CreateTeacherSubjectFormInput) => {
-    createResultRef.current = false;
-    createSubjectForm.reset(payload);
-    await createSubjectForm.handleSubmit();
-    return createResultRef.current;
-  };
-
   const subjectNamesById = useMemo(() => {
     const map = new Map<string, string>();
     for (const option of subjectOptions) {
@@ -98,7 +71,7 @@ export function TeacherSubjectsTable({
           {isAddingRow ? (
             <InlineCreateRow
               subjectOptions={subjectOptions}
-              onSave={handleCreateSubjectWithTableValidation}
+              onSave={onCreateSubject}
               onCancel={onCancelAddRow}
             />
           ) : null}

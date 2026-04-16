@@ -85,9 +85,8 @@ export function TeacherSubjectsEditor({
         onFilterTypeChange={(value) => {
           void setFilterType(value === "ALL" ? null : value);
         }}
-        isAddingRow={isAddingRow}
         onAddSubject={() => setIsAddingRow(true)}
-        rowsExist={rows.length !== 0}
+        showAddButton={rows.length > 0 && !isAddingRow}
       />
 
       <TeacherSubjectsTable
