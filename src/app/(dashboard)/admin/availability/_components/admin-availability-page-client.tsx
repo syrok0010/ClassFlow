@@ -36,13 +36,11 @@ export function AdminAvailabilityPageClient({
     searchQuery,
     selectedTeacherIds,
     selectedTeachers,
-    effectiveMode,
     templateDialog,
     overrideDialog,
     overrideToDelete,
     visibleTeachers,
     setSearchQuery,
-    setMode,
     setOverrideToDelete,
     toggleTeacherSelection,
     clearSelection,
@@ -110,20 +108,15 @@ export function AdminAvailabilityPageClient({
           selectedTeacherIds={selectedTeacherIds}
           weekStart={weekStart}
           searchQuery={searchQuery}
-          mode={effectiveMode}
           onSearchQueryChange={setSearchQuery}
           onTeacherToggle={toggleTeacherSelection}
           onClearSelection={clearSelection}
-          onEditSelectedTeacher={() => setMode("edit")}
         />
 
         <div className="flex min-w-0 flex-col gap-4">
           <AnalyzerToolbar
             weekStart={weekStart}
-            mode={effectiveMode}
-            canEdit={Boolean(selectedTeacher)}
             isWeekLoading={isWeekLoading}
-            onModeChange={setMode}
             onPreviousWeek={() => shiftWeek(-1)}
             onNextWeek={() => shiftWeek(1)}
           />
@@ -148,19 +141,15 @@ export function AdminAvailabilityPageClient({
           ) : selectedTeacher ? (
             <>
               <SingleTeacherMatrix teacher={selectedTeacher} weekStart={weekStart} />
-              {effectiveMode === "edit" ? (
-                <AvailabilityEditor
-                  teacher={selectedTeacher}
-                  weekStart={weekStart}
-                  isMutating={isMutating}
-                  onAddTemplateEntry={(dayOfWeek) => openTemplateDialog(dayOfWeek)}
-                  onEditTemplateEntry={(entry) => openTemplateDialog(entry.dayOfWeek, entry)}
-                  onDeleteTemplateEntry={mutations.handleTemplateDelete}
-                  onAddOverride={() => openOverrideDialog()}
-                  onEditOverride={(entry) => openOverrideDialog(entry)}
-                  onDeleteOverride={setOverrideToDelete}
-                />
-              ) : null}
+              <AvailabilityEditor
+                teacher={selectedTeacher}
+                weekStart={weekStart}
+                isMutating={isMutating}
+                onOpenTemplateDialog={openTemplateDialog}
+                onDeleteTemplateEntry={mutations.handleTemplateDelete}
+                onOpenOverrideDialog={openOverrideDialog}
+                onDeleteOverride={setOverrideToDelete}
+              />
             </>
           ) : (
             <MultiTeacherMatrix teachers={selectedTeachers} weekStart={weekStart} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { PencilLine, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,10 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import type { AvailabilityTeacher } from "../_lib/types";
 import { getWeekRangeLabel } from "../_lib/utils";
-import {
-  getTeacherStatusBadges,
-  type PanelMode,
-} from "./availability-view-helpers";
+import { getTeacherStatusBadges } from "./availability-view-helpers";
 
 type TeacherSelectorPanelProps = {
   teachers: AvailabilityTeacher[];
@@ -31,11 +28,9 @@ type TeacherSelectorPanelProps = {
   selectedTeacherIds: string[];
   weekStart: string;
   searchQuery: string;
-  mode: PanelMode;
   onSearchQueryChange: (value: string) => void;
   onTeacherToggle: (teacherId: string) => void;
   onClearSelection: () => void;
-  onEditSelectedTeacher: () => void;
 };
 
 export function TeacherSelectorPanel({
@@ -44,14 +39,10 @@ export function TeacherSelectorPanel({
   selectedTeacherIds,
   weekStart,
   searchQuery,
-  mode,
   onSearchQueryChange,
   onTeacherToggle,
   onClearSelection,
-  onEditSelectedTeacher,
 }: TeacherSelectorPanelProps) {
-  const selectedCount = selectedTeacherIds.length;
-
   return (
     <Card className="min-h-180">
       <CardHeader className="border-b">
@@ -74,9 +65,9 @@ export function TeacherSelectorPanel({
 
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>
-              Выбрано {selectedCount} из {allTeachersCount}
+              Выбрано {selectedTeacherIds.length} из {allTeachersCount}
             </span>
-            {selectedCount > 0 ? (
+            {selectedTeacherIds.length > 0 ? (
               <Button variant="ghost" size="sm" onClick={onClearSelection}>
                 <X data-icon="inline-start" />
                 Сбросить
@@ -101,7 +92,6 @@ export function TeacherSelectorPanel({
           ) : (
             teachers.map((teacher) => {
               const isSelected = selectedTeacherIds.includes(teacher.teacherId);
-              const showEditAction = isSelected && selectedCount === 1;
 
               return (
                 <div
@@ -124,27 +114,11 @@ export function TeacherSelectorPanel({
                   <div className="flex items-start gap-3">
                     <Checkbox checked={isSelected} className="pointer-events-none" />
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-foreground">{teacher.fullName}</p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {teacher.email ?? "email не указан"}
-                          </p>
-                        </div>
-
-                        {showEditAction ? (
-                          <Button
-                            variant={mode === "edit" ? "default" : "outline"}
-                            size="sm"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onEditSelectedTeacher();
-                            }}
-                          >
-                            <PencilLine data-icon="inline-start" />
-                            {mode === "edit" ? "Редактирование" : "Редактировать"}
-                          </Button>
-                        ) : null}
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground">{teacher.fullName}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {teacher.email ?? "email не указан"}
+                        </p>
                       </div>
 
                       <div className="flex flex-wrap gap-1.5">
