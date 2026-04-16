@@ -8,13 +8,6 @@ import {
   hasWeekOverride,
 } from "../_lib/utils";
 
-export type PanelMode = "view" | "edit";
-
-export const MODE_OPTIONS = [
-  { value: "view", label: "Просмотр" },
-  { value: "edit", label: "Редактирование" },
-] as const;
-
 export const SLOT_LABELS = buildSlotLabels();
 
 function getTeacherTemplateBadge(teacher: AvailabilityTeacher) {

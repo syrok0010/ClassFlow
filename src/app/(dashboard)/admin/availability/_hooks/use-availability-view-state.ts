@@ -7,10 +7,7 @@ import type {
   AvailabilityTeacher,
   AvailabilityTemplateEntry,
 } from "../_lib/types";
-import {
-  filterTeachers,
-  type PanelMode,
-} from "../_components/availability-view-helpers";
+import { filterTeachers } from "../_components/availability-view-helpers";
 
 export type TemplateDialogState = {
   open: boolean;
@@ -31,7 +28,6 @@ export function useAvailabilityViewState(
     defaultValue: "",
     shallow: true,
   });
-  const [mode, setMode] = useState<PanelMode>("view");
   const [templateDialog, setTemplateDialog] = useState<TemplateDialogState>({
     open: false,
     dayOfWeek: 1,
@@ -55,7 +51,6 @@ export function useAvailabilityViewState(
   const selectedTeachers = teachers.filter((teacher) =>
     selectedTeacherIds.includes(teacher.teacherId),
   );
-  const effectiveMode: PanelMode = selectedTeachers.length === 1 ? mode : "view";
 
   function toggleTeacherSelection(teacherId: string) {
     const nextSelectedTeacherIds = selectedTeacherIds.includes(teacherId)
@@ -102,13 +97,11 @@ export function useAvailabilityViewState(
     searchQuery,
     selectedTeacherIds,
     selectedTeachers,
-    effectiveMode,
     templateDialog,
     overrideDialog,
     overrideToDelete,
     visibleTeachers,
     setSearchQuery,
-    setMode,
     setOverrideToDelete,
     toggleTeacherSelection,
     clearSelection,

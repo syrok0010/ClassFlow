@@ -38,11 +38,12 @@ type AvailabilityEditorProps = {
   teacher: AvailabilityTeacher;
   weekStart: string;
   isMutating: boolean;
-  onAddTemplateEntry: (dayOfWeek: number) => void;
-  onEditTemplateEntry: (entry: AvailabilityTemplateEntry) => void;
+  onOpenTemplateDialog: (
+    dayOfWeek: number,
+    entry?: AvailabilityTemplateEntry | null,
+  ) => void;
   onDeleteTemplateEntry: (entry: AvailabilityTemplateEntry) => void;
-  onAddOverride: () => void;
-  onEditOverride: (entry: AvailabilityOverrideEntry) => void;
+  onOpenOverrideDialog: (entry?: AvailabilityOverrideEntry | null) => void;
   onDeleteOverride: (entry: AvailabilityOverrideEntry) => void;
 };
 
@@ -50,11 +51,9 @@ export function AvailabilityEditor({
   teacher,
   weekStart,
   isMutating,
-  onAddTemplateEntry,
-  onEditTemplateEntry,
+  onOpenTemplateDialog,
   onDeleteTemplateEntry,
-  onAddOverride,
-  onEditOverride,
+  onOpenOverrideDialog,
   onDeleteOverride,
 }: AvailabilityEditorProps) {
   const weekOverrides = getTeacherOverrideEntriesForWeek(teacher, weekStart);
@@ -84,7 +83,7 @@ export function AvailabilityEditor({
                     variant="outline"
                     size="sm"
                     disabled={isMutating}
-                    onClick={() => onAddTemplateEntry(day.dayOfWeek)}
+                    onClick={() => onOpenTemplateDialog(day.dayOfWeek)}
                   >
                     <CalendarDays data-icon="inline-start" />
                     Добавить слот
@@ -115,7 +114,7 @@ export function AvailabilityEditor({
                             variant="ghost"
                             size="sm"
                             disabled={isMutating}
-                            onClick={() => onEditTemplateEntry(entry)}
+                            onClick={() => onOpenTemplateDialog(entry.dayOfWeek, entry)}
                           >
                             <PencilLine data-icon="inline-start" />
                             Изменить
@@ -150,7 +149,12 @@ export function AvailabilityEditor({
             недели.
           </CardDescription>
           <CardAction>
-            <Button variant="outline" size="sm" disabled={isMutating} onClick={onAddOverride}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isMutating}
+              onClick={() => onOpenOverrideDialog()}
+            >
               <CalendarDays data-icon="inline-start" />
               Добавить исключение
             </Button>
@@ -210,7 +214,7 @@ export function AvailabilityEditor({
                           variant="ghost"
                           size="sm"
                           disabled={isMutating}
-                          onClick={() => onEditOverride(entry)}
+                          onClick={() => onOpenOverrideDialog(entry)}
                         >
                           <PencilLine data-icon="inline-start" />
                           Изменить
@@ -235,4 +239,3 @@ export function AvailabilityEditor({
     </div>
   );
 }
-
