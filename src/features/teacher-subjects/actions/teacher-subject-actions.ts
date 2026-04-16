@@ -26,43 +26,6 @@ import type {
 
 const AUTH_ERROR_MESSAGE = "Недостаточно прав для выполнения действия";
 
-type TeacherScope =
-  | {
-      role: "admin";
-      teacherId: null;
-    }
-  | {
-      role: "teacher";
-      teacherId: string;
-    };
-
-async function getTeacherScope(): Promise<Result<TeacherScope>> {
-  const session = await auth.api.getSession({ headers: await headers() });
-
-  if (!session?.user) {
-    return err("Требуется авторизация");
-  }
-
-  if (session.user.role === "ADMIN") {
-    return ok({ role: "admin", teacherId: null });
-  }
-
-  if (!session.user.domainRoles?.includes("teacher")) {
-    return err(AUTH_ERROR_MESSAGE);
-  }
-
-  const teacher = await prisma.teacher.findFirst({
-    where: { userId: session.user.id },
-    select: { id: true },
-  });
-
-  if (!teacher) {
-    return err("Не найден профиль преподавателя");
-  }
-
-  return ok({ role: "teacher", teacherId: teacher.id });
-}
-
 function mapTeacherIdentity(user: {
   id: string;
   email: string | null;
@@ -110,25 +73,62 @@ function mapTeacherSubjectRow(row: {
   };
 }
 
-async function resolveTeacherIdForScope(
-  scope: TeacherScope,
-  requestedTeacherId?: string
-): Promise<Result<string>> {
-  if (scope.role === "teacher") {
-    return ok(scope.teacherId);
-  }
-
-  if (!requestedTeacherId) {
-    return err(AUTH_ERROR_MESSAGE);
+async function resolveTeacherUserIdByTeacherId(teacherId?: string): Promise<Result<string | null>> {
+  if (!teacherId) {
+    return ok(null);
   }
 
   const teacher = await prisma.teacher.findUnique({
-    where: { id: requestedTeacherId },
-    select: { id: true },
+    where: { id: teacherId },
+    select: { userId: true },
   });
 
   if (!teacher) {
     return err("Преподаватель не найден");
+  }
+
+  return ok(teacher.userId);
+}
+
+async function resolveAuthorizedTeacherId(requestedTeacherUserId: string | null): Promise<Result<string>> {
+  const session = await auth.api.getSession({ headers: await headers() });
+
+  if (!session?.user) {
+    return err("Требуется авторизация");
+  }
+
+  if (session.user.role === "ADMIN") {
+    if (!requestedTeacherUserId) {
+      return err(AUTH_ERROR_MESSAGE);
+    }
+
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId: requestedTeacherUserId },
+      select: { id: true },
+    });
+
+    if (!teacher) {
+      return err("Преподаватель не найден");
+    }
+
+    return ok(teacher.id);
+  }
+
+  if (!session.user.domainRoles?.includes("teacher")) {
+    return err(AUTH_ERROR_MESSAGE);
+  }
+
+  const teacher = await prisma.teacher.findFirst({
+    where: { userId: session.user.id },
+    select: { id: true },
+  });
+
+  if (!teacher) {
+    return err("Не найден профиль преподавателя");
+  }
+
+  if (requestedTeacherUserId && requestedTeacherUserId !== session.user.id) {
+    return err(AUTH_ERROR_MESSAGE);
   }
 
   return ok(teacher.id);
@@ -138,16 +138,13 @@ export async function getTeacherSubjectsAction(
   input: TeacherSubjectsQueryInput = {}
 ): Promise<Result<TeacherSubjectsPageData>> {
   try {
-    const scopeResponse = await getTeacherScope();
-    if (scopeResponse.error || !scopeResponse.result) {
-      return err(scopeResponse.error ?? AUTH_ERROR_MESSAGE);
+    const validated = teacherSubjectsQuerySchema.parse(input);
+    const teacherUserIdResponse = await resolveTeacherUserIdByTeacherId(validated.teacherId);
+    if (teacherUserIdResponse.error) {
+      return err(teacherUserIdResponse.error);
     }
 
-    const validated = teacherSubjectsQuerySchema.parse(input);
-    const teacherIdResponse = await resolveTeacherIdForScope(
-      scopeResponse.result,
-      validated.teacherId
-    );
+    const teacherIdResponse = await resolveAuthorizedTeacherId(teacherUserIdResponse.result);
 
     if (teacherIdResponse.error || !teacherIdResponse.result) {
       return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
@@ -177,10 +174,6 @@ export async function getTeacherSubjectsAction(
 
     if (!teacher) {
       return err("Преподаватель не найден");
-    }
-
-    if (scopeResponse.result.role === "teacher" && scopeResponse.result.teacherId !== teacher.id) {
-      return err(AUTH_ERROR_MESSAGE);
     }
 
     if (teacher.user.teachers.length === 0) {
@@ -244,16 +237,13 @@ export async function createTeacherSubjectAction(
   input: CreateTeacherSubjectInput
 ): Promise<Result<TeacherSubjectRow>> {
   try {
-    const scopeResponse = await getTeacherScope();
-    if (scopeResponse.error || !scopeResponse.result) {
-      return err(scopeResponse.error ?? AUTH_ERROR_MESSAGE);
+    const validated = createTeacherSubjectSchema.parse(input);
+    const teacherUserIdResponse = await resolveTeacherUserIdByTeacherId(validated.teacherId);
+    if (teacherUserIdResponse.error) {
+      return err(teacherUserIdResponse.error);
     }
 
-    const validated = createTeacherSubjectSchema.parse(input);
-    const teacherIdResponse = await resolveTeacherIdForScope(
-      scopeResponse.result,
-      validated.teacherId
-    );
+    const teacherIdResponse = await resolveAuthorizedTeacherId(teacherUserIdResponse.result);
 
     if (teacherIdResponse.error || !teacherIdResponse.result) {
       return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
@@ -324,17 +314,14 @@ export async function updateTeacherSubjectAction(
   input: TeacherSubjectKeyInput & UpdateTeacherSubjectInput
 ): Promise<Result<TeacherSubjectRow>> {
   try {
-    const scopeResponse = await getTeacherScope();
-    if (scopeResponse.error || !scopeResponse.result) {
-      return err(scopeResponse.error ?? AUTH_ERROR_MESSAGE);
-    }
-
     const validatedKey = teacherSubjectKeySchema.parse(input);
     const validatedInput = gradeRangeSchema.parse(input);
-    const teacherIdResponse = await resolveTeacherIdForScope(
-      scopeResponse.result,
-      validatedKey.teacherId
-    );
+    const teacherUserIdResponse = await resolveTeacherUserIdByTeacherId(validatedKey.teacherId);
+    if (teacherUserIdResponse.error) {
+      return err(teacherUserIdResponse.error);
+    }
+
+    const teacherIdResponse = await resolveAuthorizedTeacherId(teacherUserIdResponse.result);
 
     if (teacherIdResponse.error || !teacherIdResponse.result) {
       return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
@@ -396,16 +383,13 @@ export async function deleteTeacherSubjectAction(
   key: TeacherSubjectKeyInput
 ): Promise<Result<true>> {
   try {
-    const scopeResponse = await getTeacherScope();
-    if (scopeResponse.error || !scopeResponse.result) {
-      return err(scopeResponse.error ?? AUTH_ERROR_MESSAGE);
+    const validated = teacherSubjectKeySchema.parse(key);
+    const teacherUserIdResponse = await resolveTeacherUserIdByTeacherId(validated.teacherId);
+    if (teacherUserIdResponse.error) {
+      return err(teacherUserIdResponse.error);
     }
 
-    const validated = teacherSubjectKeySchema.parse(key);
-    const teacherIdResponse = await resolveTeacherIdForScope(
-      scopeResponse.result,
-      validated.teacherId
-    );
+    const teacherIdResponse = await resolveAuthorizedTeacherId(teacherUserIdResponse.result);
 
     if (teacherIdResponse.error || !teacherIdResponse.result) {
       return err(teacherIdResponse.error ?? AUTH_ERROR_MESSAGE);
