@@ -1,6 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   DAY_END_MINUTES,
@@ -18,13 +23,9 @@ type AvailabilityTimelineRowProps = {
 
 type AvailabilityTimelineCanvasProps = {
   hoveredMinute: number | null;
+  hoverContent?: ReactNode;
   onHoverMinuteChange: (minute: number) => void;
   onHoverEnd: () => void;
-  children: ReactNode;
-  className?: string;
-};
-
-type AvailabilityHoverPanelProps = {
   children: ReactNode;
   className?: string;
 };
@@ -60,54 +61,56 @@ export function AvailabilityTimelineRow({
 
 export function AvailabilityTimelineCanvas({
   hoveredMinute,
+  hoverContent,
   onHoverMinuteChange,
   onHoverEnd,
   children,
   className,
 }: AvailabilityTimelineCanvasProps) {
   return (
-    <div
-      className={cn(
-        "relative h-28 overflow-hidden rounded-lg border bg-background",
-        className,
-      )}
-      onMouseLeave={onHoverEnd}
-      onMouseMove={(event) => {
-        const rect = event.currentTarget.getBoundingClientRect();
-        const offsetX = Math.min(Math.max(0, event.clientX - rect.left), rect.width);
-        const minuteOffset = Math.min(
-          DAY_END_MINUTES - DAY_START_MINUTES - 1,
-          Math.max(0, Math.floor((offsetX / rect.width) * (DAY_END_MINUTES - DAY_START_MINUTES))),
-        );
+    <Tooltip open={hoveredMinute !== null && Boolean(hoverContent)} trackCursorAxis="both">
+      <TooltipTrigger
+        render={
+          <div
+            className={cn("relative h-28", className)}
+            onMouseLeave={onHoverEnd}
+            onMouseMove={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              const offsetX = Math.min(Math.max(0, event.clientX - rect.left), rect.width);
+              const minuteOffset = Math.min(
+                DAY_END_MINUTES - DAY_START_MINUTES - 1,
+                Math.max(
+                  0,
+                  Math.floor((offsetX / rect.width) * (DAY_END_MINUTES - DAY_START_MINUTES)),
+                ),
+              );
 
-        onHoverMinuteChange(DAY_START_MINUTES + minuteOffset);
-      }}
-    >
-      <TimelineReferenceGrid />
-      {children}
-      {hoveredMinute !== null ? (
-        <div
-          className="pointer-events-none absolute inset-y-0 z-20 w-px bg-primary/50"
-          style={{ left: `${minuteToTimelinePercent(hoveredMinute)}%` }}
-        />
+              onHoverMinuteChange(DAY_START_MINUTES + minuteOffset);
+            }}
+          />
+        }
+      >
+        <div className="relative h-full overflow-hidden rounded-lg border bg-background">
+          <TimelineReferenceGrid />
+          {children}
+          {hoveredMinute !== null ? (
+            <div
+              className="pointer-events-none absolute inset-y-0 w-px bg-primary/50"
+              style={{ left: `${minuteToTimelinePercent(hoveredMinute)}%` }}
+            />
+          ) : null}
+        </div>
+      </TooltipTrigger>
+      {hoverContent ? (
+        <TooltipContent
+          sideOffset={16}
+          showArrow={false}
+          className="w-80 max-w-sm items-start rounded-lg border bg-background/95 p-3 text-sm text-foreground shadow-lg ring-1 ring-border backdrop-blur"
+        >
+          {hoverContent}
+        </TooltipContent>
       ) : null}
-    </div>
-  );
-}
-
-export function AvailabilityHoverPanel({
-  children,
-  className,
-}: AvailabilityHoverPanelProps) {
-  return (
-    <div
-      className={cn(
-        "rounded-lg border bg-background/95 p-3 text-sm shadow-sm backdrop-blur",
-        className,
-      )}
-    >
-      {children}
-    </div>
+    </Tooltip>
   );
 }
 
