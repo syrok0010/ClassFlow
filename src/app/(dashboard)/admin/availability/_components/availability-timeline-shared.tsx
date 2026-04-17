@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import {
   DAY_END_MINUTES,
   DAY_START_MINUTES,
+  SLOT_MINUTES,
   SLOT_COUNT,
+  minutesToTime,
   minuteToTimelinePercent,
 } from "../_lib/utils";
 import { SLOT_LABELS } from "./availability-view-helpers";
@@ -28,14 +30,30 @@ type AvailabilityTimelineCanvasProps = {
 };
 
 export function AvailabilityTimelineScale() {
+  const scaleLabels = [...SLOT_LABELS, minutesToTime(DAY_END_MINUTES)];
+
   return (
-    <div className="grid grid-cols-[120px_repeat(20,minmax(0,1fr))] gap-1 text-xs text-muted-foreground">
-      <div />
-      {SLOT_LABELS.map((label) => (
-        <div key={label} className="text-center">
-          {label}
-        </div>
-      ))}
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
+      <div/>
+      <div className="relative h-10 overflow-visible text-xs text-muted-foreground">
+        {scaleLabels.map((label, index) =>
+          (
+            <div
+              key={label}
+              className={cn(
+                "absolute bottom-0 origin-top-left whitespace-nowrap leading-none -rotate-45",
+                index === 0
+                  ? "translate-x-0"
+                  : index === scaleLabels.length - 1
+                    ? "-translate-x-full"
+                    : "-translate-x-1/2",
+              )}
+              style={{left: `${minuteToTimelinePercent(DAY_START_MINUTES + index * SLOT_MINUTES)}%`}}
+            >
+              {label}
+            </div>
+          ))}
+      </div>
     </div>
   );
 }
@@ -114,7 +132,7 @@ function TimelineReferenceGrid() {
   return (
     <div className="pointer-events-none absolute inset-0">
       {Array.from({ length: SLOT_COUNT - 1 }).map((_, index) => {
-        const minute = DAY_START_MINUTES + (index + 1) * 30;
+        const minute = DAY_START_MINUTES + (index + 1) * SLOT_MINUTES;
 
         return (
           <div

@@ -101,7 +101,7 @@ export function AdminAvailabilityPageClient({
         </p>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start">
         <TeacherSelectorPanel
           teachers={visibleTeachers}
           allTeachersCount={initialData.teachers.length}
@@ -113,7 +113,7 @@ export function AdminAvailabilityPageClient({
           onClearSelection={clearSelection}
         />
 
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
           <AnalyzerToolbar
             weekStart={weekStart}
             isWeekLoading={isWeekLoading}

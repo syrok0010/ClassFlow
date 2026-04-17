@@ -42,14 +42,14 @@ export function TeacherSelectorPanel({
   onClearSelection,
 }: TeacherSelectorPanelProps) {
   return (
-    <Card className="min-h-[500px] flex-1/5">
+    <Card className="w-full shrink-0 md:sticky md:top-4 md:w-90 md:max-h-[calc(100dvh-2rem)] md:self-start">
       <CardHeader className="border-b">
         <CardTitle>Преподаватели</CardTitle>
         <CardDescription>
           Поиск, мультивыбор и контроль качества данных по неделе {getWeekRangeLabel(weekStart)}.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
         <div className="flex flex-col gap-3">
           <div className="relative">
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -74,7 +74,7 @@ export function TeacherSelectorPanel({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-col gap-2 pr-1">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
           {teachers.length === 0 ? (
             <Empty className="min-h-80">
               <EmptyHeader>
