@@ -1,5 +1,3 @@
-"use client";
-
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,7 +42,7 @@ export function TeacherSelectorPanel({
   onClearSelection,
 }: TeacherSelectorPanelProps) {
   return (
-    <Card className="min-h-180">
+    <Card className="min-h-[500px] flex-1/5">
       <CardHeader className="border-b">
         <CardTitle>Преподаватели</CardTitle>
         <CardDescription>
@@ -76,7 +74,7 @@ export function TeacherSelectorPanel({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
+        <div className="flex min-h-0 flex-col gap-2 pr-1">
           {teachers.length === 0 ? (
             <Empty className="min-h-80">
               <EmptyHeader>
