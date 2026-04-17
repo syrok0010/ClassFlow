@@ -83,7 +83,7 @@ export function MultiTeacherMatrix({
           Чем выше стек, тем больше преподавателей с явно заданным статусом в этот момент.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-2">
         <AvailabilityTimelineScale />
 
         {Array.from(daysByDayOfWeek.values()).map((day) => (
@@ -136,7 +136,7 @@ export function MultiTeacherMatrix({
                     >
                       {segment.available > 0 ? (
                         <div
-                          className="absolute inset-x-0 bottom-0 rounded-b-sm bg-emerald-400/90"
+                          className="absolute inset-x-0 bottom-0 border-gray-700/20 border bg-emerald-400/90"
                           style={{ height: `${availableHeight}%` }}
                         />
                       ) : null}
