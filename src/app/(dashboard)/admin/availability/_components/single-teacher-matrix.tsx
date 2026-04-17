@@ -63,7 +63,7 @@ export function SingleTeacherMatrix({
           Детальный просмотр базового шаблона и исключений на выбранной неделе.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-col gap-2">
         <AvailabilityTimelineScale />
 
         {Array.from(daysByDayOfWeek.values()).map((day) => (

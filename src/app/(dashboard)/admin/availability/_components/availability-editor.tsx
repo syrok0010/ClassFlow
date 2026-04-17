@@ -1,5 +1,3 @@
-"use client";
-
 import { CalendarDays, PencilLine, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,8 +28,9 @@ import {
   formatDateRange,
   formatTimeFromDateTime,
   formatTimeRange,
-  getTeacherDayEntries,
+  getDayDateLabel,
   getTeacherOverrideEntriesForWeek,
+  timeToMinutes,
 } from "../_lib/utils";
 
 type AvailabilityEditorProps = {
@@ -54,6 +53,23 @@ export function AvailabilityEditor({
   onDeleteOverride,
 }: AvailabilityEditorProps) {
   const weekOverrides = getTeacherOverrideEntriesForWeek(teacher, weekStart);
+  const dayLabelsByDayOfWeek = new Map(
+    DAY_CONFIG.map((day) => [day.dayOfWeek, day.label]),
+  );
+  const templateGroups = (["PREFERRED", "AVAILABLE", "UNAVAILABLE"] as const).map((type) => ({
+    type,
+    label: AVAILABILITY_TYPE_LABELS[type],
+    entries: teacher.templateEntries
+      .filter((entry) => entry.type === type)
+      .slice()
+      .sort((left, right) => {
+        if (left.dayOfWeek !== right.dayOfWeek) {
+          return left.dayOfWeek - right.dayOfWeek;
+        }
+
+        return timeToMinutes(left.startTime) - timeToMinutes(right.startTime);
+      }),
+  }));
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -66,7 +82,7 @@ export function AvailabilityEditor({
           </CardDescription>
           <CardAction>
             <Button
-              variant="outline"
+              variant="default"
               size="sm"
               disabled={isMutating}
               onClick={() => onOpenTemplateDialog()}
@@ -77,38 +93,50 @@ export function AvailabilityEditor({
           </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          {DAY_CONFIG.map((day) => {
-            const entries = getTeacherDayEntries(teacher, day.dayOfWeek);
-
-            return (
-              <div key={day.dayOfWeek} className="rounded-xl border bg-background">
-                <div className="border-b px-4 py-3">
-                  <p className="font-medium text-foreground">{day.label}</p>
-                  <p className="text-xs text-muted-foreground">{day.shortLabel}</p>
+          {teacher.templateEntries.length === 0 ? (
+            <Empty className="min-h-80 py-8">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <CalendarDays />
+                </EmptyMedia>
+                <EmptyTitle>Базовый шаблон еще не задан</EmptyTitle>
+                <EmptyDescription>
+                  Добавьте первый слот доступности, чтобы сформировать недельный шаблон
+                  преподавателя.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            templateGroups.map((group) => (
+              <div key={group.type} className="rounded-xl bg-background">
+                <div className="border-b py-2">
+                  <Badge variant={AVAILABILITY_TYPE_BADGE_VARIANTS[group.type]}>
+                    {group.label}
+                  </Badge>
                 </div>
 
-                <div className="flex flex-col gap-2 px-4 py-3">
-                  {entries.length === 0 ? (
-                    <div className="rounded-lg border border-dashed px-3 py-4 text-sm text-muted-foreground">
-                      Для этого дня шаблон еще не задан.
+                <div className="flex flex-col gap-2 py-3">
+                  {group.entries.length === 0 ? (
+                    <div className="rounded-lg text-sm text-muted-foreground">
+                      Для этого типа доступности интервалы еще не заданы.
                     </div>
                   ) : (
-                    entries.map((entry) => (
+                    group.entries.map((entry) => (
                       <div
                         key={entry.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg"
                       >
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <Badge variant={AVAILABILITY_TYPE_BADGE_VARIANTS[entry.type]}>
-                            {AVAILABILITY_TYPE_LABELS[entry.type]}
-                          </Badge>
+                        <div className="flex min-w-0 flex-col gap-1">
                           <span className="font-medium text-foreground">
+                            {dayLabelsByDayOfWeek.get(entry.dayOfWeek)}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
                             {formatTimeRange(entry.startTime, entry.endTime)}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             disabled={isMutating}
                             onClick={() => onOpenTemplateDialog(entry)}
@@ -117,7 +145,7 @@ export function AvailabilityEditor({
                             Изменить
                           </Button>
                           <Button
-                            variant="ghost"
+                            variant="destructive"
                             size="sm"
                             disabled={isMutating}
                             onClick={() => {
@@ -133,8 +161,8 @@ export function AvailabilityEditor({
                   )}
                 </div>
               </div>
-            );
-          })}
+            ))
+          )}
         </CardContent>
       </Card>
 
@@ -146,7 +174,7 @@ export function AvailabilityEditor({
           </CardDescription>
           <CardAction>
             <Button
-              variant="outline"
+              variant="default"
               size="sm"
               disabled={isMutating}
               onClick={() => onOpenOverrideDialog()}
@@ -207,7 +235,7 @@ export function AvailabilityEditor({
 
                       <div className="flex items-center gap-2">
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           disabled={isMutating}
                           onClick={() => onOpenOverrideDialog(entry)}
@@ -216,7 +244,7 @@ export function AvailabilityEditor({
                           Изменить
                         </Button>
                         <Button
-                          variant="ghost"
+                          variant="destructive"
                           size="sm"
                           disabled={isMutating}
                           onClick={() => onDeleteOverride(entry)}
