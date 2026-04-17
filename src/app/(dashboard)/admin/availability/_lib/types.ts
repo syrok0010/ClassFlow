@@ -39,11 +39,10 @@ export type DayConfig = {
 export type SlotTeacherState = {
   teacherId: string;
   teacherName: string;
-  state: "free" | "unavailable" | "unmarked";
 };
 
 export type SlotBreakdown = {
-  free: SlotTeacherState[];
+  available: SlotTeacherState[];
   unavailable: SlotTeacherState[];
   unmarked: SlotTeacherState[];
 };

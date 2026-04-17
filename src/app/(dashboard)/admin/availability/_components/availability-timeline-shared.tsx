@@ -24,8 +24,7 @@ type AvailabilityTimelineRowProps = {
 type AvailabilityTimelineCanvasProps = {
   hoveredMinute: number | null;
   hoverContent?: ReactNode;
-  onHoverMinuteChange: (minute: number) => void;
-  onHoverEnd: () => void;
+  onHoverMinuteChange: (minute: number | null) => void;
   children: ReactNode;
   className?: string;
 };
@@ -63,7 +62,6 @@ export function AvailabilityTimelineCanvas({
   hoveredMinute,
   hoverContent,
   onHoverMinuteChange,
-  onHoverEnd,
   children,
   className,
 }: AvailabilityTimelineCanvasProps) {
@@ -73,7 +71,7 @@ export function AvailabilityTimelineCanvas({
         render={
           <div
             className={cn("relative h-28", className)}
-            onMouseLeave={onHoverEnd}
+            onMouseLeave={() => onHoverMinuteChange(null)}
             onMouseMove={(event) => {
               const rect = event.currentTarget.getBoundingClientRect();
               const offsetX = Math.min(Math.max(0, event.clientX - rect.left), rect.width);
