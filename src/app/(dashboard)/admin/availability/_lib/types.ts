@@ -15,14 +15,6 @@ export type AvailabilityOverrideEntry = {
   type: AvailabilityType;
 };
 
-export type AvailabilityScheduleEntry = {
-  id: string;
-  startTime: string;
-  endTime: string;
-  groupName: string;
-  subjectName: string;
-};
-
 export type AvailabilityTeacher = {
   teacherId: string;
   userId: string;
@@ -30,7 +22,6 @@ export type AvailabilityTeacher = {
   email: string | null;
   templateEntries: AvailabilityTemplateEntry[];
   overrides: AvailabilityOverrideEntry[];
-  scheduleEntries: AvailabilityScheduleEntry[];
 };
 
 export type AdminAvailabilityWeekData = {
@@ -48,13 +39,11 @@ export type DayConfig = {
 export type SlotTeacherState = {
   teacherId: string;
   teacherName: string;
-  state: "free" | "busy" | "unavailable" | "unmarked";
-  lessonLabel?: string;
+  state: "free" | "unavailable" | "unmarked";
 };
 
 export type SlotBreakdown = {
   free: SlotTeacherState[];
-  busy: SlotTeacherState[];
   unavailable: SlotTeacherState[];
   unmarked: SlotTeacherState[];
 };

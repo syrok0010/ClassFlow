@@ -18,7 +18,7 @@ import {
   buildMinuteBreakdown,
   durationToTimelinePercent,
   getDayDateLabel,
-  getTeacherDayTimeline,
+  getTeacherDayAvailabilitySegments,
   minuteToTimelinePercent,
   minutesToTime,
   type TeacherTimelineRef,
@@ -36,7 +36,6 @@ type MultiTeacherMatrixProps = {
 
 type MinuteCounts = {
   free: number;
-  busy: number;
   unavailable: number;
 };
 
@@ -62,7 +61,7 @@ export function MultiTeacherMatrix({
         DAY_CONFIG.map((day) => {
           const teacherTimelineRefs: TeacherTimelineRef[] = teachers.map((teacher) => ({
             teacher,
-            timeline: getTeacherDayTimeline(teacher, weekStart, day.dayOfWeek),
+            segments: getTeacherDayAvailabilitySegments(teacher, weekStart, day.dayOfWeek),
           }));
           const minuteCounts = Array.from(
             { length: DAY_END_MINUTES - DAY_START_MINUTES },
@@ -74,7 +73,6 @@ export function MultiTeacherMatrix({
 
               return {
                 free: breakdown.free.length,
-                busy: breakdown.busy.length,
                 unavailable: breakdown.unavailable.length,
               };
             },
@@ -93,8 +91,7 @@ export function MultiTeacherMatrix({
   );
   const hoveredDay = hovered ? DAY_CONFIG.find((day) => day.dayOfWeek === hovered.dayOfWeek) ?? null : null;
   const hoveredAggregation = hoveredDay ? dayAggregations.get(hoveredDay.dayOfWeek) ?? null : null;
-  const hoveredBreakdown =
-    hovered && hoveredAggregation
+  const hoveredBreakdown = hovered && hoveredAggregation
       ? buildMinuteBreakdown(hoveredAggregation.teacherTimelineRefs, hovered.minute)
       : null;
 
@@ -105,13 +102,6 @@ export function MultiTeacherMatrix({
         <CardDescription>
           Чем выше стек, тем больше преподавателей с явно заданным статусом в этот момент.
         </CardDescription>
-        <CardAction>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Badge variant="secondary">Свободны</Badge>
-            <Badge variant="outline">На уроках</Badge>
-            <Badge variant="destructive">Недоступны</Badge>
-          </div>
-        </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <AvailabilityTimelineScale />
@@ -140,18 +130,9 @@ export function MultiTeacherMatrix({
                       </div>
                       <div className="flex flex-col gap-2">
                         <TooltipGroup
-                          title={`Свободны (${hoveredBreakdown.free.length})`}
+                          title={`Доступны (${hoveredBreakdown.free.length})`}
                           tone="text-emerald-700"
                           items={hoveredBreakdown.free.map((entry) => entry.teacherName)}
-                        />
-                        <TooltipGroup
-                          title={`На уроках (${hoveredBreakdown.busy.length})`}
-                          tone="text-sky-700"
-                          items={hoveredBreakdown.busy.map((entry) =>
-                            entry.lessonLabel
-                              ? `${entry.teacherName} (${entry.lessonLabel})`
-                              : entry.teacherName,
-                          )}
                         />
                         <TooltipGroup
                           title={`Недоступны (${hoveredBreakdown.unavailable.length})`}
@@ -178,9 +159,8 @@ export function MultiTeacherMatrix({
                 <div className="absolute inset-0">
                   {dayAggregation.segments.map((segment) => {
                     const freeHeight = (segment.free / maxStackHeight) * 100;
-                    const busyHeight = (segment.busy / maxStackHeight) * 100;
                     const unavailableHeight = (segment.unavailable / maxStackHeight) * 100;
-                    const explicitCount = segment.free + segment.busy + segment.unavailable;
+                    const explicitCount = segment.free + segment.unavailable;
 
                     if (explicitCount === 0) {
                       return null;
@@ -201,20 +181,11 @@ export function MultiTeacherMatrix({
                             style={{ height: `${freeHeight}%` }}
                           />
                         ) : null}
-                        {segment.busy > 0 ? (
-                          <div
-                            className="absolute inset-x-0 bg-sky-500/80"
-                            style={{
-                              bottom: `${freeHeight}%`,
-                              height: `${busyHeight}%`,
-                            }}
-                          />
-                        ) : null}
                         {segment.unavailable > 0 ? (
                           <div
                             className="absolute inset-x-0 rounded-t-sm bg-destructive/70"
                             style={{
-                              bottom: `${freeHeight + busyHeight}%`,
+                              bottom: `${freeHeight}%`,
                               height: `${unavailableHeight}%`,
                             }}
                           />
@@ -246,7 +217,6 @@ function buildCountSegments(minuteCounts: MinuteCounts[]): CountSegment[] {
 
     if (
       currentCounts.free === nextCounts.free
-      && currentCounts.busy === nextCounts.busy
       && currentCounts.unavailable === nextCounts.unavailable
     ) {
       continue;

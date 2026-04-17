@@ -1,7 +1,6 @@
 import type { AvailabilityType } from "@/generated/prisma/enums";
 import type {
   AvailabilityOverrideEntry,
-  AvailabilityScheduleEntry,
   AvailabilityTeacher,
   AvailabilityTemplateEntry,
   DayConfig,
@@ -272,25 +271,15 @@ export type AvailabilityTimelineSegment = MinuteRange & {
   isOverride: boolean;
 };
 
-export type ScheduleTimelineEntry = AvailabilityScheduleEntry & MinuteRange & {
-  hasConflict: boolean;
-};
-
-export type TeacherDayTimeline = {
-  availabilitySegments: AvailabilityTimelineSegment[];
-  scheduleEntries: ScheduleTimelineEntry[];
-};
-
 export type TeacherMinuteState = {
   availability: AvailabilityType | null;
   finalAvailability: AvailabilityType | null;
   isOverride: boolean;
-  schedule: ScheduleTimelineEntry | null;
 };
 
 export type TeacherTimelineRef = {
   teacher: AvailabilityTeacher;
-  timeline: TeacherDayTimeline;
+  segments: AvailabilityTimelineSegment[];
 };
 
 const DAY_RANGE_MINUTES = DAY_END_MINUTES - DAY_START_MINUTES;
@@ -412,60 +401,19 @@ function buildEffectiveAvailabilitySegments(
   return segments;
 }
 
-function getTeacherDayScheduleEntries(
+export function getTeacherDayAvailabilitySegments(
   teacher: AvailabilityTeacher,
   weekStartIso: string,
   dayOfWeek: number,
-): Array<AvailabilityScheduleEntry & MinuteRange> {
-  const dayStart = getDayDate(weekStartIso, dayOfWeek);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = addDays(dayStart, 1);
-
-  return teacher.scheduleEntries
-    .filter((entry) => {
-      const start = new Date(entry.startTime);
-      const end = new Date(entry.endTime);
-      return start < dayEnd && end > dayStart;
-    })
-    .map((entry) => {
-      const range = clampMinuteRange(
-        getMinuteOffsetFromDayStart(new Date(entry.startTime), dayStart),
-        getMinuteOffsetFromDayStart(new Date(entry.endTime), dayStart),
-      );
-
-      return range ? { ...entry, ...range } : null;
-    })
-    .filter((entry): entry is AvailabilityScheduleEntry & MinuteRange => Boolean(entry))
-    .sort((left, right) => left.startMinute - right.startMinute);
-}
-
-export function getTeacherDayTimeline(
-  teacher: AvailabilityTeacher,
-  weekStartIso: string,
-  dayOfWeek: number,
-): TeacherDayTimeline {
-  const availabilitySegments = buildEffectiveAvailabilitySegments(teacher, weekStartIso, dayOfWeek);
-  const scheduleEntries = getTeacherDayScheduleEntries(teacher, weekStartIso, dayOfWeek).map((entry) => ({
-    ...entry,
-    hasConflict: availabilitySegments.some(
-      (segment) => segment.type === "UNAVAILABLE" && rangesOverlap(segment, entry),
-    ),
-  }));
-
-  return {
-    availabilitySegments,
-    scheduleEntries,
-  };
+): AvailabilityTimelineSegment[] {
+  return buildEffectiveAvailabilitySegments(teacher, weekStartIso, dayOfWeek);
 }
 
 export function getTeacherMinuteState(
-  timeline: TeacherDayTimeline,
+  segments: AvailabilityTimelineSegment[],
   minute: number,
 ): TeacherMinuteState {
-  const schedule = timeline.scheduleEntries.find(
-    (entry) => entry.startMinute <= minute && entry.endMinute > minute,
-  ) ?? null;
-  const availabilitySegment = timeline.availabilitySegments.find(
+  const availabilitySegment = segments.find(
     (segment) => segment.startMinute <= minute && segment.endMinute > minute,
   ) ?? null;
 
@@ -473,7 +421,6 @@ export function getTeacherMinuteState(
     availability: availabilitySegment?.type ?? null,
     finalAvailability: availabilitySegment?.type ?? null,
     isOverride: availabilitySegment?.isOverride ?? false,
-    schedule,
   };
 }
 
@@ -481,17 +428,8 @@ export function buildMinuteBreakdown(
   teacherTimelineRefs: TeacherTimelineRef[],
   minute: number,
 ): SlotBreakdown {
-  const slotStateEntries: SlotTeacherState[] = teacherTimelineRefs.map(({ teacher, timeline }) => {
-    const state = getTeacherMinuteState(timeline, minute);
-
-    if (state.schedule) {
-      return {
-        teacherId: teacher.teacherId,
-        teacherName: teacher.fullName,
-        state: "busy",
-        lessonLabel: `${state.schedule.groupName} · ${state.schedule.subjectName}`,
-      };
-    }
+  const slotStateEntries: SlotTeacherState[] = teacherTimelineRefs.map(({ teacher, segments }) => {
+    const state = getTeacherMinuteState(segments, minute);
 
     if (state.finalAvailability === "AVAILABLE" || state.finalAvailability === "PREFERRED") {
       return {
@@ -518,7 +456,6 @@ export function buildMinuteBreakdown(
 
   return {
     free: slotStateEntries.filter((entry) => entry.state === "free"),
-    busy: slotStateEntries.filter((entry) => entry.state === "busy"),
     unavailable: slotStateEntries.filter((entry) => entry.state === "unavailable"),
     unmarked: slotStateEntries.filter((entry) => entry.state === "unmarked"),
   };
