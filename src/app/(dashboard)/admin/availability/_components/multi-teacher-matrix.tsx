@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -13,34 +13,98 @@ import {
 import type { AvailabilityTeacher } from "../_lib/types";
 import {
   DAY_CONFIG,
+  DAY_END_MINUTES,
   DAY_START_MINUTES,
-  SLOT_COUNT,
-  SLOT_MINUTES,
-  buildSlotBreakdown,
+  buildMinuteBreakdown,
+  durationToTimelinePercent,
   getDayDateLabel,
+  getTeacherDayTimeline,
+  minuteToTimelinePercent,
   minutesToTime,
+  type TeacherTimelineRef,
 } from "../_lib/utils";
-import { SLOT_LABELS } from "./availability-view-helpers";
+import {
+  AvailabilityHoverPanel,
+  AvailabilityTimelineCanvas,
+  AvailabilityTimelineRow,
+  AvailabilityTimelineScale,
+} from "./availability-timeline-shared";
 
 type MultiTeacherMatrixProps = {
   teachers: AvailabilityTeacher[];
   weekStart: string;
 };
 
+type MinuteCounts = {
+  free: number;
+  busy: number;
+  unavailable: number;
+};
+
+type CountSegment = MinuteCounts & {
+  startMinute: number;
+  endMinute: number;
+};
+
+type DayAggregation = {
+  teacherTimelineRefs: TeacherTimelineRef[];
+  segments: CountSegment[];
+};
+
 export function MultiTeacherMatrix({
   teachers,
   weekStart,
 }: MultiTeacherMatrixProps) {
-  const [hovered, setHovered] = useState<{ dayOfWeek: number; slotIndex: number } | null>(null);
-
+  const [hovered, setHovered] = useState<{ dayOfWeek: number; minute: number } | null>(null);
   const maxStackHeight = teachers.length;
+  const dayAggregations = useMemo(
+    () =>
+      new Map(
+        DAY_CONFIG.map((day) => {
+          const teacherTimelineRefs: TeacherTimelineRef[] = teachers.map((teacher) => ({
+            teacher,
+            timeline: getTeacherDayTimeline(teacher, weekStart, day.dayOfWeek),
+          }));
+          const minuteCounts = Array.from(
+            { length: DAY_END_MINUTES - DAY_START_MINUTES },
+            (_, minuteOffset) => {
+              const breakdown = buildMinuteBreakdown(
+                teacherTimelineRefs,
+                DAY_START_MINUTES + minuteOffset,
+              );
+
+              return {
+                free: breakdown.free.length,
+                busy: breakdown.busy.length,
+                unavailable: breakdown.unavailable.length,
+              };
+            },
+          );
+
+          return [
+            day.dayOfWeek,
+            {
+              teacherTimelineRefs,
+              segments: buildCountSegments(minuteCounts),
+            } satisfies DayAggregation,
+          ] as const;
+        }),
+      ),
+    [teachers, weekStart],
+  );
+  const hoveredDay = hovered ? DAY_CONFIG.find((day) => day.dayOfWeek === hovered.dayOfWeek) ?? null : null;
+  const hoveredAggregation = hoveredDay ? dayAggregations.get(hoveredDay.dayOfWeek) ?? null : null;
+  const hoveredBreakdown =
+    hovered && hoveredAggregation
+      ? buildMinuteBreakdown(hoveredAggregation.teacherTimelineRefs, hovered.minute)
+      : null;
 
   return (
     <Card>
       <CardHeader className="border-b">
         <CardTitle>Сводка пересечений</CardTitle>
         <CardDescription>
-          Чем выше стек, тем больше преподавателей с явно заданным статусом в этот слот.
+          Чем выше стек, тем больше преподавателей с явно заданным статусом в этот момент.
         </CardDescription>
         <CardAction>
           <div className="flex flex-wrap justify-end gap-2">
@@ -51,127 +115,159 @@ export function MultiTeacherMatrix({
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <div className="grid grid-cols-[120px_repeat(20,minmax(0,1fr))] gap-1 text-xs text-muted-foreground">
-          <div />
-          {SLOT_LABELS.map((label) => (
-            <div key={label} className="text-center">
-              {label}
-            </div>
-          ))}
-        </div>
+        <AvailabilityTimelineScale />
 
         {DAY_CONFIG.map((day) => {
-          const activeHover = hovered?.dayOfWeek === day.dayOfWeek ? hovered.slotIndex : null;
+          const dayAggregation = dayAggregations.get(day.dayOfWeek);
+
+          if (!dayAggregation) {
+            return null;
+          }
 
           return (
-            <div key={day.dayOfWeek} className="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
-              <div className="flex flex-col justify-center rounded-lg border bg-muted/40 px-3 py-2">
-                <span className="font-medium text-foreground">{day.label}</span>
-                <span className="text-xs text-muted-foreground">
-                  {getDayDateLabel(weekStart, day.dayOfWeek)}
-                </span>
-              </div>
+            <AvailabilityTimelineRow
+              key={day.dayOfWeek}
+              dayLabel={day.label}
+              dateLabel={getDayDateLabel(weekStart, day.dayOfWeek)}
+            >
+              <AvailabilityTimelineCanvas
+                hoveredMinute={hovered?.dayOfWeek === day.dayOfWeek ? hovered.minute : null}
+                onHoverMinuteChange={(minute) => {
+                  setHovered({
+                    dayOfWeek: day.dayOfWeek,
+                    minute,
+                  });
+                }}
+                onHoverEnd={() => setHovered(null)}
+              >
+                <div className="absolute inset-0">
+                  {dayAggregation.segments.map((segment) => {
+                    const freeHeight = (segment.free / maxStackHeight) * 100;
+                    const busyHeight = (segment.busy / maxStackHeight) * 100;
+                    const unavailableHeight = (segment.unavailable / maxStackHeight) * 100;
+                    const explicitCount = segment.free + segment.busy + segment.unavailable;
 
-              <div className="relative rounded-lg border bg-background p-2">
-                {activeHover !== null ? (
-                  <div
-                    className="pointer-events-none absolute top-2 bottom-2 z-10 w-px bg-primary/40"
-                    style={{
-                      left: `calc(${((activeHover + 0.5) / SLOT_COUNT) * 100}% + 0.25rem)`,
-                    }}
-                  />
-                ) : null}
-
-                <div
-                  className="grid h-28 grid-cols-20 gap-1"
-                  onMouseLeave={() => setHovered(null)}
-                >
-                  {Array.from({ length: SLOT_COUNT }).map((_, slotIndex) => {
-                    const breakdown = buildSlotBreakdown(teachers, weekStart, day.dayOfWeek, slotIndex);
-                    const explicitCount =
-                      breakdown.free.length + breakdown.busy.length + breakdown.unavailable.length;
+                    if (explicitCount === 0) {
+                      return null;
+                    }
 
                     return (
-                      <button
-                        key={`${day.dayOfWeek}-${slotIndex}`}
-                        type="button"
-                        onMouseEnter={() => setHovered({ dayOfWeek: day.dayOfWeek, slotIndex })}
-                        className="group relative flex items-end rounded-md bg-muted/50 px-0.5"
+                      <div
+                        key={`${day.dayOfWeek}-${segment.startMinute}-${segment.endMinute}`}
+                        className="absolute inset-y-0"
+                        style={{
+                          left: `${minuteToTimelinePercent(segment.startMinute)}%`,
+                          width: `${durationToTimelinePercent(segment.endMinute - segment.startMinute)}%`,
+                        }}
                       >
-                        <div className="flex h-full w-full flex-col justify-end gap-px">
+                        {segment.free > 0 ? (
                           <div
-                            className="rounded-t-sm bg-destructive/70"
+                            className="absolute inset-x-0 bottom-0 rounded-b-sm bg-emerald-400/90"
+                            style={{ height: `${freeHeight}%` }}
+                          />
+                        ) : null}
+                        {segment.busy > 0 ? (
+                          <div
+                            className="absolute inset-x-0 bg-sky-500/80"
                             style={{
-                              height: `${(breakdown.unavailable.length / maxStackHeight) * 100}%`,
+                              bottom: `${freeHeight}%`,
+                              height: `${busyHeight}%`,
                             }}
                           />
+                        ) : null}
+                        {segment.unavailable > 0 ? (
                           <div
-                            className="bg-sky-500/80"
+                            className="absolute inset-x-0 rounded-t-sm bg-destructive/70"
                             style={{
-                              height: `${(breakdown.busy.length / maxStackHeight) * 100}%`,
+                              bottom: `${freeHeight + busyHeight}%`,
+                              height: `${unavailableHeight}%`,
                             }}
                           />
-                          <div
-                            className="rounded-b-sm bg-emerald-400/90"
-                            style={{
-                              height: `${(breakdown.free.length / maxStackHeight) * 100}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="sr-only">
-                          {minutesToTime(DAY_START_MINUTES + slotIndex * SLOT_MINUTES)}: {explicitCount}
-                        </span>
-                      </button>
+                        ) : null}
+                      </div>
                     );
                   })}
                 </div>
-
-                {activeHover !== null ? (
-                  <MultiTeacherTooltip
-                    breakdown={buildSlotBreakdown(teachers, weekStart, day.dayOfWeek, activeHover)}
-                    label={minutesToTime(DAY_START_MINUTES + activeHover * SLOT_MINUTES)}
-                  />
-                ) : null}
-              </div>
-            </div>
+              </AvailabilityTimelineCanvas>
+            </AvailabilityTimelineRow>
           );
         })}
+
+        {hovered && hoveredDay && hoveredBreakdown ? (
+          <AvailabilityHoverPanel>
+            <div className="mb-2 font-medium text-foreground">
+              {hoveredDay.label}, {getDayDateLabel(weekStart, hoveredDay.dayOfWeek)} ·{" "}
+              {minutesToTime(hovered.minute)}
+            </div>
+            <div className="flex flex-col gap-2">
+              <TooltipGroup
+                title={`Свободны (${hoveredBreakdown.free.length})`}
+                tone="text-emerald-700"
+                items={hoveredBreakdown.free.map((entry) => entry.teacherName)}
+              />
+              <TooltipGroup
+                title={`На уроках (${hoveredBreakdown.busy.length})`}
+                tone="text-sky-700"
+                items={hoveredBreakdown.busy.map((entry) =>
+                  entry.lessonLabel
+                    ? `${entry.teacherName} (${entry.lessonLabel})`
+                    : entry.teacherName,
+                )}
+              />
+              <TooltipGroup
+                title={`Недоступны (${hoveredBreakdown.unavailable.length})`}
+                tone="text-destructive"
+                items={hoveredBreakdown.unavailable.map((entry) => entry.teacherName)}
+              />
+              <TooltipGroup
+                title={`Не отмечены (${hoveredBreakdown.unmarked.length})`}
+                tone="text-muted-foreground"
+                items={hoveredBreakdown.unmarked.map((entry) => entry.teacherName)}
+              />
+            </div>
+          </AvailabilityHoverPanel>
+        ) : null}
       </CardContent>
     </Card>
   );
 }
 
-function MultiTeacherTooltip({
-  breakdown,
-  label,
-}: {
-  breakdown: ReturnType<typeof buildSlotBreakdown>;
-  label: string;
-}) {
-  return (
-    <div className="absolute right-2 bottom-2 z-20 w-[20rem] rounded-xl border bg-background/95 p-3 text-sm shadow-lg backdrop-blur">
-      <div className="mb-2 font-medium text-foreground">{label}</div>
-      <div className="flex flex-col gap-2">
-        <TooltipGroup
-          title={`Свободны (${breakdown.free.length})`}
-          tone="text-emerald-700"
-          items={breakdown.free.map((entry) => entry.teacherName)}
-        />
-        <TooltipGroup
-          title={`На уроках (${breakdown.busy.length})`}
-          tone="text-sky-700"
-          items={breakdown.busy.map((entry) =>
-            entry.lessonLabel ? `${entry.teacherName} (${entry.lessonLabel})` : entry.teacherName,
-          )}
-        />
-        <TooltipGroup
-          title={`Недоступны (${breakdown.unavailable.length})`}
-          tone="text-destructive"
-          items={breakdown.unavailable.map((entry) => entry.teacherName)}
-        />
-      </div>
-    </div>
-  );
+function buildCountSegments(minuteCounts: MinuteCounts[]): CountSegment[] {
+  if (minuteCounts.length === 0) {
+    return [];
+  }
+
+  const segments: CountSegment[] = [];
+  let currentStartMinute = DAY_START_MINUTES;
+  let currentCounts = minuteCounts[0];
+
+  for (let minuteOffset = 1; minuteOffset < minuteCounts.length; minuteOffset += 1) {
+    const nextCounts = minuteCounts[minuteOffset];
+
+    if (
+      currentCounts.free === nextCounts.free
+      && currentCounts.busy === nextCounts.busy
+      && currentCounts.unavailable === nextCounts.unavailable
+    ) {
+      continue;
+    }
+
+    segments.push({
+      startMinute: currentStartMinute,
+      endMinute: DAY_START_MINUTES + minuteOffset,
+      ...currentCounts,
+    });
+    currentStartMinute = DAY_START_MINUTES + minuteOffset;
+    currentCounts = nextCounts;
+  }
+
+  segments.push({
+    startMinute: currentStartMinute,
+    endMinute: DAY_END_MINUTES,
+    ...currentCounts,
+  });
+
+  return segments;
 }
 
 function TooltipGroup({
