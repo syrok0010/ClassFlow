@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -13,19 +14,20 @@ import type { AvailabilityTeacher } from "../_lib/types";
 import {
   AVAILABILITY_TYPE_LABELS,
   DAY_CONFIG,
-  DAY_END_MINUTES,
-  DAY_START_MINUTES,
-  SLOT_COUNT,
-  SLOT_MINUTES,
+  durationToTimelinePercent,
   formatTimeFromDateTime,
-  getDayDate,
   getDayDateLabel,
-  getTeacherConflictSlots,
-  getTeacherSlotState,
-  timeToMinutes,
-  toIsoDate,
+  getTeacherDayTimeline,
+  getTeacherMinuteState,
+  minuteToTimelinePercent,
+  minutesToTime,
 } from "../_lib/utils";
-import { SLOT_LABELS } from "./availability-view-helpers";
+import {
+  AvailabilityHoverPanel,
+  AvailabilityTimelineCanvas,
+  AvailabilityTimelineRow,
+  AvailabilityTimelineScale,
+} from "./availability-timeline-shared";
 
 type SingleTeacherMatrixProps = {
   teacher: AvailabilityTeacher;
@@ -36,7 +38,21 @@ export function SingleTeacherMatrix({
   teacher,
   weekStart,
 }: SingleTeacherMatrixProps) {
-  const conflictSlots = getTeacherConflictSlots(teacher, weekStart);
+  const [hovered, setHovered] = useState<{ dayOfWeek: number; minute: number } | null>(null);
+  const dayTimelines = useMemo(
+    () =>
+      new Map(
+        DAY_CONFIG.map((day) => [
+          day.dayOfWeek,
+          getTeacherDayTimeline(teacher, weekStart, day.dayOfWeek),
+        ]),
+      ),
+    [teacher, weekStart],
+  );
+  const hoveredDay = hovered ? DAY_CONFIG.find((day) => day.dayOfWeek === hovered.dayOfWeek) ?? null : null;
+  const hoveredTimeline = hoveredDay ? dayTimelines.get(hoveredDay.dayOfWeek) ?? null : null;
+  const hoveredState =
+    hovered && hoveredTimeline ? getTeacherMinuteState(hoveredTimeline, hovered.minute) : null;
 
   return (
     <Card>
@@ -55,115 +71,100 @@ export function SingleTeacherMatrix({
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <div className="grid grid-cols-[120px_repeat(20,minmax(0,1fr))] gap-1 text-xs text-muted-foreground">
-          <div />
-          {SLOT_LABELS.map((label) => (
-            <div key={label} className="text-center">
-              {label}
-            </div>
-          ))}
-        </div>
+        <AvailabilityTimelineScale />
 
         {DAY_CONFIG.map((day) => {
-          const dayScheduleEntries = teacher.scheduleEntries.filter(
-            (entry) =>
-              toIsoDate(new Date(entry.startTime)) ===
-              toIsoDate(getDayDate(weekStart, day.dayOfWeek)),
-          );
+          const dayTimeline = dayTimelines.get(day.dayOfWeek);
+
+          if (!dayTimeline) {
+            return null;
+          }
 
           return (
-            <div key={day.dayOfWeek} className="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
-              <div className="flex flex-col justify-center rounded-lg border bg-muted/40 px-3 py-2">
-                <span className="font-medium text-foreground">{day.label}</span>
-                <span className="text-xs text-muted-foreground">
-                  {getDayDateLabel(weekStart, day.dayOfWeek)}
-                </span>
-              </div>
-
-              <div className="relative overflow-hidden rounded-lg border bg-background">
-                <div className="grid h-16 grid-cols-20 gap-px bg-border">
-                  {Array.from({ length: SLOT_COUNT }).map((_, slotIndex) => {
-                    const slot = getTeacherSlotState(teacher, weekStart, day.dayOfWeek, slotIndex);
-                    const finalAvailability = slot.finalAvailability;
-                    const hasConflict = conflictSlots.has(`${day.dayOfWeek}:${slotIndex}`);
-
-                    return (
-                      <div
-                        key={`${day.dayOfWeek}-${slotIndex}`}
-                        className={`relative bg-background ${
-                          finalAvailability === "PREFERRED"
-                            ? "bg-emerald-500/35"
-                            : finalAvailability === "AVAILABLE"
-                              ? "bg-emerald-200/80"
-                              : finalAvailability === "UNAVAILABLE"
-                                ? "bg-slate-300/70"
-                                : "bg-background"
-                        } ${hasConflict ? "ring-2 ring-inset ring-destructive" : ""}`}
-                        style={
-                          slot.override
-                            ? {
-                                backgroundImage:
-                                  "repeating-linear-gradient(-45deg, rgba(15,23,42,0.14), rgba(15,23,42,0.14) 4px, transparent 4px, transparent 8px)",
-                              }
-                            : undefined
-                        }
-                        title={
-                          slot.schedule
-                            ? `${formatTimeFromDateTime(slot.schedule.startTime)} - ${formatTimeFromDateTime(slot.schedule.endTime)} · ${slot.schedule.groupName} · ${slot.schedule.subjectName}`
-                            : finalAvailability
-                              ? AVAILABILITY_TYPE_LABELS[finalAvailability]
-                              : "Не отмечено"
-                        }
-                      />
-                    );
-                  })}
+            <AvailabilityTimelineRow
+              key={day.dayOfWeek}
+              dayLabel={day.label}
+              dateLabel={getDayDateLabel(weekStart, day.dayOfWeek)}
+            >
+              <AvailabilityTimelineCanvas
+                hoveredMinute={hovered?.dayOfWeek === day.dayOfWeek ? hovered.minute : null}
+                onHoverMinuteChange={(minute) => {
+                  setHovered({
+                    dayOfWeek: day.dayOfWeek,
+                    minute,
+                  });
+                }}
+                onHoverEnd={() => setHovered(null)}
+              >
+                <div className="absolute inset-0">
+                  {dayTimeline.availabilitySegments.map((segment) => (
+                    <div
+                      key={`${day.dayOfWeek}-${segment.startMinute}-${segment.endMinute}-${segment.type}-${segment.isOverride ? "override" : "template"}`}
+                      className={`absolute inset-y-0 ${
+                        segment.type === "PREFERRED"
+                          ? "bg-emerald-500/35"
+                          : segment.type === "AVAILABLE"
+                            ? "bg-emerald-200/80"
+                            : "bg-slate-300/70"
+                      }`}
+                      style={{
+                        left: `${minuteToTimelinePercent(segment.startMinute)}%`,
+                        width: `${durationToTimelinePercent(segment.endMinute - segment.startMinute)}%`,
+                        backgroundImage: segment.isOverride
+                          ? "repeating-linear-gradient(-45deg, rgba(15,23,42,0.14), rgba(15,23,42,0.14) 4px, transparent 4px, transparent 8px)"
+                          : undefined,
+                      }}
+                      title={`${minutesToTime(segment.startMinute)} - ${minutesToTime(segment.endMinute)} · ${segment.isOverride ? "Исключение" : "Шаблон"} · ${AVAILABILITY_TYPE_LABELS[segment.type]}`}
+                    />
+                  ))}
                 </div>
 
                 <div className="pointer-events-none absolute inset-1">
-                  {dayScheduleEntries.map((entry) => {
-                    const startMinutes = timeToMinutes(formatTimeFromDateTime(entry.startTime));
-                    const endMinutes = timeToMinutes(formatTimeFromDateTime(entry.endTime));
-                    const clampedStart = Math.max(startMinutes, DAY_START_MINUTES);
-                    const clampedEnd = Math.min(endMinutes, DAY_END_MINUTES);
-                    const left =
-                      ((clampedStart - DAY_START_MINUTES) / (DAY_END_MINUTES - DAY_START_MINUTES)) *
-                      100;
-                    const width =
-                      ((clampedEnd - clampedStart) / (DAY_END_MINUTES - DAY_START_MINUTES)) * 100;
-
-                    if (width <= 0) {
-                      return null;
-                    }
-
-                    const hasConflict = Array.from(
-                      {
-                        length: Math.max(1, Math.ceil((clampedEnd - clampedStart) / SLOT_MINUTES)),
-                      },
-                      (_, index) =>
-                        conflictSlots.has(
-                          `${day.dayOfWeek}:${Math.floor((clampedStart - DAY_START_MINUTES) / SLOT_MINUTES) + index}`,
-                        ),
-                    ).some(Boolean);
-
-                    return (
-                      <div
-                        key={entry.id}
-                        className={`absolute top-1 bottom-1 rounded-md bg-sky-600/90 px-2 py-1 text-[11px] font-medium text-white shadow-sm ${
-                          hasConflict ? "ring-2 ring-destructive" : ""
-                        }`}
-                        style={{ left: `${left}%`, width: `${width}%` }}
-                        title={`${entry.groupName} · ${entry.subjectName}`}
-                      >
-                        <div className="truncate">{entry.groupName}</div>
-                        <div className="truncate text-sky-50/90">{entry.subjectName}</div>
-                      </div>
-                    );
-                  })}
+                  {dayTimeline.scheduleEntries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className={`absolute top-3 bottom-3 rounded-lg bg-sky-600/90 px-2 py-1 text-[11px] font-medium text-white shadow-sm ${
+                        entry.hasConflict ? "ring-2 ring-destructive" : ""
+                      }`}
+                      style={{
+                        left: `${minuteToTimelinePercent(entry.startMinute)}%`,
+                        width: `${durationToTimelinePercent(entry.endMinute - entry.startMinute)}%`,
+                      }}
+                      title={`${formatTimeFromDateTime(entry.startTime)} - ${formatTimeFromDateTime(entry.endTime)} · ${entry.groupName} · ${entry.subjectName}`}
+                    >
+                      <div className="truncate">{entry.groupName}</div>
+                      <div className="truncate text-sky-50/90">{entry.subjectName}</div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            </div>
+              </AvailabilityTimelineCanvas>
+            </AvailabilityTimelineRow>
           );
         })}
+
+        {hovered && hoveredDay && hoveredState ? (
+          <AvailabilityHoverPanel>
+            <p className="font-medium text-foreground">
+              {hoveredDay.label}, {getDayDateLabel(weekStart, hoveredDay.dayOfWeek)} ·{" "}
+              {minutesToTime(hovered.minute)}
+            </p>
+            <div className="mt-1 flex flex-col gap-1 text-muted-foreground">
+              <p>
+                {hoveredState.finalAvailability
+                  ? `${hoveredState.isOverride ? "Исключение" : "Шаблон"}: ${AVAILABILITY_TYPE_LABELS[hoveredState.finalAvailability]}`
+                  : "Шаблон не задан"}
+              </p>
+              {hoveredState.schedule ? (
+                <p className="text-sky-700">
+                  Урок: {hoveredState.schedule.groupName} · {hoveredState.schedule.subjectName}
+                </p>
+              ) : null}
+              {hoveredState.schedule?.hasConflict ? (
+                <p className="text-destructive">Конфликт: урок пересекается с недоступностью</p>
+              ) : null}
+            </div>
+          </AvailabilityHoverPanel>
+        ) : null}
 
         {teacher.scheduleEntries.length === 0 ? (
           <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
@@ -175,4 +176,3 @@ export function SingleTeacherMatrix({
     </Card>
   );
 }
-
