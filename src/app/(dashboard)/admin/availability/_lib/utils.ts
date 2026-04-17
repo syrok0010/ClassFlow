@@ -10,7 +10,7 @@ import type {
 
 export const DAY_START_MINUTES = 8 * 60;
 export const DAY_END_MINUTES = 18 * 60;
-export const SLOT_MINUTES = 30;
+export const SLOT_MINUTES = 60;
 export const SLOT_COUNT = (DAY_END_MINUTES - DAY_START_MINUTES) / SLOT_MINUTES;
 
 export const DAY_CONFIG: DayConfig[] = [
