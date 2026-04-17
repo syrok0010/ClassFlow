@@ -38,10 +38,7 @@ type AvailabilityEditorProps = {
   teacher: AvailabilityTeacher;
   weekStart: string;
   isMutating: boolean;
-  onOpenTemplateDialog: (
-    dayOfWeek: number,
-    entry?: AvailabilityTemplateEntry | null,
-  ) => void;
+  onOpenTemplateDialog: (entry?: AvailabilityTemplateEntry | null) => void;
   onDeleteTemplateEntry: (entry: AvailabilityTemplateEntry) => void;
   onOpenOverrideDialog: (entry?: AvailabilityOverrideEntry | null) => void;
   onDeleteOverride: (entry: AvailabilityOverrideEntry) => void;
@@ -67,6 +64,17 @@ export function AvailabilityEditor({
             Изменения действуют для всех будущих недель и автоматически нормализуются по
             пересечениям.
           </CardDescription>
+          <CardAction>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isMutating}
+              onClick={() => onOpenTemplateDialog()}
+            >
+              <CalendarDays data-icon="inline-start" />
+              Добавить слот
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {DAY_CONFIG.map((day) => {
@@ -74,20 +82,9 @@ export function AvailabilityEditor({
 
             return (
               <div key={day.dayOfWeek} className="rounded-xl border bg-background">
-                <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-                  <div>
-                    <p className="font-medium text-foreground">{day.label}</p>
-                    <p className="text-xs text-muted-foreground">{day.shortLabel}</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isMutating}
-                    onClick={() => onOpenTemplateDialog(day.dayOfWeek)}
-                  >
-                    <CalendarDays data-icon="inline-start" />
-                    Добавить слот
-                  </Button>
+                <div className="border-b px-4 py-3">
+                  <p className="font-medium text-foreground">{day.label}</p>
+                  <p className="text-xs text-muted-foreground">{day.shortLabel}</p>
                 </div>
 
                 <div className="flex flex-col gap-2 px-4 py-3">
@@ -99,7 +96,7 @@ export function AvailabilityEditor({
                     entries.map((entry) => (
                       <div
                         key={entry.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2"
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
                       >
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <Badge variant={AVAILABILITY_TYPE_BADGE_VARIANTS[entry.type]}>
@@ -114,7 +111,7 @@ export function AvailabilityEditor({
                             variant="ghost"
                             size="sm"
                             disabled={isMutating}
-                            onClick={() => onOpenTemplateDialog(entry.dayOfWeek, entry)}
+                            onClick={() => onOpenTemplateDialog(entry)}
                           >
                             <PencilLine data-icon="inline-start" />
                             Изменить
@@ -145,8 +142,7 @@ export function AvailabilityEditor({
         <CardHeader className="border-b">
           <CardTitle>Исключения</CardTitle>
           <CardDescription>
-            Разовые изменения поверх шаблона. В списке сначала показываются исключения текущей
-            недели.
+            Разовые изменения поверх шаблона.
           </CardDescription>
           <CardAction>
             <Button
@@ -162,7 +158,7 @@ export function AvailabilityEditor({
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {teacher.overrides.length === 0 ? (
-            <Empty className="min-h-[320px] py-8">
+            <Empty className="min-h-80 py-8">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <CalendarDays />

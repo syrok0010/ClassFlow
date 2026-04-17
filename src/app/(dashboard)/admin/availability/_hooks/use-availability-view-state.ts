@@ -11,7 +11,6 @@ import { filterTeachers } from "../_components/availability-view-helpers";
 
 export type TemplateDialogState = {
   open: boolean;
-  dayOfWeek: number;
   entry: AvailabilityTemplateEntry | null;
 };
 
@@ -30,7 +29,6 @@ export function useAvailabilityViewState(
   });
   const [templateDialog, setTemplateDialog] = useState<TemplateDialogState>({
     open: false,
-    dayOfWeek: 1,
     entry: null,
   });
   const [overrideDialog, setOverrideDialog] = useState<OverrideDialogState>({
@@ -66,10 +64,9 @@ export function useAvailabilityViewState(
     void setSelectedTeacherIdsParam(null);
   }
 
-  function openTemplateDialog(dayOfWeek: number, entry: AvailabilityTemplateEntry | null = null) {
+  function openTemplateDialog(entry: AvailabilityTemplateEntry | null = null) {
     setTemplateDialog({
       open: true,
-      dayOfWeek: entry?.dayOfWeek ?? dayOfWeek,
       entry,
     });
   }

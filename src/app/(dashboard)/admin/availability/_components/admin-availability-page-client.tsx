@@ -160,10 +160,9 @@ export function AdminAvailabilityPageClient({
       {selectedTeacher ? (
         <>
           <TemplateEntryDialog
-            key={`${weekStart}-${templateDialog.entry?.id ?? "new"}-${templateDialog.dayOfWeek}-${templateDialog.open ? "open" : "closed"}`}
+            key={`${weekStart}-${templateDialog.entry?.id ?? "new"}-${templateDialog.open ? "open" : "closed"}`}
             open={templateDialog.open}
             teacher={selectedTeacher}
-            dayOfWeek={templateDialog.dayOfWeek}
             entry={templateDialog.entry}
             isSaving={isMutating}
             onOpenChange={closeTemplateDialog}

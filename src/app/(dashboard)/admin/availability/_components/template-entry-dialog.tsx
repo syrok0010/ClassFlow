@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { Button } from "@/components/ui/button";
@@ -36,7 +34,6 @@ const DAY_LABELS_BY_VALUE = new Map(
 type TemplateEntryDialogProps = {
   open: boolean;
   teacher: AvailabilityTeacher;
-  dayOfWeek: number;
   entry: AvailabilityTemplateEntry | null;
   isSaving: boolean;
   onOpenChange: (open: boolean) => void;
@@ -46,7 +43,6 @@ type TemplateEntryDialogProps = {
 export function TemplateEntryDialog({
   open,
   teacher,
-  dayOfWeek,
   entry,
   isSaving,
   onOpenChange,
@@ -55,11 +51,11 @@ export function TemplateEntryDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const form = useForm({
     defaultValues: {
-      dayOfWeek: entry?.dayOfWeek ?? dayOfWeek,
+      dayOfWeek: entry?.dayOfWeek ?? 1,
       startTime: entry?.startTime ?? "08:00",
       endTime: entry?.endTime ?? "09:00",
       type: entry?.type ?? "AVAILABLE",
-    } satisfies TeacherAvailabilityEntryInput,
+    },
     validators: {
       onChange: teacherAvailabilityEntrySchema,
       onSubmit: teacherAvailabilityEntrySchema,
