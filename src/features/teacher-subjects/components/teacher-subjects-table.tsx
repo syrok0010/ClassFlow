@@ -1,9 +1,5 @@
-import { useMemo, useRef } from "react";
-import { useForm } from "@tanstack/react-form";
-import { BookOpen } from "lucide-react";
-import { z } from "zod/v4";
-import { Button } from "@/components/ui/button";
-import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
+import { useMemo } from "react";
+import { EmptyStateConfig, FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import {
   Table,
   TableBody,
@@ -12,17 +8,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type {
-  CreateTeacherSubjectFormInput,
-  UpdateTeacherSubjectInput,
-} from "../_lib/schemas";
-import { subjectGradeRangeSchema } from "../_lib/schemas";
-import type { SubjectOption, TeacherSubjectRow } from "../_lib/types";
+import {
+  type CreateTeacherSubjectFormInput,
+  type UpdateTeacherSubjectInput,
+} from "../lib/schemas";
+import type { SubjectOption, TeacherSubjectRow } from "../lib/types";
 import { InlineCreateRow } from "./inline-create-row";
 import { TeacherSubjectDataRow } from "./teacher-subject-data-row";
 
 interface TeacherSubjectsTableProps {
-  allRowsCount: number;
   rows: TeacherSubjectRow[];
   subjectOptions: SubjectOption[];
   isAddingRow: boolean;
@@ -31,8 +25,8 @@ interface TeacherSubjectsTableProps {
   onUpdateSubject: (row: TeacherSubjectRow, payload: UpdateTeacherSubjectInput) => Promise<boolean>;
   onDeleteRequest: (row: TeacherSubjectRow) => void;
   onCancelAddRow: () => void;
-  onCreateFirst: () => void;
   onResetFilters: () => void;
+  emptyStateConfig: EmptyStateConfig;
 }
 
 function rowKey(row: TeacherSubjectRow) {
@@ -40,7 +34,6 @@ function rowKey(row: TeacherSubjectRow) {
 }
 
 export function TeacherSubjectsTable({
-  allRowsCount,
   rows,
   subjectOptions,
   isAddingRow,
@@ -49,35 +42,10 @@ export function TeacherSubjectsTable({
   onUpdateSubject,
   onDeleteRequest,
   onCancelAddRow,
-  onCreateFirst,
   onResetFilters,
+  emptyStateConfig,
 }: TeacherSubjectsTableProps) {
   const hasRows = rows.length > 0;
-
-  const createResultRef = useRef(false);
-
-  const createSubjectForm = useForm({
-    defaultValues: {
-      subjectId: "",
-      minGrade: 1,
-      maxGrade: 11,
-    } as z.input<typeof subjectGradeRangeSchema>,
-    validators: {
-      onChange: subjectGradeRangeSchema,
-      onSubmit: subjectGradeRangeSchema,
-    },
-    onSubmit: async ({ value }) => {
-      const parsed = subjectGradeRangeSchema.parse(value);
-      createResultRef.current = await onCreateSubject(parsed as CreateTeacherSubjectFormInput);
-    },
-  });
-
-  const handleCreateSubjectWithTableValidation = async (payload: CreateTeacherSubjectFormInput) => {
-    createResultRef.current = false;
-    createSubjectForm.reset(payload as z.input<typeof subjectGradeRangeSchema>);
-    await createSubjectForm.handleSubmit();
-    return createResultRef.current;
-  };
 
   const subjectNamesById = useMemo(() => {
     const map = new Map<string, string>();
@@ -103,7 +71,7 @@ export function TeacherSubjectsTable({
           {isAddingRow ? (
             <InlineCreateRow
               subjectOptions={subjectOptions}
-              onSave={handleCreateSubjectWithTableValidation}
+              onSave={onCreateSubject}
               onCancel={onCancelAddRow}
             />
           ) : null}
@@ -113,13 +81,7 @@ export function TeacherSubjectsTable({
               <TableCell colSpan={5}>
                 <FilterableEmptyState
                   hasFilters={hasActiveFilters}
-                  empty={{
-                    icon: <BookOpen />,
-                    title: "У преподавателя пока не назначено ни одного предмета",
-                    description:
-                      "Добавьте предметы и диапазоны классов, чтобы система могла учитывать этого преподавателя в учебном плане и расписании.",
-                    action: <Button onClick={onCreateFirst}>+ Добавить первый предмет</Button>,
-                  }}
+                  empty={emptyStateConfig}
                   onResetFilters={onResetFilters}
                 />
               </TableCell>

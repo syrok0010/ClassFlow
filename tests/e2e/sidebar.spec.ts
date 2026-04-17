@@ -71,12 +71,13 @@ test.describe("Sidebar roles", () => {
     await expect(page).toHaveURL(/\/student$/);
   });
 
-  test("planned teacher route without page opens 404", async ({ page }) => {
+  test("teacher opens my subjects page from sidebar", async ({ page }) => {
     await loginAsTeacher(page);
 
     await page.getByTestId("sidebar-link-teacher-subjects").click();
 
     await expect(page).toHaveURL(/\/teacher\/subjects$/);
-    await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Мои предметы" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Добавить предмет" })).toBeVisible();
   });
 });

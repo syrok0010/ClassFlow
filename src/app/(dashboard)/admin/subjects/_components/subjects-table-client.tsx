@@ -105,7 +105,6 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
       />
 
       <SubjectsTable
-        allSubjectsCount={subjects.length}
         subjects={visibleSubjects}
         isAddingRow={isAddingRow}
         hasActiveFilters={hasActiveFilters}

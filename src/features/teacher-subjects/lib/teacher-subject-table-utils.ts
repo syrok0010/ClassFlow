@@ -1,8 +1,5 @@
-import type {
-  TeacherSubjectRow,
-  TeacherSubjectSummary,
-} from "./types";
-import { SubjectFilterType } from "@/lib/types";
+import type { SubjectFilterType } from "@/lib/types";
+import type { TeacherSubjectRow, TeacherSubjectSummary } from "./types";
 
 type TableState = {
   search: string;
@@ -46,7 +43,6 @@ export function getTeacherSubjectsSummary(rows: TeacherSubjectRow[]): TeacherSub
     } else if (row.subjectType === "REGIME") {
       summary.regime += 1;
     }
-
   }
 
   return summary;

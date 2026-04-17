@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import type { ReactNode } from "react";
+import {ReactNode} from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +11,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 
-type EmptyStateConfig = {
+export type EmptyStateConfig = {
   title: string;
   description?: ReactNode;
   icon?: ReactNode;
