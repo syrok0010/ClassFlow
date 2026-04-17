@@ -1,5 +1,3 @@
-"use client";
-
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,9 +33,7 @@ export function DeleteOverrideDialog({
           <AlertDialogCancel>Отмена</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
-            onClick={() => {
-              onConfirm();
-            }}
+            onClick={onConfirm}
           >
             Удалить
           </AlertDialogAction>

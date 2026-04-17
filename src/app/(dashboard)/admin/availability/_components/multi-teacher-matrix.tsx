@@ -142,7 +142,7 @@ export function MultiTeacherMatrix({
                       ) : null}
                       {segment.unavailable > 0 ? (
                         <div
-                          className="absolute inset-x-0 rounded-t-sm bg-destructive/70"
+                          className="absolute inset-x-0 border-gray-700/20 bg-destructive/70"
                           style={{
                             bottom: `${availableHeight}%`,
                             height: `${unavailableHeight}%`,

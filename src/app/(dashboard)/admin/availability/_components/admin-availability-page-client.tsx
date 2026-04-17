@@ -160,7 +160,7 @@ export function AdminAvailabilityPageClient({
       {selectedTeacher ? (
         <>
           <TemplateEntryDialog
-            key={`${weekStart}-${templateDialog.entry?.id ?? "new"}-${templateDialog.open ? "open" : "closed"}`}
+            key={`template-${weekStart}-${templateDialog.entry?.id ?? "new"}-${templateDialog.open ? "open" : "closed"}`}
             open={templateDialog.open}
             teacher={selectedTeacher}
             entry={templateDialog.entry}
@@ -170,7 +170,7 @@ export function AdminAvailabilityPageClient({
           />
 
           <OverrideEntryDialog
-            key={`${weekStart}-${overrideDialog.entry?.id ?? "new"}-${overrideDialog.open ? "open" : "closed"}`}
+            key={`override-${weekStart}-${overrideDialog.entry?.id ?? "new"}-${overrideDialog.open ? "open" : "closed"}`}
             open={overrideDialog.open}
             teacher={selectedTeacher}
             entry={overrideDialog.entry}

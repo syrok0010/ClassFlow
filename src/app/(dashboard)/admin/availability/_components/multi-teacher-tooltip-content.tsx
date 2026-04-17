@@ -1,5 +1,3 @@
-"use client";
-
 import type { SlotBreakdown } from "../_lib/types";
 
 type MultiTeacherTooltipContentProps = {

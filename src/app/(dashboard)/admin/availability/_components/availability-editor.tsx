@@ -28,7 +28,6 @@ import {
   formatDateRange,
   formatTimeFromDateTime,
   formatTimeRange,
-  getDayDateLabel,
   getTeacherOverrideEntriesForWeek,
   timeToMinutes,
 } from "../_lib/utils";
@@ -62,13 +61,10 @@ export function AvailabilityEditor({
     entries: teacher.templateEntries
       .filter((entry) => entry.type === type)
       .slice()
-      .sort((left, right) => {
-        if (left.dayOfWeek !== right.dayOfWeek) {
-          return left.dayOfWeek - right.dayOfWeek;
-        }
-
-        return timeToMinutes(left.startTime) - timeToMinutes(right.startTime);
-      }),
+      .sort((left, right) => left.dayOfWeek !== right.dayOfWeek
+          ? left.dayOfWeek - right.dayOfWeek
+          : timeToMinutes(left.startTime) - timeToMinutes(right.startTime)
+      ),
   }));
 
   return (
@@ -148,9 +144,7 @@ export function AvailabilityEditor({
                             variant="destructive"
                             size="sm"
                             disabled={isMutating}
-                            onClick={() => {
-                              void onDeleteTemplateEntry(entry);
-                            }}
+                            onClick={() => void onDeleteTemplateEntry(entry)}
                           >
                             <Trash2 data-icon="inline-start" />
                             Удалить
