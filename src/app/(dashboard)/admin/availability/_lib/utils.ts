@@ -250,15 +250,6 @@ export function combineDateAndTime(date: string, time: string): Date {
   return new Date(`${date}T${time}:00`);
 }
 
-export function createTemplateEntryId(entry: {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  type: AvailabilityType;
-}): string {
-  return `${entry.dayOfWeek}:${entry.startTime}:${entry.endTime}:${entry.type}`;
-}
-
 type MinuteRange = {
   startMinute: number;
   endMinute: number;
@@ -273,13 +264,17 @@ export type AvailabilityTimelineSegment = MinuteRange & {
 
 export type TeacherMinuteState = {
   availability: AvailabilityType | null;
-  finalAvailability: AvailabilityType | null;
   isOverride: boolean;
 };
 
-export type TeacherTimelineRef = {
+export type TeacherAvailabilityRef = {
   teacher: AvailabilityTeacher;
   segments: AvailabilityTimelineSegment[];
+};
+
+export type AvailabilityCountSegment = MinuteRange & {
+  available: number;
+  unavailable: number;
 };
 
 const DAY_RANGE_MINUTES = DAY_END_MINUTES - DAY_START_MINUTES;
@@ -333,7 +328,7 @@ function getTeacherDayOverrides(
     .sort((left, right) => left.startMinute - right.startMinute);
 }
 
-function buildEffectiveAvailabilitySegments(
+export function getTeacherDayAvailabilitySegments(
   teacher: AvailabilityTeacher,
   weekStartIso: string,
   dayOfWeek: number,
@@ -401,14 +396,6 @@ function buildEffectiveAvailabilitySegments(
   return segments;
 }
 
-export function getTeacherDayAvailabilitySegments(
-  teacher: AvailabilityTeacher,
-  weekStartIso: string,
-  dayOfWeek: number,
-): AvailabilityTimelineSegment[] {
-  return buildEffectiveAvailabilitySegments(teacher, weekStartIso, dayOfWeek);
-}
-
 export function getTeacherMinuteState(
   segments: AvailabilityTimelineSegment[],
   minute: number,
@@ -419,46 +406,93 @@ export function getTeacherMinuteState(
 
   return {
     availability: availabilitySegment?.type ?? null,
-    finalAvailability: availabilitySegment?.type ?? null,
     isOverride: availabilitySegment?.isOverride ?? false,
   };
 }
 
 export function buildMinuteBreakdown(
-  teacherTimelineRefs: TeacherTimelineRef[],
+  teacherAvailabilityRefs: TeacherAvailabilityRef[],
   minute: number,
 ): SlotBreakdown {
-  const slotStateEntries: SlotTeacherState[] = teacherTimelineRefs.map(({ teacher, segments }) => {
+  const breakdown: SlotBreakdown = {
+    available: [],
+    unavailable: [],
+    unmarked: [],
+  };
+
+  teacherAvailabilityRefs.forEach(({ teacher, segments }) => {
     const state = getTeacherMinuteState(segments, minute);
-
-    if (state.finalAvailability === "AVAILABLE" || state.finalAvailability === "PREFERRED") {
-      return {
-        teacherId: teacher.teacherId,
-        teacherName: teacher.fullName,
-        state: "free",
-      };
-    }
-
-    if (state.finalAvailability === "UNAVAILABLE") {
-      return {
-        teacherId: teacher.teacherId,
-        teacherName: teacher.fullName,
-        state: "unavailable",
-      };
-    }
-
-    return {
+    const teacherState: SlotTeacherState = {
       teacherId: teacher.teacherId,
       teacherName: teacher.fullName,
-      state: "unmarked",
     };
+
+    if (state.availability === "AVAILABLE" || state.availability === "PREFERRED") {
+      breakdown.available.push(teacherState);
+      return;
+    }
+
+    if (state.availability === "UNAVAILABLE") {
+      breakdown.unavailable.push(teacherState);
+      return;
+    }
+
+    breakdown.unmarked.push(teacherState);
   });
 
-  return {
-    free: slotStateEntries.filter((entry) => entry.state === "free"),
-    unavailable: slotStateEntries.filter((entry) => entry.state === "unavailable"),
-    unmarked: slotStateEntries.filter((entry) => entry.state === "unmarked"),
-  };
+  return breakdown;
+}
+
+export function buildAvailabilityCountSegments(
+  teacherAvailabilityRefs: TeacherAvailabilityRef[],
+): AvailabilityCountSegment[] {
+  if (teacherAvailabilityRefs.length === 0) {
+    return [];
+  }
+
+  const points = Array.from(
+    new Set([
+      DAY_START_MINUTES,
+      DAY_END_MINUTES,
+      ...teacherAvailabilityRefs.flatMap(({ segments }) =>
+        segments.flatMap((segment) => [segment.startMinute, segment.endMinute]),
+      ),
+    ]),
+  ).sort((left, right) => left - right);
+
+  const countSegments: AvailabilityCountSegment[] = [];
+
+  for (let pointIndex = 0; pointIndex < points.length - 1; pointIndex += 1) {
+    const startMinute = points[pointIndex];
+    const endMinute = points[pointIndex + 1];
+
+    if (startMinute >= endMinute) {
+      continue;
+    }
+
+    const breakdown = buildMinuteBreakdown(teacherAvailabilityRefs, startMinute);
+    const nextSegment: AvailabilityCountSegment = {
+      startMinute,
+      endMinute,
+      available: breakdown.available.length,
+      unavailable: breakdown.unavailable.length,
+    };
+
+    const previousSegment = countSegments.at(-1);
+    if (
+      previousSegment
+      && previousSegment.endMinute === nextSegment.startMinute
+      && previousSegment.available === nextSegment.available
+      && previousSegment.unavailable === nextSegment.unavailable
+    ) {
+      previousSegment.endMinute = nextSegment.endMinute;
+      continue;
+    }
+
+    countSegments.push(nextSegment);
+  }
+
+  return countSegments;
 }
 
 export function minuteToTimelinePercent(minute: number): number {
