@@ -197,13 +197,15 @@ export function OverrideEntryDialog({
                         field.handleBlur();
                       }}
                     >
-                      <SelectTrigger
-                        id="override-type"
-                        className="w-full"
-                        aria-invalid={errors.length > 0 || undefined}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
+                    <SelectTrigger
+                      id="override-type"
+                      className="w-full"
+                      aria-invalid={errors.length > 0 || undefined}
+                    >
+                      <SelectValue>
+                        {AVAILABILITY_TYPE_LABELS[field.state.value]}
+                      </SelectValue>
+                    </SelectTrigger>
                       <SelectContent align="start">
                         <SelectGroup>
                           {Object.entries(AVAILABILITY_TYPE_LABELS).map(([value, label]) => (

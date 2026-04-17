@@ -29,6 +29,10 @@ import {
 import type { AvailabilityTeacher, AvailabilityTemplateEntry } from "../_lib/types";
 import { AVAILABILITY_TYPE_LABELS, DAY_CONFIG } from "../_lib/utils";
 
+const DAY_LABELS_BY_VALUE = new Map(
+  DAY_CONFIG.map((day) => [String(day.dayOfWeek), day.label]),
+);
+
 type TemplateEntryDialogProps = {
   open: boolean;
   teacher: AvailabilityTeacher;
@@ -107,7 +111,9 @@ export function TemplateEntryDialog({
                         className="w-full"
                         aria-invalid={errors.length > 0 || undefined}
                       >
-                        <SelectValue />
+                        <SelectValue>
+                          {DAY_LABELS_BY_VALUE.get(String(field.state.value)) ?? "Выберите день"}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent align="start">
                         <SelectGroup>
@@ -185,7 +191,9 @@ export function TemplateEntryDialog({
                         className="w-full"
                         aria-invalid={errors.length > 0 || undefined}
                       >
-                        <SelectValue />
+                        <SelectValue>
+                          {AVAILABILITY_TYPE_LABELS[field.state.value]}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent align="start">
                         <SelectGroup>
