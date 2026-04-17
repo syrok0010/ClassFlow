@@ -47,9 +47,6 @@ function formatTemplateTime(value: Date): string {
 }
 
 async function getWeekData(weekStartIso: string): Promise<AdminAvailabilityWeekData> {
-  const weekStart = new Date(`${weekStartIso}T00:00:00`);
-  const weekEnd = new Date(`${getWeekEndExclusive(weekStartIso)}T00:00:00`);
-
   const teachers = await prisma.teacher.findMany({
     include: {
       user: {
@@ -80,28 +77,6 @@ async function getWeekData(weekStartIso: string): Promise<AdminAvailabilityWeekD
         },
         orderBy: [{ startTime: "asc" }],
       },
-      scheduleEntries: {
-        where: {
-          startTime: { lt: weekEnd },
-          endTime: { gt: weekStart },
-        },
-        select: {
-          id: true,
-          startTime: true,
-          endTime: true,
-          group: {
-            select: {
-              name: true,
-            },
-          },
-          subject: {
-            select: {
-              name: true,
-            },
-          },
-        },
-        orderBy: [{ startTime: "asc" }],
-      },
     },
     orderBy: [{ user: { surname: "asc" } }, { user: { name: "asc" } }],
   });
@@ -126,13 +101,6 @@ async function getWeekData(weekStartIso: string): Promise<AdminAvailabilityWeekD
         startTime: entry.startTime.toISOString(),
         endTime: entry.endTime.toISOString(),
         type: entry.type,
-      })),
-      scheduleEntries: teacher.scheduleEntries.map((entry) => ({
-        id: entry.id,
-        startTime: entry.startTime.toISOString(),
-        endTime: entry.endTime.toISOString(),
-        groupName: entry.group.name,
-        subjectName: entry.subject.name,
       })),
     })),
   };

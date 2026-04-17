@@ -31,14 +31,6 @@ export function getTeacherStatusBadges(teacher: AvailabilityTeacher, weekStart: 
     );
   }
 
-  if (teacher.scheduleEntries.length > 0) {
-    badges.push(
-      <Badge key="lessons" variant="outline">
-        {teacher.scheduleEntries.length} уроков
-      </Badge>,
-    );
-  }
-
   return badges;
 }
 

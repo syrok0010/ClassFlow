@@ -97,7 +97,7 @@ export function AdminAvailabilityPageClient({
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold tracking-tight">Доступность преподавателей</h1>
         <p className="text-sm text-muted-foreground">
-          Сводный экран для анализа шаблонов, исключений и занятости по фактическому расписанию.
+          Сводный экран для анализа шаблонов и исключений по неделе.
         </p>
       </div>
 
