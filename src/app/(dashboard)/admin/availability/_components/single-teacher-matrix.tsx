@@ -23,7 +23,6 @@ import {
   minutesToTime,
 } from "../_lib/utils";
 import {
-  AvailabilityHoverPanel,
   AvailabilityTimelineCanvas,
   AvailabilityTimelineRow,
   AvailabilityTimelineScale,
@@ -88,6 +87,34 @@ export function SingleTeacherMatrix({
             >
               <AvailabilityTimelineCanvas
                 hoveredMinute={hovered?.dayOfWeek === day.dayOfWeek ? hovered.minute : null}
+                hoverContent={
+                  hovered?.dayOfWeek === day.dayOfWeek && hoveredState && hoveredDay ? (
+                    <div className="flex flex-col gap-2">
+                      <p className="font-medium text-foreground">
+                        {hoveredDay.label}, {getDayDateLabel(weekStart, hoveredDay.dayOfWeek)} ·{" "}
+                        {minutesToTime(hovered.minute)}
+                      </p>
+                      <div className="flex flex-col gap-1 text-muted-foreground">
+                        <p>
+                          {hoveredState.finalAvailability
+                            ? `${hoveredState.isOverride ? "Исключение" : "Шаблон"}: ${AVAILABILITY_TYPE_LABELS[hoveredState.finalAvailability]}`
+                            : "Шаблон не задан"}
+                        </p>
+                        {hoveredState.schedule ? (
+                          <p className="text-sky-700">
+                            Урок: {hoveredState.schedule.groupName} ·{" "}
+                            {hoveredState.schedule.subjectName}
+                          </p>
+                        ) : null}
+                        {hoveredState.schedule?.hasConflict ? (
+                          <p className="text-destructive">
+                            Конфликт: урок пересекается с недоступностью
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : undefined
+                }
                 onHoverMinuteChange={(minute) => {
                   setHovered({
                     dayOfWeek: day.dayOfWeek,
@@ -141,30 +168,6 @@ export function SingleTeacherMatrix({
             </AvailabilityTimelineRow>
           );
         })}
-
-        {hovered && hoveredDay && hoveredState ? (
-          <AvailabilityHoverPanel>
-            <p className="font-medium text-foreground">
-              {hoveredDay.label}, {getDayDateLabel(weekStart, hoveredDay.dayOfWeek)} ·{" "}
-              {minutesToTime(hovered.minute)}
-            </p>
-            <div className="mt-1 flex flex-col gap-1 text-muted-foreground">
-              <p>
-                {hoveredState.finalAvailability
-                  ? `${hoveredState.isOverride ? "Исключение" : "Шаблон"}: ${AVAILABILITY_TYPE_LABELS[hoveredState.finalAvailability]}`
-                  : "Шаблон не задан"}
-              </p>
-              {hoveredState.schedule ? (
-                <p className="text-sky-700">
-                  Урок: {hoveredState.schedule.groupName} · {hoveredState.schedule.subjectName}
-                </p>
-              ) : null}
-              {hoveredState.schedule?.hasConflict ? (
-                <p className="text-destructive">Конфликт: урок пересекается с недоступностью</p>
-              ) : null}
-            </div>
-          </AvailabilityHoverPanel>
-        ) : null}
 
         {teacher.scheduleEntries.length === 0 ? (
           <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">

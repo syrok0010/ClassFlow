@@ -24,7 +24,6 @@ import {
   type TeacherTimelineRef,
 } from "../_lib/utils";
 import {
-  AvailabilityHoverPanel,
   AvailabilityTimelineCanvas,
   AvailabilityTimelineRow,
   AvailabilityTimelineScale,
@@ -132,6 +131,42 @@ export function MultiTeacherMatrix({
             >
               <AvailabilityTimelineCanvas
                 hoveredMinute={hovered?.dayOfWeek === day.dayOfWeek ? hovered.minute : null}
+                hoverContent={
+                  hovered?.dayOfWeek === day.dayOfWeek && hoveredBreakdown && hoveredDay ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="font-medium text-foreground">
+                        {hoveredDay.label}, {getDayDateLabel(weekStart, hoveredDay.dayOfWeek)} ·{" "}
+                        {minutesToTime(hovered.minute)}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <TooltipGroup
+                          title={`Свободны (${hoveredBreakdown.free.length})`}
+                          tone="text-emerald-700"
+                          items={hoveredBreakdown.free.map((entry) => entry.teacherName)}
+                        />
+                        <TooltipGroup
+                          title={`На уроках (${hoveredBreakdown.busy.length})`}
+                          tone="text-sky-700"
+                          items={hoveredBreakdown.busy.map((entry) =>
+                            entry.lessonLabel
+                              ? `${entry.teacherName} (${entry.lessonLabel})`
+                              : entry.teacherName,
+                          )}
+                        />
+                        <TooltipGroup
+                          title={`Недоступны (${hoveredBreakdown.unavailable.length})`}
+                          tone="text-destructive"
+                          items={hoveredBreakdown.unavailable.map((entry) => entry.teacherName)}
+                        />
+                        <TooltipGroup
+                          title={`Не отмечены (${hoveredBreakdown.unmarked.length})`}
+                          tone="text-muted-foreground"
+                          items={hoveredBreakdown.unmarked.map((entry) => entry.teacherName)}
+                        />
+                      </div>
+                    </div>
+                  ) : undefined
+                }
                 onHoverMinuteChange={(minute) => {
                   setHovered({
                     dayOfWeek: day.dayOfWeek,
@@ -192,41 +227,6 @@ export function MultiTeacherMatrix({
             </AvailabilityTimelineRow>
           );
         })}
-
-        {hovered && hoveredDay && hoveredBreakdown ? (
-          <AvailabilityHoverPanel>
-            <div className="mb-2 font-medium text-foreground">
-              {hoveredDay.label}, {getDayDateLabel(weekStart, hoveredDay.dayOfWeek)} ·{" "}
-              {minutesToTime(hovered.minute)}
-            </div>
-            <div className="flex flex-col gap-2">
-              <TooltipGroup
-                title={`Свободны (${hoveredBreakdown.free.length})`}
-                tone="text-emerald-700"
-                items={hoveredBreakdown.free.map((entry) => entry.teacherName)}
-              />
-              <TooltipGroup
-                title={`На уроках (${hoveredBreakdown.busy.length})`}
-                tone="text-sky-700"
-                items={hoveredBreakdown.busy.map((entry) =>
-                  entry.lessonLabel
-                    ? `${entry.teacherName} (${entry.lessonLabel})`
-                    : entry.teacherName,
-                )}
-              />
-              <TooltipGroup
-                title={`Недоступны (${hoveredBreakdown.unavailable.length})`}
-                tone="text-destructive"
-                items={hoveredBreakdown.unavailable.map((entry) => entry.teacherName)}
-              />
-              <TooltipGroup
-                title={`Не отмечены (${hoveredBreakdown.unmarked.length})`}
-                tone="text-muted-foreground"
-                items={hoveredBreakdown.unmarked.map((entry) => entry.teacherName)}
-              />
-            </div>
-          </AvailabilityHoverPanel>
-        ) : null}
       </CardContent>
     </Card>
   );
