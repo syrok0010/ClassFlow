@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
+import { requireAdminContext, rethrowIfNextControlFlow } from "@/lib/server-action-auth";
 import {
   type CreateUserInput,
   createUserSchema,
@@ -47,6 +48,8 @@ async function createInviteToken(
 const USERS_PATH = "/admin/users";
 
 export async function getUsersAction(filters?: Partial<UsersFilterState>) {
+  await requireAdminContext();
+
   const where: Prisma.UserWhereInput = {};
 
   if (filters?.search) {
@@ -84,6 +87,8 @@ export async function getUsersAction(filters?: Partial<UsersFilterState>) {
 }
 
 export async function createUserAction(input: CreateUserInput) {
+  await requireAdminContext();
+
   const parsed = createUserSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Ошибка валидации" };
@@ -119,6 +124,8 @@ export async function createUserAction(input: CreateUserInput) {
       inviteToken: data.email ? null : token,
     };
   } catch (e: unknown) {
+    rethrowIfNextControlFlow(e);
+
     if (
       e &&
       typeof e === "object" &&
@@ -132,6 +139,8 @@ export async function createUserAction(input: CreateUserInput) {
 }
 
 export async function generateParentInviteAction(studentId: string) {
+  await requireAdminContext();
+
   const parsed = generateParentInviteSchema.safeParse({ studentId });
   if (!parsed.success) {
     return { error: "Некорректный ID ученика" };
@@ -180,6 +189,8 @@ export async function linkExistingParentAction(
   studentId: string,
   parentId: string,
 ) {
+  await requireAdminContext();
+
   const parsed = linkExistingParentSchema.safeParse({ studentId, parentId });
   if (!parsed.success) {
     return { error: "Некорректные данные" };
@@ -211,6 +222,8 @@ export async function linkExistingParentAction(
 }
 
 export async function updateUserAction(input: UpdateUserInput) {
+  await requireAdminContext();
+
   const parsed = updateUserSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Ошибка валидации" };
@@ -266,6 +279,8 @@ export async function updateUserAction(input: UpdateUserInput) {
 }
 
 export async function toggleUserStatusAction(id: string) {
+  await requireAdminContext();
+
   const user = await prisma.user.findUniqueOrThrow({ where: { id }, select: { status: true } });
 
   if (user.status === "PENDING_INVITE") {
@@ -284,6 +299,8 @@ export async function toggleUserStatusAction(id: string) {
 }
 
 export async function deleteUserAction(id: string, confirmName: string) {
+  await requireAdminContext();
+
   const parsed = deleteUserSchema.safeParse({ id, confirmName });
   if (!parsed.success) {
     return { error: "Введите имя для подтверждения" };
@@ -306,6 +323,8 @@ export async function deleteUserAction(id: string, confirmName: string) {
 }
 
 export async function searchParentsAction(query: string) {
+  await requireAdminContext();
+
   if (!query || query.length < 2) return [];
 
   return prisma.parent.findMany({
@@ -341,6 +360,8 @@ export async function searchParentsAction(query: string) {
 }
 
 export async function getInviteTokenAction(userId: string) {
+  await requireAdminContext();
+
   try {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -363,6 +384,7 @@ export async function getInviteTokenAction(userId: string) {
 
     return { token: newToken };
   } catch (error) {
+    rethrowIfNextControlFlow(error);
     console.error("Ошибка при получении инвайт-токена:", error);
     return { error: "Не удалось получить инвайт-ссылку" };
   }

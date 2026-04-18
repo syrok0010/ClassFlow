@@ -1,13 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import type { Prisma } from "@/generated/prisma/client";
-import { auth } from "@/lib/auth";
 import { getUserFullName } from "@/lib/auth-access";
 import { getActionErrorMessage } from "@/lib/action-error";
 import { prisma } from "@/lib/prisma";
 import { err, ok, type Result } from "@/lib/result";
+import { resolveTeacherScope } from "@/lib/server-action-auth";
 import {
   createTeacherSubjectSchema,
   gradeRangeSchema,
@@ -23,7 +22,6 @@ import type {
   TeacherSubjectsPageData,
   TeacherSubjectRow,
 } from "../lib/types";
-import {forbidden, notFound} from "next/navigation";
 
 function mapTeacherIdentity(user: {
   id: string;
@@ -72,56 +70,12 @@ function mapTeacherSubjectRow(row: {
   };
 }
 
-async function resolveAuthorizedTeacherId(requestedTeacherId?: string): Promise<string> {
-  const session = await auth.api.getSession({ headers: await headers() });
-
-  if (!session?.user) {
-    forbidden();
-  }
-
-  if (session.user.role === "ADMIN") {
-    if (!requestedTeacherId) {
-      forbidden();
-    }
-
-    const teacher = await prisma.teacher.findFirst({
-      where: { id: requestedTeacherId },
-      select: { id: true },
-    });
-
-    if (!teacher) {
-      notFound();
-    }
-
-    return teacher.id;
-  }
-
-  if (!session.user.domainRoles?.includes("teacher")) {
-    forbidden();
-  }
-
-  const teacher = await prisma.teacher.findFirst({
-    where: { userId: session.user.id },
-    select: { id: true },
-  });
-
-  if (!teacher) {
-    notFound();
-  }
-
-  if (requestedTeacherId && requestedTeacherId !== teacher.id) {
-    forbidden();
-  }
-
-  return teacher.id;
-}
-
 export async function getTeacherSubjectsAction(
   input: TeacherSubjectsQueryInput = {}
 ): Promise<Result<TeacherSubjectsPageData>> {
   try {
     const validated = teacherSubjectsQuerySchema.parse(input);
-    const teacherId = await resolveAuthorizedTeacherId(validated.teacherId);
+    const { targetTeacherId: teacherId } = await resolveTeacherScope(validated.teacherId);
 
     const teacher = await prisma.teacher.findUnique({
       where: { id: teacherId },
@@ -209,7 +163,7 @@ export async function createTeacherSubjectAction(
 ): Promise<Result<TeacherSubjectRow>> {
   try {
     const validated = createTeacherSubjectSchema.parse(input);
-    const teacherId = await resolveAuthorizedTeacherId(validated.teacherId);
+    const { targetTeacherId: teacherId } = await resolveTeacherScope(validated.teacherId);
 
     const [teacher, subject] = await Promise.all([
       prisma.teacher.findUnique({
@@ -276,7 +230,7 @@ export async function updateTeacherSubjectAction(
   try {
     const validatedKey = teacherSubjectKeySchema.parse(input);
     const validatedInput = gradeRangeSchema.parse(input);
-    const teacherId = await resolveAuthorizedTeacherId(validatedKey.teacherId);
+    const { targetTeacherId: teacherId } = await resolveTeacherScope(validatedKey.teacherId);
 
     const existing = await prisma.teacherSubject.findUnique({
       where: {
@@ -333,7 +287,7 @@ export async function deleteTeacherSubjectAction(
 ): Promise<Result<true>> {
   try {
     const validated = teacherSubjectKeySchema.parse(key);
-    const teacherId = await resolveAuthorizedTeacherId(validated.teacherId);
+    const { targetTeacherId: teacherId } = await resolveTeacherScope(validated.teacherId);
 
     const existing = await prisma.teacherSubject.findUnique({
       where: {
