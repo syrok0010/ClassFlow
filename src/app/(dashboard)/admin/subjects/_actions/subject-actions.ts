@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { err, ok, type Result } from "@/lib/result";
 import { getActionErrorMessage } from "@/lib/action-error";
 import type { SubjectType } from "@/generated/prisma/client";
+import { requireAdminContext } from "@/lib/server-action-auth";
 import {
   createSubjectSchema,
   idSchema,
@@ -102,6 +103,8 @@ function hasDeleteDependencies(guards: SubjectDeleteGuards): boolean {
 export async function getSubjectsAction(
   filters: SubjectListFilters = {}
 ): Promise<Result<SubjectWithUsage[]>> {
+  await requireAdminContext();
+
   try {
     const subjects = await prisma.subject.findMany({
       include: {
@@ -126,6 +129,8 @@ export async function getSubjectsAction(
 }
 
 export async function createSubjectAction(data: CreateSubjectInput) {
+  await requireAdminContext();
+
   try {
     const validated = createSubjectSchema.parse(data);
 
@@ -158,6 +163,8 @@ export async function createSubjectAction(data: CreateSubjectInput) {
 }
 
 export async function updateSubjectAction(id: IdInput, data: UpdateSubjectInput) {
+  await requireAdminContext();
+
   try {
     idSchema.parse(id);
     const validated = updateSubjectSchema.parse(data);
@@ -194,6 +201,8 @@ export async function updateSubjectAction(id: IdInput, data: UpdateSubjectInput)
 export async function getSubjectDeleteGuardsAction(
   id: IdInput
 ): Promise<Result<SubjectDeleteGuards>> {
+  await requireAdminContext();
+
   try {
     idSchema.parse(id);
 
@@ -233,6 +242,8 @@ export async function getSubjectDeleteGuardsAction(
 export async function getSubjectUsageDetailsAction(
   id: IdInput
 ): Promise<Result<SubjectUsageDetails>> {
+  await requireAdminContext();
+
   try {
     idSchema.parse(id);
 
@@ -284,6 +295,8 @@ export async function getSubjectUsageDetailsAction(
 }
 
 export async function deleteSubjectAction(id: IdInput): Promise<Result<true>> {
+  await requireAdminContext();
+
   try {
     idSchema.parse(id);
 

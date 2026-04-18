@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { err, ok, type Result } from "@/lib/result";
 import { z } from "zod";
+import { requireAdminContext, rethrowIfNextControlFlow } from "@/lib/server-action-auth";
 import {
   createBuildingSchema,
   createRoomSchema,
@@ -25,6 +26,8 @@ function normalizeBuildingAddress(value?: string) {
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
+  rethrowIfNextControlFlow(error);
+
   if (error instanceof z.ZodError) {
     return error.issues[0]?.message ?? fallback;
   }
@@ -42,6 +45,8 @@ export async function getRoomsPageDataAction(): Promise<
     subjects: SubjectLite[];
   }>
 > {
+  await requireAdminContext();
+
   try {
     const [buildings, subjects] = await Promise.all([
       prisma.building.findMany({
@@ -61,6 +66,8 @@ export async function getRoomsPageDataAction(): Promise<
 }
 
 export async function getRoomByIdAction(roomId: string) {
+  await requireAdminContext();
+
   try {
     const parsed = deleteRoomSchema.parse({ id: roomId });
 
@@ -91,6 +98,8 @@ export async function getRoomByIdAction(roomId: string) {
 }
 
 export async function createBuildingAction(input: CreateBuildingInput) {
+  await requireAdminContext();
+
   try {
     const data = createBuildingSchema.parse(input);
 
@@ -109,6 +118,8 @@ export async function createBuildingAction(input: CreateBuildingInput) {
 }
 
 export async function updateBuildingAction(input: UpdateBuildingInput) {
+  await requireAdminContext();
+
   try {
     const data = updateBuildingSchema.parse(input);
 
@@ -128,6 +139,8 @@ export async function updateBuildingAction(input: UpdateBuildingInput) {
 }
 
 export async function deleteBuildingAction(id: string) {
+  await requireAdminContext();
+
   try {
     const parsed = deleteRoomSchema.parse({ id });
 
@@ -145,6 +158,8 @@ export async function deleteBuildingAction(id: string) {
 }
 
 export async function createRoomAction(input: CreateRoomInput) {
+  await requireAdminContext();
+
   try {
     const data = createRoomSchema.parse(input);
 
@@ -164,6 +179,8 @@ export async function createRoomAction(input: CreateRoomInput) {
 }
 
 export async function updateRoomAction(input: UpdateRoomInput) {
+  await requireAdminContext();
+
   try {
     const id = deleteRoomSchema.parse({ id: input.id }).id;
     const data = createRoomSchema
@@ -186,6 +203,8 @@ export async function updateRoomAction(input: UpdateRoomInput) {
 }
 
 export async function deleteRoomAction(id: string) {
+  await requireAdminContext();
+
   try {
     const parsed = deleteRoomSchema.parse({ id });
 
@@ -206,6 +225,8 @@ export async function deleteRoomAction(id: string) {
 }
 
 export async function updateRoomSubjectsAction(roomId: string, subjectIds: string[]) {
+  await requireAdminContext();
+
   try {
     const payload = updateRoomSubjectsSchema.parse({ roomId, subjectIds });
 

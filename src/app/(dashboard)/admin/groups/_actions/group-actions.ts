@@ -5,6 +5,7 @@ import { err, ok, type Result } from "@/lib/result";
 import { getActionErrorMessage } from "@/lib/action-error";
 import { revalidatePath } from "next/cache";
 import type { GroupType } from "@/generated/prisma/client";
+import { requireAdminContext } from "@/lib/server-action-auth";
 import {
   assignStudentsSchema,
   createGroupSchema,
@@ -67,6 +68,8 @@ function filterGroupsTree(
 export async function getGroupsTree(
   filters: GroupsTreeFilters = {}
 ): Promise<Result<GroupWithDetails[]>> {
+  await requireAdminContext();
+
   try {
     const groups = await prisma.group.findMany({
       include: {
@@ -113,6 +116,8 @@ export async function getGroupsTree(
 }
 
 export async function createGroupAction(data: CreateGroupInput) {
+  await requireAdminContext();
+
   try {
     const validated = createGroupSchema.parse(data);
 
@@ -137,6 +142,8 @@ export async function updateGroupAction(
   id: IdInput,
   data: UpdateGroupInput
 ) {
+  await requireAdminContext();
+
   try {
     idSchema.parse(id);
     const validated = updateGroupSchema.parse(data);
@@ -190,6 +197,8 @@ async function collectGroupIds(rootId: IdInput): Promise<string[]> {
 }
 
 export async function deleteGroupAction(id: IdInput) {
+  await requireAdminContext();
+
   try {
     idSchema.parse(id);
 
@@ -229,6 +238,8 @@ export async function getStudentsForAssignment(
   assigned: StudentForAssignment[];
   available: StudentForAssignment[];
 }>> {
+  await requireAdminContext();
+
   try {
     idSchema.parse(groupId);
     groupTypeSchema.parse(groupType);
@@ -348,6 +359,8 @@ export async function assignStudentsToGroupAction(
   groupId: AssignStudentsInput["groupId"],
   studentIds: AssignStudentsInput["studentIds"]
 ) {
+  await requireAdminContext();
+
   try {
     const validated = assignStudentsSchema.parse({ groupId, studentIds });
 
@@ -371,6 +384,8 @@ export async function removeStudentsFromGroupAction(
   groupId: AssignStudentsInput["groupId"],
   studentIds: AssignStudentsInput["studentIds"]
 ): Promise<Result<true>> {
+  await requireAdminContext();
+
   try {
     const validated = assignStudentsSchema.parse({ groupId, studentIds });
 
@@ -409,6 +424,8 @@ export async function removeStudentsFromGroupAction(
 export async function getGroupStudents(
   groupId: IdInput
 ): Promise<Result<StudentForAssignment[]>> {
+  await requireAdminContext();
+
   try {
     idSchema.parse(groupId);
 
@@ -445,6 +462,8 @@ export async function getGroupStudents(
 }
 
 export async function createSubgroupsFromSplit(data: SplitInput) {
+  await requireAdminContext();
+
   try {
     const validated = splitSchema.parse(data);
 
@@ -555,6 +574,8 @@ export async function createSubgroupsFromSplit(data: SplitInput) {
 }
 
 export async function getSubjects(): Promise<Result<SubjectOption[]>> {
+  await requireAdminContext();
+
   try {
     const subjects = await prisma.subject.findMany({
       select: { id: true, name: true },
@@ -578,6 +599,8 @@ export type SubgroupEditorData = {
 export async function getSubgroupEditorData(
   subgroupId: IdInput
 ): Promise<Result<SubgroupEditorData>> {
+  await requireAdminContext();
+
   try {
     idSchema.parse(subgroupId);
 
@@ -659,6 +682,8 @@ export async function getSubgroupEditorData(
 export async function saveSubgroupRedistribution(
   assignments: RedistributeInput["assignments"]
 ) {
+  await requireAdminContext();
+
   try {
     const validated = redistributeSchema.parse({ assignments });
 
