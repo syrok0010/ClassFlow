@@ -1,10 +1,8 @@
 import type {
-  EffectiveTimeRange,
-  ResolvedTimeRange,
   ScheduleDay,
-  ScheduleSlot,
   ScheduleTimeRange,
   ScheduleViewMode,
+  ResolvedTimeRange,
 } from "./types"
 
 export const DEFAULT_TIME_RANGE: Required<ScheduleTimeRange> = {
@@ -14,7 +12,6 @@ export const DEFAULT_TIME_RANGE: Required<ScheduleTimeRange> = {
 }
 
 export const MINUTES_IN_DAY = 24 * 60
-export const PIXELS_PER_MINUTE = 1.2
 
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
   weekday: "short",
@@ -179,7 +176,7 @@ export function ceilMinutesToStep(minutes: number, stepMinutes: number): number 
 export function buildEffectiveTimeRange(
   baseRange: ResolvedTimeRange,
   events: Array<{ startMinutes: number; endMinutes: number }>
-): EffectiveTimeRange {
+): ResolvedTimeRange & { totalMinutes: number } {
   let startMinutes = baseRange.startMinutes
   let endMinutes = baseRange.endMinutes
 
@@ -212,12 +209,25 @@ export function buildEffectiveTimeRange(
     endMinutes,
     stepMinutes: baseRange.stepMinutes,
     totalMinutes,
-    heightPx: totalMinutes * PIXELS_PER_MINUTE,
   }
 }
 
-export function buildTimeSlots(timeRange: EffectiveTimeRange): ScheduleSlot[] {
-  const slots: ScheduleSlot[] = []
+export function buildTimeSlots(
+  timeRange: ResolvedTimeRange
+): Array<{
+  key: string
+  minutes: number
+  offsetMinutes: number
+  label: string
+  isMajor: boolean
+}> {
+  const slots: Array<{
+    key: string
+    minutes: number
+    offsetMinutes: number
+    label: string
+    isMajor: boolean
+  }> = []
 
   for (
     let minutes = timeRange.startMinutes;
@@ -227,7 +237,7 @@ export function buildTimeSlots(timeRange: EffectiveTimeRange): ScheduleSlot[] {
     slots.push({
       key: `slot-${minutes}`,
       minutes,
-      offsetPx: (minutes - timeRange.startMinutes) * PIXELS_PER_MINUTE,
+      offsetMinutes: minutes - timeRange.startMinutes,
       label: formatTimeLabel(minutes),
       isMajor:
         minutes === timeRange.startMinutes ||
@@ -241,7 +251,7 @@ export function buildTimeSlots(timeRange: EffectiveTimeRange): ScheduleSlot[] {
     slots.push({
       key: `slot-${timeRange.endMinutes}`,
       minutes: timeRange.endMinutes,
-      offsetPx: (timeRange.endMinutes - timeRange.startMinutes) * PIXELS_PER_MINUTE,
+      offsetMinutes: timeRange.endMinutes - timeRange.startMinutes,
       label: formatTimeLabel(timeRange.endMinutes),
       isMajor: true,
     })

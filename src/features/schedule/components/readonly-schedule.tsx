@@ -17,6 +17,8 @@ import type {
   ScheduleTimeRange,
   ScheduleViewMode
 } from "../lib/types"
+import { useMemo } from "react";
+import { BookOpen } from "lucide-react";
 
 const TIME_COLUMN_WIDTH_PX = 72
 const MIN_DAY_COLUMN_WIDTH_PX = 208
@@ -40,7 +42,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
   timeRange,
   className,
 }: ReadonlyScheduleProps<TEvent>) {
-  const layout = React.useMemo(
+  const layout = useMemo(
     () =>
       buildScheduleLayout({
         events,
@@ -62,6 +64,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
       >
         <Empty className="min-h-80">
           <EmptyHeader>
+            <BookOpen/>
             <EmptyTitle>{emptyState?.title ?? "Нет событий"}</EmptyTitle>
             <EmptyDescription>
               {emptyState?.description ?? "На выбранный период расписание пусто"}

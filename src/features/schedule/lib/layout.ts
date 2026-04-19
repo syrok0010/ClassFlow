@@ -7,13 +7,16 @@ import {
   isValidDate,
   resolveTimeRange,
   toDayKey,
-  PIXELS_PER_MINUTE,
 } from "./date-utils"
 import type {
   BaseScheduleEvent,
+  EffectiveTimeRange,
   NormalizedScheduleEvent,
   PositionedScheduleEvent,
-  ScheduleLayout, ScheduleTimeRange, ScheduleViewMode,
+  ScheduleLayout,
+  ScheduleSlot,
+  ScheduleTimeRange,
+  ScheduleViewMode,
 } from "./types"
 
 type LayoutInput<TEvent extends BaseScheduleEvent> = {
@@ -34,7 +37,16 @@ export function buildScheduleLayout<TEvent extends BaseScheduleEvent>({
   const baseRange = resolveTimeRange(timeRange)
   const normalizedEvents = normalizeEvents(events, dayKeys)
   const effectiveTimeRange = buildEffectiveTimeRange(baseRange, normalizedEvents)
-  const timeSlots = buildTimeSlots(effectiveTimeRange)
+  const timeRangePx: EffectiveTimeRange = {
+    ...effectiveTimeRange,
+    heightPx: effectiveTimeRange.totalMinutes,
+  }
+  const timeSlots: ScheduleSlot[] = buildTimeSlots(effectiveTimeRange).map(
+    ({ offsetMinutes, ...slot }) => ({
+      ...slot,
+      offsetPx: offsetMinutes,
+    })
+  )
   const eventsByDay = Object.fromEntries(
     days.map((day) => [day.key, [] as PositionedScheduleEvent<TEvent>[]])
   ) as Record<string, PositionedScheduleEvent<TEvent>[]>
@@ -47,7 +59,7 @@ export function buildScheduleLayout<TEvent extends BaseScheduleEvent>({
   return {
     days,
     timeSlots,
-    timeRange: effectiveTimeRange,
+    timeRange: timeRangePx,
     eventsByDay,
     hasVisibleEvents: normalizedEvents.length > 0,
   }
@@ -154,8 +166,8 @@ function positionCluster<TEvent extends BaseScheduleEvent>(
     source: event.source,
     id: event.id,
     dayKey: event.dayKey,
-    topPx: (event.startMinutes - rangeStartMinutes) * PIXELS_PER_MINUTE,
-    heightPx: (event.endMinutes - event.startMinutes) * PIXELS_PER_MINUTE,
+    topPx: event.startMinutes - rangeStartMinutes,
+    heightPx: event.endMinutes - event.startMinutes,
     leftPercent: (columnIndex / totalColumns) * 100,
     widthPercent: 100 / totalColumns,
   }))
