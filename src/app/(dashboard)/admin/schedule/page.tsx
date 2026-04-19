@@ -1,15 +1,35 @@
-export default function SchedulePage() {
+import { ScheduleDemo } from "@/features/schedule/components/schedule-demo";
+import {
+  createFallbackScheduleEntries,
+  scheduleEntryDemoArgs,
+} from "@/features/schedule/lib/schedule-entry-demo-data";
+import { prisma } from "@/lib/prisma";
+
+export default async function SchedulePage() {
+  const scheduleEntries = await prisma.scheduleEntry.findMany({
+    ...scheduleEntryDemoArgs,
+    orderBy: [
+      { startTime: "asc" },
+      { endTime: "asc" },
+    ],
+  });
+
+  const demoEntries =
+    scheduleEntries.length > 0 ? scheduleEntries : createFallbackScheduleEntries();
+  const source = scheduleEntries.length > 0 ? "database" : "fixtures";
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Управление расписанием</h1>
+    <div className="flex flex-col gap-6">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Демо расписания</h1>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          Тестовая страница для визуальной проверки общего read-only schedule-компонента на базе
+          доменных записей `ScheduleEntry`. Если в локальной БД еще нет расписания, страница
+          использует fallback fixtures, совпадающие по форме с Prisma-моделью и ее связями.
+        </p>
       </div>
-      <div className="flex flex-col gap-4">
-        <p className="text-muted-foreground">Генерация и перетаскивание карточек расписания.</p>
-        <div className="rounded-xl border bg-card text-card-foreground shadow min-h-64 flex items-center justify-center p-6">
-          <p className="text-sm text-muted-foreground">Сетка расписания будет здесь</p>
-        </div>
-      </div>
+
+      <ScheduleDemo entries={demoEntries} source={source} />
     </div>
   );
 }
