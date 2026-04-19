@@ -1,8 +1,10 @@
+import { addDays, format, isSameDay, isValid, startOfDay, startOfWeek } from "date-fns"
+
 import type {
   ScheduleDay,
+  ResolvedTimeRange,
   ScheduleTimeRange,
   ScheduleViewMode,
-  ResolvedTimeRange,
 } from "./types"
 
 export const DEFAULT_TIME_RANGE: Required<ScheduleTimeRange> = {
@@ -29,43 +31,6 @@ const FULL_DATE_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
 })
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/
-
-export function isValidDate(value: Date): boolean {
-  return Number.isFinite(value.getTime())
-}
-
-export function getStartOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
-}
-
-export function addDays(date: Date, days: number): Date {
-  const next = new Date(date)
-  next.setDate(next.getDate() + days)
-  return next
-}
-
-export function getStartOfWeekMonday(date: Date): Date {
-  const startOfDay = getStartOfDay(date)
-  const dayOfWeek = startOfDay.getDay()
-  const daysFromMonday = (dayOfWeek + 6) % 7
-  return addDays(startOfDay, -daysFromMonday)
-}
-
-export function toDayKey(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-
-  return `${year}-${month}-${day}`
-}
-
-export function areSameDay(left: Date, right: Date): boolean {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  )
-}
 
 export function getMinutesSinceStartOfDay(date: Date): number {
   return date.getHours() * 60 + date.getMinutes()
@@ -142,25 +107,25 @@ export function buildVisibleDays(
   anchorDate: Date,
   viewMode: ScheduleViewMode
 ): ScheduleDay[] {
-  const safeAnchorDate = isValidDate(anchorDate) ? anchorDate : new Date()
+  const safeAnchorDate = isValid(anchorDate) ? anchorDate : new Date()
   const startDate =
     viewMode === "week"
-      ? getStartOfWeekMonday(safeAnchorDate)
-      : getStartOfDay(safeAnchorDate)
+      ? startOfWeek(safeAnchorDate, { weekStartsOn: 1 })
+      : startOfDay(safeAnchorDate)
   const totalDays = viewMode === "week" ? 7 : 1
-  const today = getStartOfDay(new Date())
+  const today = startOfDay(new Date())
 
   return Array.from({ length: totalDays }, (_, index) => {
     const date = addDays(startDate, index)
     const labels = formatDayHeader(date)
 
     return {
-      key: toDayKey(date),
+      key: format(date, "yyyy-MM-dd"),
       date,
       weekdayLabel: labels.weekdayLabel,
       dateLabel: labels.dateLabel,
       fullLabel: labels.fullLabel,
-      isToday: areSameDay(date, today),
+      isToday: isSameDay(date, today),
     }
   })
 }

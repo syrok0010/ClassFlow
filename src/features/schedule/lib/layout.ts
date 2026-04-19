@@ -1,12 +1,11 @@
+import { format, isSameDay, isValid } from "date-fns"
+
 import {
-  areSameDay,
   buildEffectiveTimeRange,
   buildTimeSlots,
   buildVisibleDays,
   getMinutesSinceStartOfDay,
-  isValidDate,
   resolveTimeRange,
-  toDayKey,
 } from "./date-utils"
 import type {
   BaseScheduleEvent,
@@ -70,15 +69,15 @@ function normalizeEvents<TEvent extends BaseScheduleEvent>(
   dayKeys: Set<string>
 ): NormalizedScheduleEvent<TEvent>[] {
   return events.flatMap((event) => {
-    if (!isValidDate(event.start) || !isValidDate(event.end)) {
+    if (!isValid(event.start) || !isValid(event.end)) {
       return []
     }
 
-    if (event.end <= event.start || !areSameDay(event.start, event.end)) {
+    if (event.end <= event.start || !isSameDay(event.start, event.end)) {
       return []
     }
 
-    const dayKey = toDayKey(event.start)
+    const dayKey = format(event.start, "yyyy-MM-dd")
 
     if (!dayKeys.has(dayKey)) {
       return []
