@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaClient } from "../src/generated/prisma/client.js";
 import { hashPassword } from "better-auth/crypto";
 
 const connectionString = `${process.env.DATABASE_URL}`;
@@ -229,100 +229,6 @@ async function main() {
       { studentId: student3.id, groupId: class10A.id },
       { studentId: student4.id, groupId: class10B.id },
       { studentId: student5.id, groupId: class10B.id },
-    ],
-  });
-
-  const demoWeekStart = new Date(2026, 3, 20, 0, 0, 0, 0);
-
-  const createScheduleDate = (
-    dayOffset: number,
-    hour: number,
-    minute: number
-  ) =>
-    new Date(
-      demoWeekStart.getFullYear(),
-      demoWeekStart.getMonth(),
-      demoWeekStart.getDate() + dayOffset,
-      hour,
-      minute,
-      0,
-      0
-    );
-
-  await prisma.scheduleEntry.createMany({
-    data: [
-      {
-        date: createScheduleDate(0, 0, 0),
-        startTime: createScheduleDate(0, 8, 30),
-        endTime: createScheduleDate(0, 9, 20),
-        groupId: class10A.id,
-        roomId: room101.id,
-        teacherId: teacher1.id,
-        subjectId: math.id,
-      },
-      {
-        date: createScheduleDate(0, 0, 0),
-        startTime: createScheduleDate(0, 9, 0),
-        endTime: createScheduleDate(0, 10, 10),
-        groupId: class10A.id,
-        roomId: room102.id,
-        teacherId: teacher3.id,
-        subjectId: english.id,
-      },
-      {
-        date: createScheduleDate(1, 0, 0),
-        startTime: createScheduleDate(1, 10, 20),
-        endTime: createScheduleDate(1, 11, 0),
-        groupId: class10A.id,
-        roomId: canteen.id,
-        teacherId: null,
-        subjectId: lunch.id,
-      },
-      {
-        date: createScheduleDate(2, 0, 0),
-        startTime: createScheduleDate(2, 7, 45),
-        endTime: createScheduleDate(2, 8, 30),
-        groupId: class10B.id,
-        roomId: canteen.id,
-        teacherId: null,
-        subjectId: lunch.id,
-      },
-      {
-        date: createScheduleDate(2, 0, 0),
-        startTime: createScheduleDate(2, 9, 10),
-        endTime: createScheduleDate(2, 9, 55),
-        groupId: class10A.id,
-        roomId: lab1.id,
-        teacherId: teacher1.id,
-        subjectId: physics.id,
-      },
-      {
-        date: createScheduleDate(2, 0, 0),
-        startTime: createScheduleDate(2, 9, 20),
-        endTime: createScheduleDate(2, 10, 5),
-        groupId: class10B.id,
-        roomId: room101.id,
-        teacherId: teacher3.id,
-        subjectId: english.id,
-      },
-      {
-        date: createScheduleDate(3, 0, 0),
-        startTime: createScheduleDate(3, 16, 30),
-        endTime: createScheduleDate(3, 18, 45),
-        groupId: class10A.id,
-        roomId: gym.id,
-        teacherId: teacher2.id,
-        subjectId: pe.id,
-      },
-      {
-        date: createScheduleDate(4, 0, 0),
-        startTime: createScheduleDate(4, 11, 0),
-        endTime: createScheduleDate(4, 12, 30),
-        groupId: class10B.id,
-        roomId: room102.id,
-        teacherId: teacher1.id,
-        subjectId: math.id,
-      },
     ],
   });
 
