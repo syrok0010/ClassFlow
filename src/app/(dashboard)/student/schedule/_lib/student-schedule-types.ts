@@ -5,11 +5,6 @@ import type {
 } from "@/features/schedule";
 import type { GroupType, SubjectType } from "@/generated/prisma/enums";
 
-export type StudentScheduleStatusLabel =
-  | "Внепланово"
-  | "Перенос"
-  | "Замена";
-
 export interface StudentScheduleEvent extends BaseScheduleEvent {
   subjectName: string;
   subjectType: SubjectType;
@@ -18,7 +13,6 @@ export interface StudentScheduleEvent extends BaseScheduleEvent {
   groupName: string;
   groupType: GroupType;
   timeLabel: string;
-  statusLabels: StudentScheduleStatusLabel[];
   metaLine: string;
 }
 

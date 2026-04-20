@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   Tooltip,
@@ -8,7 +8,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { SUBJECT_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import type { StudentScheduleEvent } from "../_lib/student-schedule-types";
@@ -17,19 +16,7 @@ interface StudentScheduleEventCardProps {
   event: StudentScheduleEvent;
 }
 
-interface StudentScheduleChip {
-  key: string;
-  label: string;
-  className: string;
-}
-
 type CompactTier = "xs" | "sm" | "md" | "lg";
-
-const CHIP_STYLES = {
-  status: "bg-amber-100 text-amber-900 ring-amber-300/80",
-  type: "bg-sky-100 text-sky-900 ring-sky-300/80",
-  group: "bg-slate-100 text-slate-700 ring-slate-300/80",
-} as const;
 
 const FIT_TOLERANCE_PX = 2;
 
@@ -39,41 +26,11 @@ export function StudentScheduleEventCard({ event }: StudentScheduleEventCardProp
   const visibleCardRef = useRef<HTMLDivElement | null>(null);
   const measureRef = useRef<HTMLDivElement | null>(null);
 
-  const chips = useMemo<StudentScheduleChip[]>(
-    () => [
-      ...event.statusLabels.map((label) => ({
-        key: `status-${label}`,
-        label,
-        className: CHIP_STYLES.status,
-      })),
-      ...(event.subjectType !== "ACADEMIC"
-        ? [
-            {
-              key: `type-${event.subjectType}`,
-              label: SUBJECT_LABELS[event.subjectType],
-              className: CHIP_STYLES.type,
-            },
-          ]
-        : []),
-      ...(event.groupType !== "CLASS"
-        ? [
-            {
-              key: `group-${event.groupName}`,
-              label: event.groupName,
-              className: CHIP_STYLES.group,
-            },
-          ]
-        : []),
-    ],
-    [event.groupName, event.groupType, event.statusLabels, event.subjectType]
-  );
-
   const titleLines = [
     event.subjectName,
     event.timeLabel,
     event.teacherName,
     event.roomName,
-    ...chips.map((chip) => chip.label),
   ];
   const cardLabel = titleLines.join(", ");
   const fitsFully =
@@ -119,11 +76,11 @@ export function StudentScheduleEventCard({ event }: StudentScheduleEventCardProp
     return () => {
       observer.disconnect();
     };
-  }, [chips, event.groupName, event.roomName, event.subjectName, event.teacherName, fitsFully]);
+  }, [event.groupName, event.roomName, event.subjectName, event.teacherName, fitsFully]);
 
   const measurementContent = (
     <div ref={measureRef} aria-hidden={true} className="absolute inset-x-0 top-0 invisible pointer-events-none">
-      <StudentScheduleEventDetails event={event} chips={chips} variant="inline" />
+      <StudentScheduleEventDetails event={event} variant="inline" />
     </div>
   );
 
@@ -138,7 +95,7 @@ export function StudentScheduleEventCard({ event }: StudentScheduleEventCardProp
           data-time-label={event.timeLabel}
           className="h-full"
         >
-          <StudentScheduleEventDetails event={event} chips={chips} variant="inline" />
+          <StudentScheduleEventDetails event={event} variant="inline" />
         </div>
       </div>
     );
@@ -173,7 +130,7 @@ export function StudentScheduleEventCard({ event }: StudentScheduleEventCardProp
             sideOffset={8}
             className="block w-80 max-w-none gap-0 rounded-lg bg-popover p-0 text-popover-foreground shadow-md ring-1 ring-foreground/10 *:aria-hidden:bg-popover"
           >
-            <StudentScheduleEventDetails event={event} chips={chips} variant="overlay" />
+            <StudentScheduleEventDetails event={event} variant="overlay" />
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -181,13 +138,15 @@ export function StudentScheduleEventCard({ event }: StudentScheduleEventCardProp
   );
 }
 
+interface StudentScheduleEventCompactPreviewProps {
+  subjectName: string;
+  typographyClassName: string;
+}
+
 function StudentScheduleEventCompactPreview({
   subjectName,
   typographyClassName,
-}: {
-  subjectName: string;
-  typographyClassName: string;
-}) {
+}: StudentScheduleEventCompactPreviewProps) {
   return (
     <div className="flex h-full items-center px-2 py-1 text-left">
       <div
@@ -202,15 +161,15 @@ function StudentScheduleEventCompactPreview({
   );
 }
 
+interface StudentScheduleEventDetailsProps {
+  event: StudentScheduleEvent,
+  variant: "inline" | "overlay"
+}
+
 function StudentScheduleEventDetails({
   event,
-  chips,
   variant,
-}: {
-  event: StudentScheduleEvent;
-  chips: StudentScheduleChip[];
-  variant: "inline" | "overlay";
-}) {
+}: StudentScheduleEventDetailsProps) {
   return (
     <div
       className={cn(
@@ -250,24 +209,6 @@ function StudentScheduleEventDetails({
           </div>
         </>
       )}
-
-      {chips.length > 0 ? (
-        <div className="flex flex-wrap gap-1 pt-0.5">
-          {chips.map((chip) => (
-            <span
-              key={chip.key}
-              data-slot="student-schedule-event-chip"
-              className={cn(
-                "inline-flex max-w-full items-center rounded-md px-1.5 py-0.5 font-medium leading-tight whitespace-normal wrap-break-word ring-1 ring-inset",
-                variant === "inline" ? "text-[9px]" : "text-[10px]",
-                chip.className
-              )}
-            >
-              {chip.label}
-            </span>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
