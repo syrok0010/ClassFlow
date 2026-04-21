@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useTransition } from "react";
 import { addDays, format, startOfWeek } from "date-fns";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 import { useQueryState } from "nuqs";
 
 import { Button } from "@/components/ui/button";
@@ -20,25 +20,30 @@ import { StudentScheduleEventCard } from "./student-schedule-event-card";
 type StudentScheduleViewProps = StudentSchedulePageData;
 
 export function StudentScheduleView({
+  anchorDate,
   dateParam,
   emptyState,
   events,
+  viewMode,
 }: StudentScheduleViewProps) {
   const todayDateParam = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+  const [isPending, startTransition] = useTransition();
   const [currentView, setCurrentView] = useQueryState("view", {
     defaultValue: DEFAULT_STUDENT_SCHEDULE_VIEW,
     shallow: false,
+    startTransition,
   });
   const [currentDate, setCurrentDate] = useQueryState("date", {
     defaultValue: todayDateParam,
     shallow: false,
+    startTransition,
   });
 
-  const resolvedViewMode = parseStudentScheduleView(currentView ?? DEFAULT_STUDENT_SCHEDULE_VIEW);
-  const resolvedAnchorDate = useMemo(() => {
-    return parseStudentScheduleDate(currentDate ?? dateParam);
-  }, [currentDate, dateParam]);
-  const normalizedEvents = useMemo(
+  const optimisticViewMode = parseStudentScheduleView(currentView);
+  const optimisticAnchorDate = useMemo(() => {
+    return parseStudentScheduleDate(currentDate);
+  }, [currentDate]);
+  const confirmedEvents = useMemo(
     () =>
       events.map((event) => ({
         ...event,
@@ -47,15 +52,17 @@ export function StudentScheduleView({
       })),
     [events]
   );
-  const weekStart = startOfWeek(resolvedAnchorDate, { weekStartsOn: 1 });
+  const isScheduleRefreshing =
+    isPending || currentView !== viewMode || currentDate !== dateParam;
+  const weekStart = startOfWeek(optimisticAnchorDate, { weekStartsOn: 1 });
   const periodLabel =
-    resolvedViewMode === "day"
-      ? format(resolvedAnchorDate, "d MMMM yyyy")
+    optimisticViewMode === "day"
+      ? format(optimisticAnchorDate, "d MMMM yyyy")
       : `${format(weekStart, "d MMM")} - ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
 
   const shiftPeriod = (direction: -1 | 1) => {
-    const step = resolvedViewMode === "day" ? 1 : 7;
-    const nextDate = addDays(resolvedAnchorDate, direction * step);
+    const step = optimisticViewMode === "day" ? 1 : 7;
+    const nextDate = addDays(optimisticAnchorDate, direction * step);
 
     void setCurrentDate(format(nextDate, "yyyy-MM-dd"));
   };
@@ -72,13 +79,13 @@ export function StudentScheduleView({
 
         <div className="flex flex-col gap-3 sm:items-end">
           <SegmentedControl
-            value={resolvedViewMode}
+            value={optimisticViewMode}
             onChange={(nextView) => {
               void setCurrentView(nextView === DEFAULT_STUDENT_SCHEDULE_VIEW ? null : nextView);
             }}
             options={[
-              { value: "week", label: "Неделя" },
-              { value: "day", label: "День" },
+              { value: "week", label: "Неделя", disabled: isScheduleRefreshing },
+              { value: "day", label: "День", disabled: isScheduleRefreshing },
             ]}
             size="sm"
           />
@@ -87,6 +94,7 @@ export function StudentScheduleView({
             <Button
               variant="outline"
               size="sm"
+              disabled={isScheduleRefreshing}
               onClick={() => shiftPeriod(-1)}
               aria-label="Назад"
             >
@@ -96,6 +104,7 @@ export function StudentScheduleView({
             <Button
               variant="outline"
               size="sm"
+              disabled={isScheduleRefreshing}
               onClick={() => {
                 void setCurrentDate(null);
               }}
@@ -105,6 +114,7 @@ export function StudentScheduleView({
             <Button
               variant="outline"
               size="sm"
+              disabled={isScheduleRefreshing}
               onClick={() => shiftPeriod(1)}
               aria-label="Вперёд"
             >
@@ -115,13 +125,31 @@ export function StudentScheduleView({
         </div>
       </div>
 
-      <ReadonlySchedule
-        anchorDate={resolvedAnchorDate}
-        viewMode={resolvedViewMode}
-        events={normalizedEvents}
-        emptyState={emptyState}
-        renderEvent={(event) => <StudentScheduleEventCard event={event} />}
-      />
+      <div className="relative" aria-busy={isScheduleRefreshing}>
+        {isScheduleRefreshing ? <StudentSchedulePendingOverlay /> : null}
+        <ReadonlySchedule
+          anchorDate={anchorDate}
+          viewMode={viewMode}
+          events={confirmedEvents}
+          emptyState={emptyState}
+          renderEvent={(event) => <StudentScheduleEventCard event={event} />}
+        />
+      </div>
+    </div>
+  );
+}
+
+function StudentSchedulePendingOverlay() {
+  return (
+    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
+      <div
+        role="status"
+        aria-live="polite"
+        className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm"
+      >
+        <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
+        <span>Загружаем расписание...</span>
+      </div>
     </div>
   );
 }
