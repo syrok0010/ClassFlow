@@ -6,11 +6,6 @@ export interface BaseScheduleEvent {
 
 export type ScheduleViewMode = "day" | "week"
 
-export interface ReadonlyScheduleEmptyState {
-  title?: string
-  description?: string
-}
-
 export interface ScheduleTimeRange {
   start: string
   end: string

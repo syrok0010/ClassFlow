@@ -22,9 +22,6 @@ export default async function StudentSchedulePage(props: {
     <div className="flex flex-col gap-4">
       <div className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight">Расписание уроков</h1>
-        <p className="text-sm text-muted-foreground">
-          Просмотр фактического расписания ученика без редактирования.
-        </p>
       </div>
 
       <StudentScheduleView {...pageData} />

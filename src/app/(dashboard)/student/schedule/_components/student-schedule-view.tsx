@@ -2,7 +2,7 @@
 
 import { useMemo, useTransition } from "react";
 import { addDays, format, startOfWeek } from "date-fns";
-import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
+import {BookOpen, ChevronLeft, ChevronRight, LoaderCircle} from "lucide-react";
 import { useQueryState } from "nuqs";
 
 import { Button } from "@/components/ui/button";
@@ -16,13 +16,13 @@ import {
 } from "../_lib/student-schedule-params";
 import type { StudentSchedulePageData } from "../_lib/student-schedule-types";
 import { StudentScheduleEventCard } from "./student-schedule-event-card";
+import { ru } from "date-fns/locale";
 
 type StudentScheduleViewProps = StudentSchedulePageData;
 
 export function StudentScheduleView({
   anchorDate,
   dateParam,
-  emptyState,
   events,
   viewMode,
 }: StudentScheduleViewProps) {
@@ -57,8 +57,8 @@ export function StudentScheduleView({
   const weekStart = startOfWeek(optimisticAnchorDate, { weekStartsOn: 1 });
   const periodLabel =
     optimisticViewMode === "day"
-      ? format(optimisticAnchorDate, "d MMMM yyyy")
-      : `${format(weekStart, "d MMM")} - ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
+      ? format(optimisticAnchorDate, "d MMMM yyyy", { locale: ru })
+      : `${format(weekStart, "d MMM", { locale: ru })} - ${format(addDays(weekStart, 6), "d MMM yyyy", { locale: ru })}`;
 
   const shiftPeriod = (direction: -1 | 1) => {
     const step = optimisticViewMode === "day" ? 1 : 7;
@@ -72,9 +72,6 @@ export function StudentScheduleView({
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <div className="text-sm font-medium text-foreground">{periodLabel}</div>
-          <div className="text-xs text-muted-foreground">
-            Фактическое расписание по всем учебным группам ученика.
-          </div>
         </div>
 
         <div className="flex flex-col gap-3 sm:items-end">
@@ -131,7 +128,11 @@ export function StudentScheduleView({
           anchorDate={anchorDate}
           viewMode={viewMode}
           events={confirmedEvents}
-          emptyState={emptyState}
+          emptyState={{
+            icon: <BookOpen/>,
+            title: "Нет занятий",
+            description: "На выбранный день или неделю расписание пусто.",
+          }}
           renderEvent={(event) => <StudentScheduleEventCard event={event} />}
         />
       </div>

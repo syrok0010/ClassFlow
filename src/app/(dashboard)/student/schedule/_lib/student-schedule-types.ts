@@ -1,6 +1,5 @@
 import type {
   BaseScheduleEvent,
-  ReadonlyScheduleEmptyState,
   ScheduleViewMode,
 } from "@/features/schedule";
 import type { GroupType, SubjectType } from "@/generated/prisma/enums";
@@ -21,5 +20,4 @@ export interface StudentSchedulePageData {
   dateParam: string;
   viewMode: ScheduleViewMode;
   events: StudentScheduleEvent[];
-  emptyState: ReadonlyScheduleEmptyState;
 }

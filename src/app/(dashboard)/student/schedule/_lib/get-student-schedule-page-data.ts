@@ -47,10 +47,6 @@ export async function getStudentSchedulePageData({
       dateParam,
       viewMode,
       events: [],
-      emptyState: {
-        title: "Расписание пока недоступно",
-        description: "Вы ещё не привязаны ни к одной учебной группе.",
-      },
     };
   }
 
@@ -72,9 +68,5 @@ export async function getStudentSchedulePageData({
     dateParam,
     viewMode,
     events: scheduleEntries.map(mapScheduleEntryToStudentScheduleEvent),
-    emptyState: {
-      title: "Нет занятий",
-      description: "На выбранный день или неделю расписание пусто.",
-    },
   };
 }

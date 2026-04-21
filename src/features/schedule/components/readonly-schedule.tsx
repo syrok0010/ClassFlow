@@ -2,23 +2,16 @@
 
 import * as React from "react"
 
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import { cn } from "@/lib/utils"
 
 import { buildScheduleLayout } from "../lib/layout"
 import type {
   BaseScheduleEvent,
-  ReadonlyScheduleEmptyState,
   ScheduleTimeRange,
   ScheduleViewMode
 } from "../lib/types"
 import { useMemo } from "react";
-import { BookOpen } from "lucide-react";
+import {EmptyStateConfig, FilterableEmptyState} from "@/components/ui/filterable-empty-state";
 
 const TIME_COLUMN_WIDTH_PX = 72
 const MIN_DAY_COLUMN_WIDTH_PX = 208
@@ -28,7 +21,7 @@ interface ReadonlyScheduleProps<TEvent extends BaseScheduleEvent> {
   anchorDate: Date
   viewMode: ScheduleViewMode
   renderEvent: (event: TEvent) => React.ReactNode
-  emptyState?: ReadonlyScheduleEmptyState
+  emptyState: EmptyStateConfig
   timeRange?: ScheduleTimeRange
   className?: string
 }
@@ -62,15 +55,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
           className
         )}
       >
-        <Empty className="min-h-80">
-          <EmptyHeader>
-            <BookOpen/>
-            <EmptyTitle>{emptyState?.title ?? "Нет событий"}</EmptyTitle>
-            <EmptyDescription>
-              {emptyState?.description ?? "На выбранный период расписание пусто"}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <FilterableEmptyState hasFilters={false} empty={emptyState}/>
       </div>
     )
   }
