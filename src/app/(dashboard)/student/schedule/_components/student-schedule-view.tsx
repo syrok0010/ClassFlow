@@ -11,7 +11,6 @@ import { ReadonlySchedule } from "@/features/schedule";
 
 import {
   DEFAULT_STUDENT_SCHEDULE_VIEW,
-  formatStudentScheduleDateParam,
   parseStudentScheduleDate,
   parseStudentScheduleView,
 } from "../_lib/student-schedule-params";
@@ -25,7 +24,7 @@ export function StudentScheduleView({
   emptyState,
   events,
 }: StudentScheduleViewProps) {
-  const todayDateParam = useMemo(() => formatStudentScheduleDateParam(new Date()), []);
+  const todayDateParam = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
   const [currentView, setCurrentView] = useQueryState("view", {
     defaultValue: DEFAULT_STUDENT_SCHEDULE_VIEW,
     shallow: false,
@@ -58,7 +57,7 @@ export function StudentScheduleView({
     const step = resolvedViewMode === "day" ? 1 : 7;
     const nextDate = addDays(resolvedAnchorDate, direction * step);
 
-    void setCurrentDate(formatStudentScheduleDateParam(nextDate));
+    void setCurrentDate(format(nextDate, "yyyy-MM-dd"));
   };
 
   return (

@@ -1,4 +1,4 @@
-import { addDays, format, startOfDay, startOfWeek } from "date-fns";
+import { addDays, format, isValid, parse, startOfDay, startOfWeek } from "date-fns";
 
 import type { ScheduleViewMode } from "@/features/schedule";
 
@@ -13,35 +13,13 @@ export function parseStudentScheduleDate(value: string | string[] | undefined): 
     return startOfDay(new Date());
   }
 
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const parsedDate = parse(value, "yyyy-MM-dd", new Date());
 
-  if (!match) {
-    return startOfDay(new Date());
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-    return startOfDay(new Date());
-  }
-
-  const parsedDate = new Date(year, month - 1, day);
-
-  if (
-    parsedDate.getFullYear() !== year ||
-    parsedDate.getMonth() !== month - 1 ||
-    parsedDate.getDate() !== day
-  ) {
+  if (!isValid(parsedDate) || format(parsedDate, "yyyy-MM-dd") !== value) {
     return startOfDay(new Date());
   }
 
   return startOfDay(parsedDate);
-}
-
-export function formatStudentScheduleDateParam(date: Date): string {
-  return format(date, "yyyy-MM-dd");
 }
 
 export function getStudentScheduleRange(anchorDate: Date, viewMode: ScheduleViewMode): {

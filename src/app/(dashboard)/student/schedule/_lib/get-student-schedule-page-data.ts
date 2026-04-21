@@ -1,32 +1,29 @@
 import type { GroupType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { requireStudentActor } from "@/lib/server-action-auth";
-
-import {
-  formatStudentScheduleDateParam,
-  getStudentScheduleRange,
-  parseStudentScheduleDate,
-  parseStudentScheduleView,
-} from "./student-schedule-params";
+import { getStudentScheduleRange } from "./student-schedule-params";
 import {
   mapScheduleEntryToStudentScheduleEvent,
   studentScheduleEntryInclude,
 } from "./student-schedule-mapper";
 import type { StudentSchedulePageData } from "./student-schedule-types";
+import { format } from "date-fns";
+import { ScheduleViewMode } from "@/features/schedule";
 
 type StudentScheduleSearchParams = {
-  [key: string]: string | string[] | undefined;
+  viewMode: ScheduleViewMode;
+  anchorDate: Date;
 };
 
 const VISIBLE_GROUP_TYPES: GroupType[] = ["CLASS", "SUBJECT_SUBGROUP", "ELECTIVE_GROUP"];
 
-export async function getStudentSchedulePageData(
-  searchParams: StudentScheduleSearchParams
-): Promise<StudentSchedulePageData> {
+export async function getStudentSchedulePageData({
+  viewMode,
+  anchorDate,
+}: StudentScheduleSearchParams): Promise<StudentSchedulePageData> {
   const actor = await requireStudentActor();
-  const viewMode = parseStudentScheduleView(searchParams.view);
-  const anchorDate = parseStudentScheduleDate(searchParams.date);
-  const dateParam = formatStudentScheduleDateParam(anchorDate);
+
+  const dateParam = format(anchorDate, "yyyy-MM-dd");
 
   const studentGroups = await prisma.studentGroups.findMany({
     where: {
@@ -77,7 +74,7 @@ export async function getStudentSchedulePageData(
     events: scheduleEntries.map(mapScheduleEntryToStudentScheduleEvent),
     emptyState: {
       title: "Нет занятий",
-      description: "На выбранный день или неделю фактическое расписание пусто.",
+      description: "На выбранный день или неделю расписание пусто.",
     },
   };
 }

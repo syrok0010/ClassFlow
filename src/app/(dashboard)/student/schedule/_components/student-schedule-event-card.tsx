@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-
 import {
   Tooltip,
   TooltipContent,
@@ -10,21 +8,38 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+import { useFittingDimensions } from "../_hooks/use-fitting-dimensions";
 import type { StudentScheduleEvent } from "../_lib/student-schedule-types";
 
 interface StudentScheduleEventCardProps {
   event: StudentScheduleEvent;
 }
 
-type CompactTier = "xs" | "sm" | "md" | "lg";
+type CompactPreviewTier = "xs" | "sm" | "lg";
+
+type CompactPreviewPreset = {
+  containerClassName: string;
+  textClassName: string;
+};
 
 const FIT_TOLERANCE_PX = 2;
+const COMPACT_PREVIEW_PRESETS: Record<CompactPreviewTier, CompactPreviewPreset> = {
+  xs: {
+    containerClassName: "px-1.5 py-0.5",
+    textClassName: "line-clamp-1 text-xs leading-tight",
+  },
+  sm: {
+    containerClassName: "px-2 py-1",
+    textClassName: "line-clamp-2 text-xs leading-tight",
+  },
+  lg: {
+    containerClassName: "px-2 py-1",
+    textClassName: "line-clamp-2 text-sm leading-tight",
+  },
+};
 
 export function StudentScheduleEventCard({ event }: StudentScheduleEventCardProps) {
-  const [availableHeight, setAvailableHeight] = useState(0);
-  const [fullDetailsHeight, setFullDetailsHeight] = useState(0);
-  const visibleCardRef = useRef<HTMLDivElement | null>(null);
-  const measureRef = useRef<HTMLDivElement | null>(null);
+  const { available, containerRef, full, measureRef } = useFittingDimensions();
 
   const titleLines = [
     event.subjectName,
@@ -33,63 +48,24 @@ export function StudentScheduleEventCard({ event }: StudentScheduleEventCardProp
     event.roomName,
   ];
   const cardLabel = titleLines.join(", ");
-  const fitsFully =
-    fullDetailsHeight > 0 && fullDetailsHeight <= availableHeight + FIT_TOLERANCE_PX;
-  const compactTier = getCompactTier(availableHeight);
-  const compactTypographyClass = getCompactTypographyClass(compactTier);
-
-  useEffect(() => {
-    const updateMeasurements = () => {
-      const nextAvailableHeight = Math.ceil(
-        visibleCardRef.current?.getBoundingClientRect().height ?? 0
-      );
-      const nextFullDetailsHeight = Math.ceil(
-        measureRef.current?.getBoundingClientRect().height ?? 0
-      );
-
-      setAvailableHeight((previousHeight) =>
-        previousHeight === nextAvailableHeight ? previousHeight : nextAvailableHeight
-      );
-      setFullDetailsHeight((previousHeight) =>
-        previousHeight === nextFullDetailsHeight ? previousHeight : nextFullDetailsHeight
-      );
-    };
-
-    updateMeasurements();
-
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-
-    const observer = new ResizeObserver(() => {
-      updateMeasurements();
-    });
-
-    if (visibleCardRef.current) {
-      observer.observe(visibleCardRef.current);
-    }
-
-    if (measureRef.current) {
-      observer.observe(measureRef.current);
-    }
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [event.groupName, event.roomName, event.subjectName, event.teacherName, fitsFully]);
+  const fitsFully = full > 0 && full <= available + FIT_TOLERANCE_PX;
+  const compactPreviewPreset = getCompactPreviewPreset(available);
 
   const measurementContent = (
-    <div ref={measureRef} aria-hidden={true} className="absolute inset-x-0 top-0 invisible pointer-events-none">
+    <div
+      ref={measureRef}
+      aria-hidden={true}
+      className="pointer-events-none absolute inset-x-0 top-0 invisible"
+    >
       <StudentScheduleEventDetails event={event} variant="inline" />
     </div>
   );
 
   if (fitsFully) {
     return (
-      <div className="relative h-full">
+      <div ref={containerRef} className="relative h-full">
         {measurementContent}
         <div
-          ref={visibleCardRef}
           data-testid="student-schedule-card"
           data-card-mode="full"
           data-time-label={event.timeLabel}
@@ -102,23 +78,22 @@ export function StudentScheduleEventCard({ event }: StudentScheduleEventCardProp
   }
 
   return (
-    <div className="relative h-full">
+    <div ref={containerRef} className="relative h-full">
       {measurementContent}
       <TooltipProvider delay={0}>
         <Tooltip>
           <TooltipTrigger
             data-testid="student-schedule-card"
             data-card-mode="compact"
-            data-font-tier={compactTier}
             data-time-label={event.timeLabel}
             aria-label={cardLabel}
             delay={0}
             className="block h-full w-full rounded-[inherit] bg-transparent p-0 text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring/60"
           >
-            <div ref={visibleCardRef} className="h-full">
+            <div className="h-full">
               <StudentScheduleEventCompactPreview
                 subjectName={event.subjectName}
-                typographyClassName={compactTypographyClass}
+                preset={compactPreviewPreset}
               />
             </div>
           </TooltipTrigger>
@@ -139,20 +114,20 @@ export function StudentScheduleEventCard({ event }: StudentScheduleEventCardProp
 }
 
 interface StudentScheduleEventCompactPreviewProps {
+  preset: CompactPreviewPreset;
   subjectName: string;
-  typographyClassName: string;
 }
 
 function StudentScheduleEventCompactPreview({
+  preset,
   subjectName,
-  typographyClassName,
 }: StudentScheduleEventCompactPreviewProps) {
   return (
-    <div className="flex h-full items-center px-2 py-1 text-left">
+    <div className={cn("flex h-full items-center text-left", preset.containerClassName)}>
       <div
         className={cn(
-          "line-clamp-2 w-full wrap-break-word font-semibold text-foreground",
-          typographyClassName
+          "w-full wrap-break-word font-semibold text-foreground",
+          preset.textClassName
         )}
       >
         {subjectName}
@@ -162,8 +137,8 @@ function StudentScheduleEventCompactPreview({
 }
 
 interface StudentScheduleEventDetailsProps {
-  event: StudentScheduleEvent,
-  variant: "inline" | "overlay"
+  event: StudentScheduleEvent;
+  variant: "inline" | "overlay";
 }
 
 function StudentScheduleEventDetails({
@@ -213,31 +188,18 @@ function StudentScheduleEventDetails({
   );
 }
 
-function getCompactTier(availableHeight: number): CompactTier {
+function getCompactPreviewTier(availableHeight: number): CompactPreviewTier {
   if (availableHeight < 34) {
     return "xs";
   }
 
-  if (availableHeight < 48) {
-    return "sm";
-  }
-
   if (availableHeight < 64) {
-    return "md";
+    return "sm";
   }
 
   return "lg";
 }
 
-function getCompactTypographyClass(tier: CompactTier) {
-  switch (tier) {
-    case "xs":
-      return "text-[9px] leading-tight";
-    case "sm":
-      return "text-[10px] leading-tight";
-    case "md":
-      return "text-[11px] leading-tight";
-    default:
-      return "text-xs leading-tight";
-  }
+function getCompactPreviewPreset(availableHeight: number): CompactPreviewPreset {
+  return COMPACT_PREVIEW_PRESETS[getCompactPreviewTier(availableHeight)];
 }
