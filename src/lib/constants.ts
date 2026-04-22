@@ -73,4 +73,11 @@ export const SUBJECT_MARKERS: Record<SubjectType, string> = SUBJECT_TYPE_OPTIONS
   {} as Record<SubjectType, string>
 );
 
+export const SUBJECT_CARD_TONES: Record<SubjectType, string> = {
+  ACADEMIC: "border-sky-300/80 bg-sky-100/80",
+  ELECTIVE_REQUIRED: "border-violet-300/80 bg-violet-100/80",
+  ELECTIVE_OPTIONAL: "border-amber-300/80 bg-amber-100/80",
+  REGIME: "border-emerald-300/80 bg-emerald-100/80",
+};
+
 export const SUBJECT_SELECT: SubjectType[] = [...SUBJECT_TYPE_OPTIONS.map((option) => option.value)];

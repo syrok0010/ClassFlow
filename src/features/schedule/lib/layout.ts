@@ -7,11 +7,11 @@ import {
   getMinutesSinceStartOfDay,
   resolveTimeRange,
 } from "./date-utils"
-import type {
+import {
   BaseScheduleEvent,
   EffectiveTimeRange,
   NormalizedScheduleEvent,
-  PositionedScheduleEvent,
+  PositionedScheduleEvent, ScheduleDataError,
   ScheduleLayout,
   ScheduleSlot,
   ScheduleTimeRange,
@@ -24,6 +24,8 @@ type LayoutInput<TEvent extends BaseScheduleEvent> = {
   viewMode: ScheduleViewMode
   timeRange?: ScheduleTimeRange
 }
+
+const PIXEL_PER_MINUTE = 2
 
 export function buildScheduleLayout<TEvent extends BaseScheduleEvent>({
   events,
@@ -38,12 +40,12 @@ export function buildScheduleLayout<TEvent extends BaseScheduleEvent>({
   const effectiveTimeRange = buildEffectiveTimeRange(baseRange, normalizedEvents)
   const timeRangePx: EffectiveTimeRange = {
     ...effectiveTimeRange,
-    heightPx: effectiveTimeRange.totalMinutes,
+    heightPx: effectiveTimeRange.totalMinutes * PIXEL_PER_MINUTE,
   }
   const timeSlots: ScheduleSlot[] = buildTimeSlots(effectiveTimeRange).map(
     ({ offsetMinutes, ...slot }) => ({
       ...slot,
-      offsetPx: offsetMinutes,
+      offsetPx: offsetMinutes * PIXEL_PER_MINUTE,
     })
   )
   const eventsByDay = Object.fromEntries(
@@ -64,23 +66,33 @@ export function buildScheduleLayout<TEvent extends BaseScheduleEvent>({
   }
 }
 
+function validateEvent(event: BaseScheduleEvent) {
+  if (!isValid(event.start)) throw new ScheduleDataError("Невалидная дата начала события", event.id);
+  if (!isValid(event.end)) throw new ScheduleDataError("Невалидная дата конца события", event.id);
+
+  if (event.end <= event.start) {
+    throw new ScheduleDataError("Дата конца события должна быть после даты начала", event.id);
+  }
+
+  if (!isSameDay(event.start, event.end)) {
+    throw new ScheduleDataError("Многодневные события не поддерживаются", event.id);
+  }
+}
+
 function normalizeEvents<TEvent extends BaseScheduleEvent>(
   events: readonly TEvent[],
   dayKeys: Set<string>
 ): NormalizedScheduleEvent<TEvent>[] {
   return events.flatMap((event) => {
-    if (!isValid(event.start) || !isValid(event.end)) {
-      return []
-    }
+    validateEvent(event)
 
-    if (event.end <= event.start || !isSameDay(event.start, event.end)) {
-      return []
-    }
+    const startMinutes = getMinutesSinceStartOfDay(event.start);
+    const endMinutes = getMinutesSinceStartOfDay(event.end);
 
-    const dayKey = format(event.start, "yyyy-MM-dd")
+    const dayKey = format(event.start, "yyyy-MM-dd");
 
     if (!dayKeys.has(dayKey)) {
-      return []
+      throw new ScheduleDataError("Событие не входит в рассматриваемый набор");
     }
 
     return [
@@ -90,8 +102,8 @@ function normalizeEvents<TEvent extends BaseScheduleEvent>(
         start: event.start,
         end: event.end,
         dayKey,
-        startMinutes: getMinutesSinceStartOfDay(event.start),
-        endMinutes: getMinutesSinceStartOfDay(event.end),
+        startMinutes,
+        endMinutes,
       },
     ]
   })
@@ -165,8 +177,8 @@ function positionCluster<TEvent extends BaseScheduleEvent>(
     source: event.source,
     id: event.id,
     dayKey: event.dayKey,
-    topPx: event.startMinutes - rangeStartMinutes,
-    heightPx: event.endMinutes - event.startMinutes,
+    topPx: (event.startMinutes - rangeStartMinutes) * PIXEL_PER_MINUTE,
+    heightPx: (event.endMinutes - event.startMinutes) * PIXEL_PER_MINUTE,
     leftPercent: (columnIndex / totalColumns) * 100,
     widthPercent: 100 / totalColumns,
   }))

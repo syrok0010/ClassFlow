@@ -6,10 +6,7 @@ export interface BaseScheduleEvent {
 
 export type ScheduleViewMode = "day" | "week"
 
-export interface ReadonlyScheduleEmptyState {
-  title?: string
-  description?: string
-}
+export type GridMarkKind = "hour" | "halfHour" | "minor"
 
 export interface ScheduleTimeRange {
   start: string
@@ -31,7 +28,7 @@ export interface ScheduleSlot {
   minutes: number
   offsetPx: number
   label: string
-  isMajor: boolean
+  kind: GridMarkKind
 }
 
 export interface ResolvedTimeRange {
@@ -71,4 +68,11 @@ export interface ScheduleLayout<TEvent extends BaseScheduleEvent> {
   timeRange: EffectiveTimeRange
   eventsByDay: Record<string, PositionedScheduleEvent<TEvent>[]>
   hasVisibleEvents: boolean
+}
+
+export class ScheduleDataError extends Error {
+  constructor(message: string, public eventId?: string) {
+    super(eventId ? `[Event ID: ${eventId}] ${message}` : message);
+    this.name = "ScheduleDataError";
+  }
 }

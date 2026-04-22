@@ -1,16 +1,13 @@
 import { addDays, format, isSameDay, isValid, startOfDay, startOfWeek } from "date-fns"
 
-import type {
-  ScheduleDay,
-  ResolvedTimeRange,
-  ScheduleTimeRange,
-  ScheduleViewMode,
-} from "./types"
+import type {ScheduleDay, ResolvedTimeRange, ScheduleTimeRange, ScheduleViewMode, GridMarkKind} from "./types"
+
+export const TIME_SLOT_STEP_MINUTES = 5
 
 export const DEFAULT_TIME_RANGE: Required<ScheduleTimeRange> = {
   start: "08:00",
   end: "18:00",
-  stepMinutes: 30,
+  stepMinutes: TIME_SLOT_STEP_MINUTES,
 }
 
 export const MINUTES_IN_DAY = 24 * 60
@@ -70,7 +67,7 @@ export function normalizeStepMinutes(value?: number): number {
     return DEFAULT_TIME_RANGE.stepMinutes
   }
 
-  if (value < 15 || value > 60 || value % 5 !== 0) {
+  if (value < TIME_SLOT_STEP_MINUTES || value > 60 || value % TIME_SLOT_STEP_MINUTES !== 0) {
     return DEFAULT_TIME_RANGE.stepMinutes
   }
 
@@ -184,14 +181,14 @@ export function buildTimeSlots(
   minutes: number
   offsetMinutes: number
   label: string
-  isMajor: boolean
+  kind: GridMarkKind
 }> {
   const slots: Array<{
     key: string
     minutes: number
     offsetMinutes: number
     label: string
-    isMajor: boolean
+    kind: GridMarkKind
   }> = []
 
   for (
@@ -199,28 +196,42 @@ export function buildTimeSlots(
     minutes < timeRange.endMinutes;
     minutes += timeRange.stepMinutes
   ) {
+    const kind = getSlotKind(minutes)
+
     slots.push({
       key: `slot-${minutes}`,
       minutes,
       offsetMinutes: minutes - timeRange.startMinutes,
       label: formatTimeLabel(minutes),
-      isMajor:
-        minutes === timeRange.startMinutes ||
-        minutes % 60 === 0,
+      kind,
     })
   }
 
   const lastSlot = slots.at(-1)
 
   if (!lastSlot || lastSlot.minutes !== timeRange.endMinutes) {
+    const kind = getSlotKind(timeRange.endMinutes)
+
     slots.push({
       key: `slot-${timeRange.endMinutes}`,
       minutes: timeRange.endMinutes,
       offsetMinutes: timeRange.endMinutes - timeRange.startMinutes,
       label: formatTimeLabel(timeRange.endMinutes),
-      isMajor: true,
+      kind,
     })
   }
 
   return slots
+}
+
+function getSlotKind(minutes: number): GridMarkKind {
+  if (minutes % 60 === 0) {
+    return "hour"
+  }
+
+  if (minutes % 60 === 30) {
+    return "halfHour"
+  }
+
+  return "minor"
 }
