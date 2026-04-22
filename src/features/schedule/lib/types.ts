@@ -69,3 +69,10 @@ export interface ScheduleLayout<TEvent extends BaseScheduleEvent> {
   eventsByDay: Record<string, PositionedScheduleEvent<TEvent>[]>
   hasVisibleEvents: boolean
 }
+
+export class ScheduleDataError extends Error {
+  constructor(message: string, public eventId?: string) {
+    super(eventId ? `[Event ID: ${eventId}] ${message}` : message);
+    this.name = "ScheduleDataError";
+  }
+}

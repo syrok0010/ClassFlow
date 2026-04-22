@@ -7,11 +7,11 @@ import {
   getMinutesSinceStartOfDay,
   resolveTimeRange,
 } from "./date-utils"
-import type {
+import {
   BaseScheduleEvent,
   EffectiveTimeRange,
   NormalizedScheduleEvent,
-  PositionedScheduleEvent,
+  PositionedScheduleEvent, ScheduleDataError,
   ScheduleLayout,
   ScheduleSlot,
   ScheduleTimeRange,
@@ -66,37 +66,33 @@ export function buildScheduleLayout<TEvent extends BaseScheduleEvent>({
   }
 }
 
+function validateEvent(event: BaseScheduleEvent) {
+  if (!isValid(event.start)) throw new ScheduleDataError("Невалидная дата начала события", event.id);
+  if (!isValid(event.end)) throw new ScheduleDataError("Невалидная дата конца события", event.id);
+
+  if (event.end <= event.start) {
+    throw new ScheduleDataError("Дата конца события должна быть после даты начала", event.id);
+  }
+
+  if (!isSameDay(event.start, event.end)) {
+    throw new ScheduleDataError("Многодневные события не поддерживаются", event.id);
+  }
+}
+
 function normalizeEvents<TEvent extends BaseScheduleEvent>(
   events: readonly TEvent[],
   dayKeys: Set<string>
 ): NormalizedScheduleEvent<TEvent>[] {
   return events.flatMap((event) => {
-    if (!isValid(event.start) || !isValid(event.end)) {
-      return []
-    }
+    validateEvent(event)
 
-    if (event.end <= event.start || !isSameDay(event.start, event.end)) {
-      return []
-    }
+    const startMinutes = getMinutesSinceStartOfDay(event.start);
+    const endMinutes = getMinutesSinceStartOfDay(event.end);
 
-    const startMinutes = getMinutesSinceStartOfDay(event.start)
-    const endMinutes = getMinutesSinceStartOfDay(event.end)
-    const durationMinutes = endMinutes - startMinutes
-
-    if (
-      startMinutes % 5 !== 0 ||
-      endMinutes % 5 !== 0 ||
-      durationMinutes < 10 ||
-      durationMinutes > 60 ||
-      durationMinutes % 5 !== 0
-    ) {
-      return []
-    }
-
-    const dayKey = format(event.start, "yyyy-MM-dd")
+    const dayKey = format(event.start, "yyyy-MM-dd");
 
     if (!dayKeys.has(dayKey)) {
-      return []
+      throw new ScheduleDataError("Событие не входит в рассматриваемый набор");
     }
 
     return [

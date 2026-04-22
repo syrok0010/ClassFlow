@@ -10,6 +10,7 @@ import { SUBJECT_CARD_TONES, SUBJECT_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import type { StudentScheduleEvent } from "../_lib/student-schedule-types";
+import {differenceInMinutes} from "date-fns";
 
 interface StudentScheduleEventCardProps {
   event: StudentScheduleEvent;
@@ -145,5 +146,5 @@ function getCardLayout(durationMinutes: number): StudentScheduleCardLayout {
 }
 
 function getEventDurationMinutes(event: StudentScheduleEvent): number {
-  return Math.round((event.end.getTime() - event.start.getTime()) / 60_000);
+  return differenceInMinutes(event.end, event.start, { roundingMethod: "round" });
 }
