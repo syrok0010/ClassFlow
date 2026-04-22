@@ -1,9 +1,9 @@
 "use server";
 
-import { z } from "zod/v4";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { err, ok, type Result } from "@/lib/result";
+import { requireAdminContext } from "@/lib/server-action-auth";
 import type {
   RequirementEntry,
   RequirementGroupNode,
@@ -12,86 +12,20 @@ import type {
   RequirementsMatrixData,
   RequirementSubject,
 } from "../_lib/types";
+import { getActionErrorMessage } from "@/lib/action-error";
+import { requirementMutationSchema } from "../_lib/schemas";
 
 const REQUIREMENTS_PATH = "/admin/requirements";
 
-const requirementMutationSchema = z.object({
-  groupId: z.string().min(1),
-  subjectId: z.string().min(1),
-  lessonsPerWeek: z.number().int().min(0).max(99),
-  durationInMinutes: z.number().int().min(1).max(180),
-  breakDuration: z.number().int().min(0).max(60),
-});
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof z.ZodError) {
-    return error.issues[0]?.message ?? fallback;
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return fallback;
-}
-
-function buildGroupTree(groups: Array<{
-  id: string;
-  name: string;
-  type: "CLASS" | "KINDERGARTEN_GROUP" | "SUBJECT_SUBGROUP" | "ELECTIVE_GROUP";
-  grade: number | null;
-  parentId: string | null;
-  subjectId: string | null;
-}>): RequirementGroupNode[] {
-  const allowedRootTypes = new Set(["CLASS", "ELECTIVE_GROUP"]);
-  const byParent = new Map<string | null, typeof groups>();
-
-  for (const group of groups) {
-    const bucket = byParent.get(group.parentId);
-    if (bucket) {
-      bucket.push(group);
-      continue;
-    }
-
-    byParent.set(group.parentId, [group]);
-  }
-
-  const toNode = (group: (typeof groups)[number]): RequirementGroupNode => {
-    const children = (byParent.get(group.id) ?? [])
-      .filter((child) => child.type === "SUBJECT_SUBGROUP")
-      .sort((a, b) => a.name.localeCompare(b.name, "ru", { sensitivity: "base" }));
-
-    return {
-      id: group.id,
-      name: group.name,
-      type: group.type,
-      grade: group.grade,
-      parentId: group.parentId,
-      subjectId: group.subjectId,
-      subGroups: children.map(toNode),
-    };
-  };
-
-  return groups
-    .filter((group) => group.parentId === null && allowedRootTypes.has(group.type))
-    .sort((a, b) => {
-      if (a.type !== b.type) {
-        return a.type.localeCompare(b.type);
-      }
-
-      if ((a.grade ?? 0) !== (b.grade ?? 0)) {
-        return (a.grade ?? 0) - (b.grade ?? 0);
-      }
-
-      return a.name.localeCompare(b.name, "ru", { sensitivity: "base" });
-    })
-    .map(toNode);
-}
-
 export async function getRequirementsMatrixAction(): Promise<Result<RequirementsMatrixData>> {
   try {
+    await requireAdminContext();
+
     const [groups, subjects, requirements] = await Promise.all([
       prisma.group.findMany({
+        where: {
+          type: { in: ["CLASS", "ELECTIVE_GROUP"] },
+        },
         select: {
           id: true,
           name: true,
@@ -100,6 +34,11 @@ export async function getRequirementsMatrixAction(): Promise<Result<Requirements
           parentId: true,
           subjectId: true,
         },
+        orderBy: [
+          { type: "asc" },
+          { grade: "asc" },
+          { name: "asc" },
+        ],
       }),
       prisma.subject.findMany({
         select: {
@@ -121,14 +60,14 @@ export async function getRequirementsMatrixAction(): Promise<Result<Requirements
     ]);
 
     const payload: RequirementsMatrixData = {
-      groups: buildGroupTree(groups),
+      groups: groups as RequirementGroupNode[],
       subjects: subjects as RequirementSubject[],
       requirements: requirements as RequirementEntry[],
     };
 
     return ok(payload);
   } catch (error) {
-    return err(getErrorMessage(error, "Не удалось загрузить матрицу нагрузки"));
+    return err(getActionErrorMessage(error, "Не удалось загрузить матрицу нагрузки"));
   }
 }
 
@@ -136,6 +75,8 @@ export async function upsertRequirementAction(
   input: RequirementMutationInput
 ): Promise<Result<RequirementMutationResult>> {
   try {
+    await requireAdminContext();
+
     const validated = requirementMutationSchema.parse(input);
 
     const baseGroup = await prisma.group.findUnique({
@@ -230,6 +171,6 @@ export async function upsertRequirementAction(
       deletedGroupIds: [],
     });
   } catch (error) {
-    return err(getErrorMessage(error, "Не удалось сохранить требование"));
+    return err(getActionErrorMessage(error, "Не удалось сохранить требование"));
   }
 }

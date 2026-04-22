@@ -1,4 +1,4 @@
-import { z } from "zod/v4";
+import { z } from "zod";
 
 export const lessonsPerWeekSchema = z
   .number({ error: "Укажите часы" })
@@ -19,7 +19,12 @@ export const breakDurationSchema = z
   .max(60, "Максимум 60 минут");
 
 export const requirementCellFormSchema = z.object({
-  lessons: lessonsPerWeekSchema,
-  duration: durationMinutesSchema,
+  lessonsPerWeek: lessonsPerWeekSchema,
+  durationInMinutes: durationMinutesSchema,
   breakDuration: breakDurationSchema,
+});
+
+export const requirementMutationSchema = requirementCellFormSchema.extend({
+  groupId: z.string().min(1, "Группа обязательна"),
+  subjectId: z.string().min(1, "Предмет обязателен"),
 });

@@ -1,6 +1,4 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -9,9 +7,6 @@ import {
   type Header,
 } from "@tanstack/react-table";
 import {
-  Clock3,
-  Coffee,
-  Lock,
   Minus,
   Plus,
 } from "lucide-react";
@@ -25,7 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 import {
   getCollapsedGroupColumnId,
   getSubjectColumnId,
@@ -39,44 +33,34 @@ import {
   makeRequirementMap,
 } from "../_lib/utils";
 import type {
-  FlatRequirementRow,
   RequirementEntry,
+  RequirementGroupNode,
   RequirementSubject,
   SubjectColumnGroupKey,
+  RequirementMutationInput,
+  NavigationDirection,
 } from "../_lib/types";
-import { RequirementCellEditor } from "./requirement-cell-editor";
+import { RequirementGridCell } from "./requirement-grid-cell";
 
 type ActiveCell = {
-  rowId: string;
+  groupId: string;
   subjectId: string;
 };
 
-type EditingCell = {
-  rowId: string;
-  subjectId: string;
+type EditingCell = ActiveCell & {
   initialLessons?: number;
   instanceId: string;
 };
 
 type RequirementsMatrixTableProps = {
-  rows: FlatRequirementRow[];
+  rows: RequirementGroupNode[];
   subjects: RequirementSubject[];
   requirements: RequirementEntry[];
   quickInputMode: boolean;
   collapsedColumnGroups: Set<SubjectColumnGroupKey>;
   onToggleColumnGroup: (key: SubjectColumnGroupKey) => void;
-  onSaveCell: (payload: {
-    rowId: string;
-    subjectId: string;
-    lessonsPerWeek: number;
-    durationInMinutes: number;
-    breakDuration: number;
-  }) => Promise<void>;
+  onSaveCell: (payload: RequirementMutationInput & { advance: NavigationDirection }) => Promise<void>;
 };
-
-type CellPayload =
-  | { kind: "subject"; subject: RequirementSubject }
-  | { kind: "collapsed"; groupKey: SubjectColumnGroupKey };
 
 const GROUP_TYPE_LABELS: Record<GroupType, string> = {
   CLASS: "Класс",
@@ -85,14 +69,7 @@ const GROUP_TYPE_LABELS: Record<GroupType, string> = {
   SUBJECT_SUBGROUP: "Подгруппа",
 };
 
-const SUBJECT_TYPE_CELL_TINT: Record<RequirementSubject["type"], string> = {
-  ACADEMIC: "bg-blue-50",
-  ELECTIVE_REQUIRED: "bg-orange-50",
-  ELECTIVE_OPTIONAL: "bg-amber-50",
-  REGIME: "bg-emerald-50",
-};
-
-function isCollapsedHeader(header: Header<FlatRequirementRow, unknown>): boolean {
+function isCollapsedHeader(header: Header<RequirementGroupNode, unknown>): boolean {
   return header.column.id.startsWith("collapsed::");
 }
 
@@ -102,32 +79,16 @@ function parseCollapsedGroupKey(id: string): SubjectColumnGroupKey | null {
   }
 
   const key = id.replace("collapsed::", "");
-
-  if (
-    key === "REGIME" ||
-    key === "ACADEMIC" ||
-    key === "ELECTIVE_REQUIRED" ||
-    key === "ELECTIVE_OPTIONAL"
-  ) {
-    return key;
-  }
-
-  return null;
+  return ["REGIME", "ACADEMIC", "ELECTIVE_REQUIRED", "ELECTIVE_OPTIONAL"].includes(key) 
+    ? (key as SubjectColumnGroupKey) 
+    : null;
 }
 
 function parseGroupHeaderKey(id: string): SubjectColumnGroupKey | null {
   const key = id.startsWith("group::") ? id.replace("group::", "") : id;
-
-  if (
-    key === "REGIME" ||
-    key === "ACADEMIC" ||
-    key === "ELECTIVE_REQUIRED" ||
-    key === "ELECTIVE_OPTIONAL"
-  ) {
-    return key;
-  }
-
-  return null;
+  return ["REGIME", "ACADEMIC", "ELECTIVE_REQUIRED", "ELECTIVE_OPTIONAL"].includes(key) 
+    ? (key as SubjectColumnGroupKey) 
+    : null;
 }
 
 export function RequirementsMatrixTable({
@@ -158,9 +119,8 @@ export function RequirementsMatrixTable({
     return result;
   }, [requirementsMap, rows, subjects]);
 
-  const matrixColumns = useMemo<ColumnDef<FlatRequirementRow>[]>(() => {
-    const columns: ColumnDef<FlatRequirementRow>[] = [];
-
+  const matrixColumns = useMemo<ColumnDef<RequirementGroupNode>[]>(() => {
+    const columns: ColumnDef<RequirementGroupNode>[] = [];
     for (const group of SUBJECT_COLUMN_GROUPS) {
       const groupSubjects = subjectsByGroup.get(group.key) ?? [];
 
@@ -172,8 +132,6 @@ export function RequirementsMatrixTable({
         id: getCollapsedGroupColumnId(group.key),
         header: () => null,
         size: 48,
-        minSize: 48,
-        maxSize: 48,
         cell: () => null,
       });
 
@@ -184,7 +142,6 @@ export function RequirementsMatrixTable({
           id: getSubjectColumnId(subject.id),
           accessorFn: () => null,
           size: 136,
-          minSize: 136,
           header: () => subject.name,
           cell: () => null,
         })),
@@ -223,12 +180,11 @@ export function RequirementsMatrixTable({
     return map;
   }, [subjects]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: rows,
     columns: matrixColumns,
-    state: {
-      columnVisibility,
-    },
+    state: { columnVisibility },
     getCoreRowModel: getCoreRowModel(),
   });
 
@@ -243,49 +199,39 @@ export function RequirementsMatrixTable({
     [visibleLeafColumns, subjectsByColumnId]
   );
 
-  useEffect(() => {
-    if (rows.length === 0 || visibleSubjects.length === 0) {
-      setActiveCell(null);
-      return;
+  const hasData = rows.length > 0 && visibleSubjects.length > 0;
+  const groupExists = activeCell ? rows.some((r) => r.id === activeCell.groupId) : false;
+  const subjectExists = activeCell ? visibleSubjects.some((s) => s.id === activeCell.subjectId) : false;
+
+  if (hasData) {
+    if (!activeCell || !groupExists || !subjectExists) {
+      setActiveCell({ groupId: rows[0].id, subjectId: visibleSubjects[0].id });
     }
+  } else if (activeCell !== null) {
+    setActiveCell(null);
+  }
 
-    if (!activeCell) {
-      setActiveCell({ rowId: rows[0].id, subjectId: visibleSubjects[0].id });
-      return;
-    }
-
-    const rowExists = rows.some((row) => row.id === activeCell.rowId);
-    const subjectExists = visibleSubjects.some(
-      (subject) => subject.id === activeCell.subjectId
-    );
-
-    if (!rowExists || !subjectExists) {
-      setActiveCell({ rowId: rows[0].id, subjectId: visibleSubjects[0].id });
-    }
-  }, [activeCell, rows, visibleSubjects]);
-
-  useEffect(() => {
-    if (!activeCell) {
-      return;
-    }
-
-    const key = `${activeCell.rowId}:${activeCell.subjectId}`;
+  useLayoutEffect(() => {
+    if (!activeCell) return;
     const target = document.querySelector<HTMLButtonElement>(
-      `[data-cell-focus-id="${key}"]`
+      `[data-cell-focus-id="${activeCell.groupId}:${activeCell.subjectId}"]`
     );
-
     target?.focus();
   }, [activeCell, editingCell]);
 
-  const navigateActiveCell = (direction: "up" | "down" | "left" | "right") => {
-    if (!activeCell || rows.length === 0 || visibleSubjects.length === 0) {
+  const moveActiveCell = (direction: NavigationDirection) => {
+    if (!activeCell || !hasData) {
       return;
     }
 
-    const rowIndex = rows.findIndex((row) => row.id === activeCell.rowId);
-    const subjectIndex = visibleSubjects.findIndex(
-      (subject) => subject.id === activeCell.subjectId
-    );
+    if (direction === "stay") {
+      if (editingCell)
+        setEditingCell(null);
+      return;
+    }
+
+    const rowIndex = rows.findIndex((row) => row.id === activeCell.groupId);
+    const subjectIndex = visibleSubjects.findIndex((subject) => subject.id === activeCell.subjectId);
 
     if (rowIndex < 0 || subjectIndex < 0) {
       return;
@@ -305,237 +251,13 @@ export function RequirementsMatrixTable({
     }
 
     setActiveCell({
-      rowId: rows[nextRowIndex]?.id ?? activeCell.rowId,
-      subjectId: visibleSubjects[nextSubjectIndex]?.id ?? activeCell.subjectId,
+      groupId: rows[nextRowIndex].id,
+      subjectId: visibleSubjects[nextSubjectIndex].id
     });
 
     if (editingCell) {
       setEditingCell(null);
     }
-  };
-
-  const navigateAfterSave = (advance: "down" | "right" | "left" | "stay") => {
-    if (!activeCell || rows.length === 0 || visibleSubjects.length === 0) {
-      return;
-    }
-
-    if (advance === "stay") {
-      setActiveCell({ rowId: activeCell.rowId, subjectId: activeCell.subjectId });
-      return;
-    }
-
-    const rowIndex = rows.findIndex((row) => row.id === activeCell.rowId);
-    const subjectIndex = visibleSubjects.findIndex(
-      (subject) => subject.id === activeCell.subjectId
-    );
-
-    if (rowIndex < 0 || subjectIndex < 0) {
-      return;
-    }
-
-    let nextRowIndex = rowIndex;
-    let nextSubjectIndex = subjectIndex;
-
-    if (advance === "down") {
-      nextRowIndex = Math.min(rows.length - 1, rowIndex + 1);
-    } else if (advance === "left") {
-      nextSubjectIndex = Math.max(0, subjectIndex - 1);
-    } else {
-      nextSubjectIndex = Math.min(visibleSubjects.length - 1, subjectIndex + 1);
-    }
-
-    setActiveCell({
-      rowId: rows[nextRowIndex]?.id ?? activeCell.rowId,
-      subjectId: visibleSubjects[nextSubjectIndex]?.id ?? activeCell.subjectId,
-    });
-  };
-
-  const startEditing = (cell: Omit<EditingCell, "instanceId"> & { instanceId?: string }) => {
-    setActiveCell({ rowId: cell.rowId, subjectId: cell.subjectId });
-    setEditingCell({
-      rowId: cell.rowId,
-      subjectId: cell.subjectId,
-      initialLessons: cell.initialLessons,
-      instanceId: cell.instanceId ?? crypto.randomUUID(),
-    });
-  };
-
-  const renderGridCell = (row: FlatRequirementRow, payload: CellPayload) => {
-    if (payload.kind === "collapsed") {
-      return (
-        <TableCell
-          key={`${row.id}:${payload.groupKey}`}
-          className="h-16 min-w-12 border-r border-b bg-muted/20 px-1 py-1"
-        >
-          <div className="h-full rounded-sm bg-muted/40" />
-        </TableCell>
-      );
-    }
-
-    const subject = payload.subject;
-    const key = `${row.id}:${subject.id}`;
-    const entry = requirementsMap.get(key) ?? null;
-    const isActive = activeCell?.rowId === row.id && activeCell.subjectId === subject.id;
-    const isEditing = editingCell?.rowId === row.id && editingCell.subjectId === subject.id;
-    const isReadOnlySubgroup = row.type === "SUBJECT_SUBGROUP";
-
-    return (
-      <TableCell
-        key={key}
-        className={cn(
-          "relative h-16 min-w-32 border-r border-b px-2 py-1",
-          SUBJECT_TYPE_CELL_TINT[subject.type],
-          !entry && "bg-muted/25",
-          isActive && "ring-2 ring-primary/60 ring-inset"
-        )}
-      >
-        <button
-          type="button"
-          className={cn(
-            "group flex h-full w-full items-center justify-center text-center outline-none",
-            isReadOnlySubgroup
-              ? "cursor-not-allowed opacity-80"
-              : "hover:bg-background/70 focus-visible:ring-ring"
-          )}
-          title={
-            isReadOnlySubgroup
-              ? "Нагрузка подгруппы меняется через родительский класс"
-              : "Нажмите Enter или цифру для редактирования"
-          }
-          onClick={() => setActiveCell({ rowId: row.id, subjectId: subject.id })}
-          onDoubleClick={() => {
-            setActiveCell({ rowId: row.id, subjectId: subject.id });
-
-            if (isReadOnlySubgroup) {
-              return;
-            }
-
-            startEditing({
-              rowId: row.id,
-              subjectId: subject.id,
-            });
-          }}
-          onKeyDown={(event) => {
-            if (!isActive) {
-              return;
-            }
-
-            if (event.key === "ArrowUp") {
-              event.preventDefault();
-              navigateActiveCell("up");
-              return;
-            }
-
-            if (event.key === "ArrowDown") {
-              event.preventDefault();
-              navigateActiveCell("down");
-              return;
-            }
-
-            if (event.key === "ArrowLeft") {
-              event.preventDefault();
-              navigateActiveCell("left");
-              return;
-            }
-
-            if (event.key === "ArrowRight") {
-              event.preventDefault();
-              navigateActiveCell("right");
-              return;
-            }
-
-            if (isReadOnlySubgroup) {
-              return;
-            }
-
-            if (event.key === "Enter") {
-              event.preventDefault();
-              startEditing({
-                rowId: row.id,
-                subjectId: subject.id,
-              });
-              return;
-            }
-
-            if (/^[0-9]$/.test(event.key)) {
-              event.preventDefault();
-
-              if (quickInputMode) {
-                void onSaveCell({
-                  rowId: row.id,
-                  subjectId: subject.id,
-                  lessonsPerWeek: Number(event.key),
-                  durationInMinutes:
-                    entry?.durationInMinutes ?? QUICK_INPUT_DEFAULT_DURATION,
-                  breakDuration: entry?.breakDuration ?? QUICK_INPUT_DEFAULT_BREAK,
-                });
-                return;
-              }
-
-              startEditing({
-                rowId: row.id,
-                subjectId: subject.id,
-                initialLessons: Number(event.key),
-              });
-            }
-          }}
-          tabIndex={isActive ? 0 : -1}
-          data-cell-focus-id={key}
-        >
-          {entry ? (
-            <div className="flex flex-col items-center">
-              <span className="text-xl font-semibold leading-none">{entry.lessonsPerWeek}</span>
-              <span className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-0.5" title="Длительность урока">
-                  <Clock3 className="size-3" />
-                  {entry.durationInMinutes}м
-                </span>
-                <span className="inline-flex items-center gap-0.5" title="Длительность перемены">
-                  <Coffee className="size-3" />
-                  {entry.breakDuration}м
-                </span>
-              </span>
-            </div>
-          ) : (
-            <span className="opacity-0 text-muted-foreground transition-opacity group-hover:opacity-60">
-              <Plus className="size-4" />
-            </span>
-          )}
-
-          {isReadOnlySubgroup ? (
-            <span className="absolute right-1.5 top-1.5 text-muted-foreground">
-              <Lock className="size-3.5" />
-            </span>
-          ) : null}
-        </button>
-
-        {isEditing && !isReadOnlySubgroup ? (
-          <RequirementCellEditor
-            key={editingCell.instanceId}
-            quickInputMode={quickInputMode}
-                            initial={entry}
-                            initialLessons={editingCell?.initialLessons}
-                            onCancel={() => setEditingCell(null)}
-                            onSave={async ({
-                              lessonsPerWeek,
-                              durationInMinutes,
-              breakDuration,
-              advance,
-            }) => {
-                              await onSaveCell({
-                                rowId: row.id,
-                                subjectId: subject.id,
-                                lessonsPerWeek,
-                                durationInMinutes,
-                                breakDuration,
-                              });
-                              setEditingCell(null);
-                              navigateAfterSave(advance);
-                            }}
-                          />
-        ) : null}
-      </TableCell>
-    );
   };
 
   return (
@@ -544,14 +266,14 @@ export function RequirementsMatrixTable({
         <TableHeader>
           {headerGroups.map((headerGroup) => (
             <TableRow key={headerGroup.id}>
-              {headerGroup.depth === 0 ? (
+              {headerGroup.depth === 0 && (
                 <TableHead
                   rowSpan={headerGroups.length}
                   className="sticky left-0 top-0 z-30 min-w-80 border-r border-b rounded-tl-xl bg-card px-3 py-2 text-left text-xs font-semibold text-muted-foreground"
                 >
                   Группы / Классы
                 </TableHead>
-              ) : null}
+              )}
 
               {headerGroup.headers.map((header) => {
                 const collapsedHeader = isCollapsedHeader(header);
@@ -574,11 +296,7 @@ export function RequirementsMatrixTable({
                       <Button
                         size="icon-xs"
                         variant="ghost"
-                        onClick={() => {
-                          if (groupKey) {
-                            onToggleColumnGroup(groupKey);
-                          }
-                        }}
+                        onClick={() => groupKey && onToggleColumnGroup(groupKey)}
                         aria-label={`Развернуть группу ${groupDef?.label ?? "предметов"}`}
                       >
                         <Plus className="size-3.5" />
@@ -636,14 +354,14 @@ export function RequirementsMatrixTable({
                 );
               })}
 
-              {headerGroup.depth === 0 ? (
+              {headerGroup.depth === 0 && (
                 <TableHead
                   rowSpan={headerGroups.length}
                   className="sticky right-0 top-0 z-30 min-w-28 border-l border-b rounded-tr-xl bg-card px-3 py-2 text-right text-xs font-semibold text-muted-foreground"
                 >
                   Итого уроков
                 </TableHead>
-              ) : null}
+              )}
             </TableRow>
           ))}
         </TableHeader>
@@ -652,30 +370,20 @@ export function RequirementsMatrixTable({
           {rows.map((row) => (
             <TableRow key={row.id}>
               <TableCell className="sticky left-0 z-10 border-r border-b bg-card px-3 py-2">
-                <div
-                  className="flex items-center gap-1.5"
-                  style={{ paddingLeft: `${row.depth * 18}px` }}
-                >
-                  <span className="inline-block w-6" />
-
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{row.name}</div>
-                    <div className="text-xs text-muted-foreground">{GROUP_TYPE_LABELS[row.type]}</div>
-                  </div>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{row.name}</div>
+                  <div className="text-xs text-muted-foreground">{GROUP_TYPE_LABELS[row.type]}</div>
                 </div>
               </TableCell>
 
               {visibleLeafColumns.map((column) => {
-                if (column.id.startsWith("collapsed::")) {
-                  const groupKey = parseCollapsedGroupKey(column.id);
-                  if (!groupKey) {
-                    return null;
-                  }
-
-                  return renderGridCell(row, {
-                    kind: "collapsed",
-                    groupKey,
-                  });
+                const groupKey = parseCollapsedGroupKey(column.id);
+                if (groupKey) {
+                  return (
+                    <TableCell key={`${row.id}:${groupKey}`} className="h-16 min-w-12 border-r border-b bg-muted/20 px-1 py-1">
+                      <div className="h-full rounded-sm bg-muted/40" />
+                    </TableCell>
+                  );
                 }
 
                 const subject = subjectsByColumnId.get(column.id);
@@ -684,7 +392,45 @@ export function RequirementsMatrixTable({
                   return null;
                 }
 
-                return renderGridCell(row, { kind: "subject", subject });
+                const isActive = activeCell?.groupId === row.id && activeCell.subjectId === subject.id;
+                const isEditing = editingCell?.groupId === row.id && editingCell.subjectId === subject.id;
+
+                return (
+                  <RequirementGridCell
+                    key={`${row.id}:${subject.id}`}
+                    row={row}
+                    subject={subject}
+                    entry={requirementsMap.get(`${row.id}:${subject.id}`) ?? null}
+                    isActive={isActive}
+                    editing={isEditing ? {
+                      initialLessons: editingCell?.initialLessons,
+                      instanceId: editingCell.instanceId
+                    } : null}
+                    quickInputMode={quickInputMode}
+                    onActivate={() => {
+                      setActiveCell({ groupId: row.id, subjectId: subject.id });
+                      if (editingCell) setEditingCell(null);
+                    }}
+                    onStartEditing={(lessons) => {
+                      setActiveCell({ groupId: row.id, subjectId: subject.id });
+                      setEditingCell({
+                        groupId: row.id,
+                        subjectId: subject.id,
+                        initialLessons: lessons,
+                        instanceId: crypto.randomUUID(),
+                      });
+                    }}
+                    onSave={async (p) => {
+                      await onSaveCell({
+                        groupId: row.id,
+                        subjectId: subject.id,
+                        ...p,
+                      });
+                      moveActiveCell(p.advance);
+                    }}
+                    onNavigate={moveActiveCell}
+                  />
+                );
               })}
 
               <TableCell className="sticky right-0 z-10 border-l border-b bg-card px-3 py-2 text-right">

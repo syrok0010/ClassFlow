@@ -7,12 +7,11 @@ import { toast } from "sonner";
 import { upsertRequirementAction } from "../_actions/requirement-actions";
 import { RequirementsMatrixTable } from "./requirements-matrix-table";
 import { RequirementsToolbar } from "./requirements-toolbar";
-import { flattenRequirementRows, getRootRowIds } from "../_lib/utils";
 import type {
   RequirementEntry,
-  RequirementGroupNode,
   RequirementsMatrixData,
   SubjectColumnGroupKey,
+  RequirementMutationInput,
 } from "../_lib/types";
 
 type MatrixRegion = "core" | "elective";
@@ -43,34 +42,14 @@ export function RequirementsMatrixClient({
     initialData.requirements
   );
 
-  const coreGroups = useMemo(
-    () =>
-      initialData.groups
-        .filter((group) => group.type === "CLASS")
-        .map((group) => ({ ...group, subGroups: [] })),
-    [initialData.groups]
-  );
-
-  const electiveGroups = useMemo(
-    () =>
-      initialData.groups
-        .filter((group) => group.type === "ELECTIVE_GROUP")
-        .map((group) => ({ ...group, subGroups: [] })),
-    [initialData.groups]
-  );
-
   const coreRows = useMemo(
-    () => flattenRequirementRows(coreGroups, new Set(getRootRowIds(coreGroups))),
-    [coreGroups]
+    () => initialData.groups.filter((group) => group.type === "CLASS"),
+    [initialData.groups]
   );
 
   const electiveRows = useMemo(
-    () =>
-      flattenRequirementRows(
-        electiveGroups,
-        new Set(getRootRowIds(electiveGroups))
-      ),
-    [electiveGroups]
+    () => initialData.groups.filter((group) => group.type === "ELECTIVE_GROUP"),
+    [initialData.groups]
   );
 
   const coreSubjects = useMemo(
@@ -89,55 +68,9 @@ export function RequirementsMatrixClient({
     [initialData.subjects]
   );
 
-  const groupsById = useMemo(() => {
-    const map = new Map<string, RequirementGroupNode>();
-
-    const walk = (nodes: RequirementGroupNode[]) => {
-      for (const node of nodes) {
-        map.set(node.id, node);
-        walk(node.subGroups);
-      }
-    };
-
-    walk(initialData.groups);
-    return map;
-  }, [initialData.groups]);
-
-  const getTargetGroupIds = (groupId: string, subjectId: string): string[] => {
-    const base = groupsById.get(groupId);
-    if (!base) {
-      return [groupId];
-    }
-
-    if (base.type !== "CLASS") {
-      return [groupId];
-    }
-
-    const subgroupIds = base.subGroups
-      .filter(
-        (subgroup) =>
-          subgroup.type === "SUBJECT_SUBGROUP" && subgroup.subjectId === subjectId
-      )
-      .map((subgroup) => subgroup.id);
-
-    return [groupId, ...subgroupIds];
-  };
-
   const saveMutation = useMutation({
-    mutationFn: async (payload: {
-      rowId: string;
-      subjectId: string;
-      lessonsPerWeek: number;
-      durationInMinutes: number;
-      breakDuration: number;
-    }) => {
-      const response = await upsertRequirementAction({
-        groupId: payload.rowId,
-        subjectId: payload.subjectId,
-        lessonsPerWeek: payload.lessonsPerWeek,
-        durationInMinutes: payload.durationInMinutes,
-        breakDuration: payload.breakDuration,
-      });
+    mutationFn: async (payload: RequirementMutationInput) => {
+      const response = await upsertRequirementAction(payload);
 
       if (response.error || !response.result) {
         throw new Error(response.error ?? "Не удалось сохранить требование");
@@ -147,7 +80,6 @@ export function RequirementsMatrixClient({
     },
     onMutate: async (payload) => {
       const previous = requirements;
-      const targetGroupIds = getTargetGroupIds(payload.rowId, payload.subjectId);
 
       if (payload.lessonsPerWeek === 0) {
         setRequirements((prev) =>
@@ -155,7 +87,7 @@ export function RequirementsMatrixClient({
             (entry) =>
               !(
                 entry.subjectId === payload.subjectId &&
-                targetGroupIds.includes(entry.groupId)
+                entry.groupId === payload.groupId
               )
           )
         );
@@ -165,15 +97,13 @@ export function RequirementsMatrixClient({
             prev.map((entry) => [`${entry.groupId}:${entry.subjectId}`, entry])
           );
 
-          for (const gid of targetGroupIds) {
-            map.set(`${gid}:${payload.subjectId}`, {
-              groupId: gid,
-              subjectId: payload.subjectId,
-              lessonsPerWeek: payload.lessonsPerWeek,
-              durationInMinutes: payload.durationInMinutes,
-              breakDuration: payload.breakDuration,
-            });
-          }
+          map.set(`${payload.groupId}:${payload.subjectId}`, {
+            groupId: payload.groupId,
+            subjectId: payload.subjectId,
+            lessonsPerWeek: payload.lessonsPerWeek,
+            durationInMinutes: payload.durationInMinutes,
+            breakDuration: payload.breakDuration,
+          });
 
           return Array.from(map.values());
         });

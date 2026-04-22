@@ -1,6 +1,4 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
@@ -16,25 +14,18 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import {
-  breakDurationSchema,
-  durationMinutesSchema,
-  lessonsPerWeekSchema,
-  requirementCellFormSchema,
-} from "../_lib/requirement-schemas";
-import type { RequirementEntry } from "../_lib/types";
+import { requirementCellFormSchema } from "../_lib/schemas";
+import type { 
+  RequirementCellFormInput, 
+  RequirementEntry,
+  NavigationDirection 
+} from "../_lib/types";
 
 type RequirementCellEditorProps = {
   quickInputMode: boolean;
   initial: RequirementEntry | null;
   initialLessons?: number;
-  onSave: (payload: {
-    lessonsPerWeek: number;
-    durationInMinutes: number;
-    breakDuration: number;
-    advance: "down" | "right" | "left" | "stay";
-  }) => void;
+  onSave: (payload: RequirementCellFormInput & { advance: NavigationDirection }) => void;
   onCancel: () => void;
 };
 
@@ -45,12 +36,23 @@ export function RequirementCellEditor({
   onSave,
   onCancel,
 }: RequirementCellEditorProps) {
-  const [dirty, setDirty] = useState(() => initialLessons !== undefined);
+  const advanceRef = useRef<NavigationDirection>("stay");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const popoverContentRef = useRef<HTMLDivElement | null>(null);
   const lessonsInputRef = useRef<HTMLInputElement | null>(null);
   const durationInputRef = useRef<HTMLInputElement | null>(null);
   const breakInputRef = useRef<HTMLInputElement | null>(null);
+
+  const form = useForm({
+    defaultValues: {
+      lessonsPerWeek: initial?.lessonsPerWeek ?? 0,
+      durationInMinutes: initial?.durationInMinutes ?? 45,
+      breakDuration: initial?.breakDuration ?? 10,
+    },
+    onSubmit: ({ value }) => {
+      onSave({ ...value, advance: advanceRef.current });
+    },
+  });
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -58,44 +60,24 @@ export function RequirementCellEditor({
       lessonsInputRef.current?.select();
     });
 
-    return () => window.cancelAnimationFrame(frameId);
-  }, [quickInputMode]);
-
-  const form = useForm({
-    defaultValues: {
-      lessons: Number(initialLessons ?? initial?.lessonsPerWeek ?? 0),
-      duration: Number(initial?.durationInMinutes ?? 45),
-      breakDuration: Number(initial?.breakDuration ?? 10),
-    },
-    validators: {
-      onChange: requirementCellFormSchema,
-    },
-  });
-
-  const commit = (advance: "down" | "right" | "left" | "stay") => {
-    const parsed = requirementCellFormSchema.safeParse(form.state.values);
-    if (!parsed.success) {
-      return false;
+    if (initialLessons)
+    {
+      form.setFieldValue("lessonsPerWeek", initialLessons)
     }
 
-    const values = parsed.data;
-    setDirty(false);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [form, initialLessons]);
 
-    onSave({
-      lessonsPerWeek: values.lessons,
-      durationInMinutes: values.duration,
-      breakDuration: values.breakDuration,
-      advance,
-    });
-
-    return true;
+  const triggerSubmit = (advance: NavigationDirection) => {
+    advanceRef.current = advance;
+    void form.handleSubmit();
   };
 
   useHotkey(
     "Enter",
     (event) => {
       event.preventDefault();
-      void commit("down");
+      triggerSubmit("down");
     },
     {
       target: quickInputMode ? rootRef : popoverContentRef,
@@ -120,15 +102,9 @@ export function RequirementCellEditor({
   useHotkey(
     "Tab",
     (event) => {
-      if (quickInputMode) {
+      if (quickInputMode || document.activeElement === breakInputRef.current) {
         event.preventDefault();
-        void commit("right");
-        return;
-      }
-
-      if (document.activeElement === breakInputRef.current) {
-        event.preventDefault();
-        void commit("right");
+        triggerSubmit("right");
       }
     },
     {
@@ -141,15 +117,9 @@ export function RequirementCellEditor({
   useHotkey(
     "Shift+Tab",
     (event) => {
-      if (quickInputMode) {
+      if (quickInputMode || document.activeElement === lessonsInputRef.current) {
         event.preventDefault();
-        void commit("left");
-        return;
-      }
-
-      if (document.activeElement === lessonsInputRef.current) {
-        event.preventDefault();
-        void commit("left");
+        triggerSubmit("left");
       }
     },
     {
@@ -159,27 +129,21 @@ export function RequirementCellEditor({
     }
   );
 
-  const renderLessonsField = (autoFocus = false) => (
+  const renderLessonsField = () => (
     <form.Field
-      name="lessons"
-      validators={{
-        onChange: lessonsPerWeekSchema,
-      }}
+      name="lessonsPerWeek"
+      validators={{ onChange: requirementCellFormSchema.shape.lessonsPerWeek }}
     >
       {(field) => (
         <Field data-invalid={field.state.meta.errors.length > 0}>
           <FieldContent>
             <FieldLabel className="text-xs">Часы в неделю</FieldLabel>
-              <Input
-                ref={lessonsInputRef}
-                autoFocus={autoFocus}
+            <Input
+              ref={lessonsInputRef}
               type="number"
               min={0}
               value={Number.isNaN(field.state.value) ? "" : field.state.value}
-              onChange={(event) => {
-                field.handleChange(event.target.valueAsNumber);
-                setDirty(true);
-              }}
+              onChange={(event) => field.handleChange(event.target.valueAsNumber)}
               onBlur={field.handleBlur}
               placeholder="Часы"
               className="h-7"
@@ -191,88 +155,23 @@ export function RequirementCellEditor({
     </form.Field>
   );
 
-  const renderExpandedFields = () => (
-    <FieldGroup className="gap-3">
-      {renderLessonsField(true)}
-
-      <form.Field
-        name="duration"
-        validators={{
-          onChange: durationMinutesSchema,
-        }}
-      >
-        {(field) => (
-          <Field data-invalid={field.state.meta.errors.length > 0}>
-            <FieldContent>
-              <FieldLabel className="text-xs">Длительность (мин)</FieldLabel>
-              <Input
-                ref={durationInputRef}
-                type="number"
-                min={1}
-                value={Number.isNaN(field.state.value) ? "" : field.state.value}
-                onChange={(event) => {
-                  field.handleChange(event.target.valueAsNumber);
-                  setDirty(true);
-                }}
-                onBlur={field.handleBlur}
-                placeholder="Мин"
-                className="h-7"
-              />
-              <FieldError errors={field.state.meta.errors} className="text-[10px]" />
-            </FieldContent>
-          </Field>
-        )}
-      </form.Field>
-
-      <form.Field
-        name="breakDuration"
-        validators={{
-          onChange: breakDurationSchema,
-        }}
-      >
-        {(field) => (
-          <Field data-invalid={field.state.meta.errors.length > 0}>
-            <FieldContent>
-              <FieldLabel className="text-xs">Перемена (мин)</FieldLabel>
-              <Input
-                ref={breakInputRef}
-                type="number"
-                min={0}
-                value={Number.isNaN(field.state.value) ? "" : field.state.value}
-                onChange={(event) => {
-                  field.handleChange(event.target.valueAsNumber);
-                  setDirty(true);
-                }}
-                onBlur={field.handleBlur}
-                placeholder="Перемена"
-                className="h-7"
-              />
-              <FieldError errors={field.state.meta.errors} className="text-[10px]" />
-            </FieldContent>
-          </Field>
-        )}
-      </form.Field>
-    </FieldGroup>
-  );
-
   if (quickInputMode) {
     return (
       <div
         ref={rootRef}
         className="absolute inset-0 z-10 flex items-center bg-background p-2 shadow-lg"
-        onBlur={(event) => {
-          const nextTarget = event.relatedTarget as Node | null;
-          if (nextTarget && rootRef.current?.contains(nextTarget)) {
-            return;
-          }
-
-          if (dirty) {
-            void commit("stay");
+        onBlur={(e) => {
+          if (!rootRef.current?.contains(e.relatedTarget as Node)) {
+            if (form.state.isDirty) {
+              void triggerSubmit("stay");
+            } else {
+              onCancel();
+            }
           }
         }}
       >
         <div className="flex w-full flex-col justify-center gap-2">
-          {renderLessonsField(true)}
+          {renderLessonsField()}
         </div>
       </div>
     );
@@ -284,26 +183,73 @@ export function RequirementCellEditor({
         open={true}
         onOpenChange={(open) => {
           if (!open) {
-            if (dirty) {
-              const saved = commit("stay");
-              if (!saved) {
-                return;
-              }
+            if (form.state.isDirty) {
+              triggerSubmit("stay");
+            } else {
+              onCancel();
             }
-            onCancel();
           }
         }}
       >
         <PopoverTrigger className="absolute left-1/2 top-1/2 size-px -translate-x-1/2 -translate-y-1/2 opacity-0" />
         <PopoverContent
           ref={popoverContentRef}
-          initialFocus={lessonsInputRef}
           side="top"
           align="center"
           sideOffset={10}
           className="w-80 gap-3 p-3"
         >
-          {renderExpandedFields()}
+          <FieldGroup className="gap-3">
+            {renderLessonsField()}
+
+            <form.Field
+              name="durationInMinutes"
+              validators={{ onChange: requirementCellFormSchema.shape.durationInMinutes }}
+            >
+              {(field) => (
+                <Field data-invalid={field.state.meta.errors.length > 0}>
+                  <FieldContent>
+                    <FieldLabel className="text-xs">Длительность (мин)</FieldLabel>
+                    <Input
+                      ref={durationInputRef}
+                      type="number"
+                      min={1}
+                      value={Number.isNaN(field.state.value) ? "" : field.state.value}
+                      onChange={(event) => field.handleChange(event.target.valueAsNumber)}
+                      onBlur={field.handleBlur}
+                      placeholder="Мин"
+                      className="h-7"
+                    />
+                    <FieldError errors={field.state.meta.errors} className="text-[10px]" />
+                  </FieldContent>
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field
+              name="breakDuration"
+              validators={{ onChange: requirementCellFormSchema.shape.breakDuration }}
+            >
+              {(field) => (
+                <Field data-invalid={field.state.meta.errors.length > 0}>
+                  <FieldContent>
+                    <FieldLabel className="text-xs">Перемена (мин)</FieldLabel>
+                    <Input
+                      ref={breakInputRef}
+                      type="number"
+                      min={0}
+                      value={Number.isNaN(field.state.value) ? "" : field.state.value}
+                      onChange={(event) => field.handleChange(event.target.valueAsNumber)}
+                      onBlur={field.handleBlur}
+                      placeholder="Перемена"
+                      className="h-7"
+                    />
+                    <FieldError errors={field.state.meta.errors} className="text-[10px]" />
+                  </FieldContent>
+                </Field>
+              )}
+            </form.Field>
+          </FieldGroup>
         </PopoverContent>
       </Popover>
     </div>

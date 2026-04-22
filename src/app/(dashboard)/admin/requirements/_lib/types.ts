@@ -1,4 +1,6 @@
 import type { GroupType, SubjectType } from "@/generated/prisma/client";
+import { requirementCellFormSchema, requirementMutationSchema } from "./schemas";
+import { z } from "zod";
 
 export type RequirementSubject = {
   id: string;
@@ -9,11 +11,10 @@ export type RequirementSubject = {
 export type RequirementGroupNode = {
   id: string;
   name: string;
-  type: GroupType;
+  type: Exclude<GroupType, "SUBJECT_SUBGROUP">;
   grade: number | null;
   parentId: string | null;
   subjectId: string | null;
-  subGroups: RequirementGroupNode[];
 };
 
 export type RequirementEntry = {
@@ -30,33 +31,15 @@ export type RequirementsMatrixData = {
   requirements: RequirementEntry[];
 };
 
-export type SubjectColumnGroupKey =
-  | "REGIME"
-  | "ACADEMIC"
-  | "ELECTIVE_REQUIRED"
-  | "ELECTIVE_OPTIONAL";
-
-export type FlatRequirementRow = {
-  id: string;
-  name: string;
-  type: GroupType;
-  grade: number | null;
-  parentId: string | null;
-  subjectId: string | null;
-  depth: number;
-  isExpanded: boolean;
-  hasChildren: boolean;
-};
-
-export type RequirementMutationInput = {
-  groupId: string;
-  subjectId: string;
-  lessonsPerWeek: number;
-  durationInMinutes: number;
-  breakDuration: number;
-};
+export type SubjectColumnGroupKey = keyof typeof SubjectType;
 
 export type RequirementMutationResult = {
   updated: RequirementEntry[];
   deletedGroupIds: string[];
 };
+
+export type RequirementMutationInput = z.infer<typeof requirementMutationSchema>;
+
+export type RequirementCellFormInput = z.infer<typeof requirementCellFormSchema>;
+
+export type NavigationDirection = "up" | "down" | "left" | "right" | "stay";
