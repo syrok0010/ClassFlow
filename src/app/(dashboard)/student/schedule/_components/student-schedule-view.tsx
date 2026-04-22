@@ -69,56 +69,44 @@ export function StudentScheduleView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <div className="text-sm font-medium text-foreground">{periodLabel}</div>
-        </div>
 
-        <div className="flex flex-col gap-3 sm:items-end">
-          <SegmentedControl
-            value={optimisticViewMode}
-            onChange={(nextView) => {
-              void setCurrentView(nextView === DEFAULT_STUDENT_SCHEDULE_VIEW ? null : nextView);
-            }}
-            options={[
-              { value: "week", label: "Неделя", disabled: isScheduleRefreshing },
-              { value: "day", label: "День", disabled: isScheduleRefreshing },
-            ]}
+      <div className="flex flex-col gap-3 sm:items-center">
+        <SegmentedControl
+          value={optimisticViewMode}
+          onChange={(nextView) => {
+            void setCurrentView(nextView === DEFAULT_STUDENT_SCHEDULE_VIEW ? null : nextView);
+          }}
+          options={[
+            { value: "week", label: "Неделя", disabled: isScheduleRefreshing },
+            { value: "day", label: "День", disabled: isScheduleRefreshing },
+          ]}
+          size="sm"
+        />
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
             size="sm"
-          />
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isScheduleRefreshing}
-              onClick={() => shiftPeriod(-1)}
-              aria-label="Назад"
-            >
-              <ChevronLeft />
-              Назад
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isScheduleRefreshing}
-              onClick={() => {
-                void setCurrentDate(null);
-              }}
-            >
-              Сегодня
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isScheduleRefreshing}
-              onClick={() => shiftPeriod(1)}
-              aria-label="Вперёд"
-            >
-              Вперёд
-              <ChevronRight />
-            </Button>
+            disabled={isScheduleRefreshing}
+            onClick={() => shiftPeriod(-1)}
+            aria-label="Назад"
+          >
+            <ChevronLeft />
+            Назад
+          </Button>
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-foreground">{periodLabel}</div>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isScheduleRefreshing}
+            onClick={() => shiftPeriod(1)}
+            aria-label="Вперёд"
+          >
+            Вперёд
+            <ChevronRight />
+          </Button>
         </div>
       </div>
 
