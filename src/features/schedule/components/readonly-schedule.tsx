@@ -118,13 +118,17 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
                 <div
                   className={cn(
                     "border-t",
-                    slot.isMajor ? "border-border" : "border-border/50"
+                    slot.kind === "hour"
+                      ? "border-border"
+                      : slot.kind === "halfHour"
+                        ? "border-border/60"
+                        : "border-border/30"
                   )}
                 />
-                {slot.isMajor ? (
+                {slot.kind === "hour" ? (
                   <span
                     className={cn(
-                      "absolute right-2 text-[11px] text-muted-foreground",
+                      "absolute right-2 text-xs text-muted-foreground",
                       slot.minutes === layout.timeRange.startMinutes
                         ? "top-1"
                         : "-top-2 -translate-y-1/2"
@@ -154,7 +158,11 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
                     data-slot="schedule-grid-line"
                     className={cn(
                       "absolute inset-x-0 border-t",
-                      slot.isMajor ? "border-border" : "border-border/50"
+                      slot.kind === "hour"
+                        ? "border-border"
+                        : slot.kind === "halfHour"
+                          ? "border-border/60"
+                          : "border-border/30"
                     )}
                     style={{ top: `${slot.offsetPx}px` }}
                   />
@@ -168,7 +176,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
                     <div
                       key={event.id}
                       data-slot="schedule-event"
-                      className="absolute box-border p-1"
+                      className="absolute box-border overflow-hidden"
                       style={{
                         top: `${event.topPx}px`,
                         height: `${event.heightPx}px`,
@@ -176,7 +184,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
                         width: `${event.widthPercent}%`,
                       }}
                     >
-                      <div className="h-full overflow-hidden rounded-lg border border-border/80 bg-card/95 shadow-sm ring-1 ring-black/5">
+                      <div className="h-full w-full overflow-hidden">
                         {renderEvent(event.source)}
                       </div>
                     </div>

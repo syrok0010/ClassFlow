@@ -6,6 +6,8 @@ export interface BaseScheduleEvent {
 
 export type ScheduleViewMode = "day" | "week"
 
+export type GridMarkKind = "hour" | "halfHour" | "minor"
+
 export interface ScheduleTimeRange {
   start: string
   end: string
@@ -26,7 +28,7 @@ export interface ScheduleSlot {
   minutes: number
   offsetPx: number
   label: string
-  isMajor: boolean
+  kind: GridMarkKind
 }
 
 export interface ResolvedTimeRange {

@@ -25,6 +25,8 @@ type LayoutInput<TEvent extends BaseScheduleEvent> = {
   timeRange?: ScheduleTimeRange
 }
 
+const PIXEL_PER_MINUTE = 2
+
 export function buildScheduleLayout<TEvent extends BaseScheduleEvent>({
   events,
   anchorDate,
@@ -38,12 +40,12 @@ export function buildScheduleLayout<TEvent extends BaseScheduleEvent>({
   const effectiveTimeRange = buildEffectiveTimeRange(baseRange, normalizedEvents)
   const timeRangePx: EffectiveTimeRange = {
     ...effectiveTimeRange,
-    heightPx: effectiveTimeRange.totalMinutes,
+    heightPx: effectiveTimeRange.totalMinutes * PIXEL_PER_MINUTE,
   }
   const timeSlots: ScheduleSlot[] = buildTimeSlots(effectiveTimeRange).map(
     ({ offsetMinutes, ...slot }) => ({
       ...slot,
-      offsetPx: offsetMinutes,
+      offsetPx: offsetMinutes * PIXEL_PER_MINUTE,
     })
   )
   const eventsByDay = Object.fromEntries(
@@ -77,6 +79,20 @@ function normalizeEvents<TEvent extends BaseScheduleEvent>(
       return []
     }
 
+    const startMinutes = getMinutesSinceStartOfDay(event.start)
+    const endMinutes = getMinutesSinceStartOfDay(event.end)
+    const durationMinutes = endMinutes - startMinutes
+
+    if (
+      startMinutes % 5 !== 0 ||
+      endMinutes % 5 !== 0 ||
+      durationMinutes < 10 ||
+      durationMinutes > 60 ||
+      durationMinutes % 5 !== 0
+    ) {
+      return []
+    }
+
     const dayKey = format(event.start, "yyyy-MM-dd")
 
     if (!dayKeys.has(dayKey)) {
@@ -90,8 +106,8 @@ function normalizeEvents<TEvent extends BaseScheduleEvent>(
         start: event.start,
         end: event.end,
         dayKey,
-        startMinutes: getMinutesSinceStartOfDay(event.start),
-        endMinutes: getMinutesSinceStartOfDay(event.end),
+        startMinutes,
+        endMinutes,
       },
     ]
   })
@@ -165,8 +181,8 @@ function positionCluster<TEvent extends BaseScheduleEvent>(
     source: event.source,
     id: event.id,
     dayKey: event.dayKey,
-    topPx: event.startMinutes - rangeStartMinutes,
-    heightPx: event.endMinutes - event.startMinutes,
+    topPx: (event.startMinutes - rangeStartMinutes) * PIXEL_PER_MINUTE,
+    heightPx: (event.endMinutes - event.startMinutes) * PIXEL_PER_MINUTE,
     leftPercent: (columnIndex / totalColumns) * 100,
     widthPercent: 100 / totalColumns,
   }))
