@@ -103,16 +103,16 @@ function AdminScheduleEventInlineCard({
   return (
     <div
       className={cn(
-        "flex h-full w-full flex-col overflow-hidden rounded-lg border px-1 text-left shadow-sm",
+        "flex h-full w-full flex-col overflow-hidden rounded-lg border p-1 text-left shadow-sm",
         SUBJECT_CARD_TONES[event.subjectType],
-        layout === "title-only" ? "justify-center py-0" : "justify-start py-0.5",
+        layout === "title-only" ? "justify-center" : "justify-start",
         isDimmed && "opacity-35 saturate-50",
       )}
     >
-      <div className="truncate text-xs font-semibold leading-tight text-foreground">{event.subjectName}</div>
+      <div className="truncate text-[13px] font-semibold leading-tight text-foreground">{event.subjectName}</div>
 
       {layout === "title-time" || layout === "full" ? (
-        <div className="truncate text-xs font-medium leading-tight text-muted-foreground">{event.timeLabel}</div>
+        <div className="mt-1 truncate text-xs font-medium leading-tight text-muted-foreground">{event.timeLabel}</div>
       ) : null}
 
       {layout === "full" ? (
