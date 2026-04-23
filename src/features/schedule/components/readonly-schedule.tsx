@@ -48,26 +48,17 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
   timeRange,
   className,
 }: ReadonlyScheduleProps<TEvent>) {
-  const normalizedEvents = useMemo(
-    () =>
-      events.map((event) => ({
-        ...event,
-        start: new Date(event.start),
-        end: new Date(event.end),
-      })) as TEvent[],
-    [events]
-  )
 
   const shouldShowDayDates = Boolean(anchorDate)
   const layout = useMemo(
     () =>
       buildScheduleLayout({
-        events: normalizedEvents,
+        events,
         anchorDate: anchorDate ?? new Date(),
         viewMode,
         timeRange,
       }),
-    [normalizedEvents, anchorDate, viewMode, timeRange]
+    [events, anchorDate, viewMode, timeRange]
   )
 
   const hasRows = Boolean(rows && rows.length > 0 && getEventRowId)
@@ -99,14 +90,14 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
       id: row.id,
       row: row,
       layout: buildScheduleLayout({
-        events: normalizedEvents.filter((event) => getEventRowId(event) === row.id),
+        events: events.filter((event) => getEventRowId(event) === row.id),
         anchorDate: anchorDate ?? new Date(),
         viewMode,
         timeRange: fixedTimeRange,
       }),
     })) satisfies RowLayoutItem[]
   }, [
-    normalizedEvents,
+    events,
     getEventRowId,
     hasRows,
     layout,
@@ -180,7 +171,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
               data-slot="schedule-day-header"
               className={cn(
                 "border-r px-4 py-3 text-center last:border-r-0",
-                day.isToday && "bg-accent/50"
+                day.isToday && anchorDate && "bg-accent/50"
                 )}
               >
                 <div className="text-sm font-semibold capitalize">{day.weekdayLabel}</div>

@@ -1,5 +1,3 @@
-import { startOfWeek } from "date-fns";
-
 import type { GroupType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { requireAdminContext } from "@/lib/server-action-auth";
@@ -12,14 +10,8 @@ import type { AdminSchedulePageData } from "./admin-schedule-types";
 
 const VISIBLE_CLASS_TYPES: GroupType[] = ["CLASS"];
 
-export async function getAdminSchedulePageData({
-  anchorDate,
-}: {
-  anchorDate: Date;
-}): Promise<AdminSchedulePageData> {
+export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData> {
   await requireAdminContext();
-
-  const anchorWeekStart = startOfWeek(anchorDate, { weekStartsOn: 1 });
 
   const classRows = await prisma.group.findMany({
     where: {
@@ -37,7 +29,6 @@ export async function getAdminSchedulePageData({
 
   if (classRows.length === 0) {
     return {
-      anchorDate,
       events: [],
       classRows: [],
     };
@@ -73,8 +64,7 @@ export async function getAdminSchedulePageData({
   });
 
   return {
-    anchorDate,
-    events: templates.map((entry) => mapWeeklyTemplateToAdminScheduleEvent(entry, anchorWeekStart)),
+    events: templates.map((entry) => mapWeeklyTemplateToAdminScheduleEvent(entry)),
     classRows,
   };
 }

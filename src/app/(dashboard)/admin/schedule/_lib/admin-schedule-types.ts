@@ -21,7 +21,6 @@ export interface AdminScheduleClassRow {
 }
 
 export interface AdminSchedulePageData {
-  anchorDate: Date;
   events: AdminScheduleEvent[];
   classRows: AdminScheduleClassRow[];
 }

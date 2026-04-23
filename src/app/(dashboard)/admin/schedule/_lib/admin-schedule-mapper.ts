@@ -52,9 +52,15 @@ function getClassInfo(entry: AdminScheduleTemplateRecord) {
   };
 }
 
-function mapDayOfWeekToDate(anchorWeekStart: Date, dayOfWeek: number) {
-  const date = new Date(anchorWeekStart);
-  date.setDate(anchorWeekStart.getDate() + (dayOfWeek - 1));
+function mapDayOfWeekToDate(dayOfWeek: number) {
+  const current = new Date();
+  const mondayOffset = (current.getDay() + 6) % 7;
+  const monday = new Date(current);
+  monday.setDate(current.getDate() - mondayOffset);
+  monday.setHours(0, 0, 0, 0);
+
+  const date = new Date(monday);
+  date.setDate(monday.getDate() + (dayOfWeek - 1));
   return date;
 }
 
@@ -66,10 +72,9 @@ function mapTimeToDate(baseDate: Date, minutesFromMidnight: number) {
 
 export function mapWeeklyTemplateToAdminScheduleEvent(
   entry: AdminScheduleTemplateRecord,
-  anchorWeekStart: Date,
 ): AdminScheduleEvent {
   const classInfo = getClassInfo(entry);
-  const date = mapDayOfWeekToDate(anchorWeekStart, entry.dayOfWeek);
+  const date = mapDayOfWeekToDate(entry.dayOfWeek);
   const start = mapTimeToDate(date, entry.startTime);
   const end = mapTimeToDate(date, entry.endTime);
   const teacherName = entry.teacher?.user
