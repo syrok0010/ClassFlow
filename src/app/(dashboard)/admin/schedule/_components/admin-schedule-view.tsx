@@ -1,20 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpen, ChevronDown } from "lucide-react";
+import { BookOpen } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { ReadonlySchedule } from "@/features/schedule";
-import { cn } from "@/lib/utils";
 
 import type { AdminSchedulePageData } from "../_lib/admin-schedule-types";
 import { AdminScheduleEventCard } from "./admin-schedule-event-card";
+import { ScheduleMultiSelect } from "./schedule-multi-select";
 
 type AdminScheduleViewProps = AdminSchedulePageData;
 
@@ -38,9 +31,7 @@ export function AdminScheduleView({
       .filter((event) => event.teacherId)
       .map((event) => ({ id: event.teacherId as string, label: event.teacherName }))
       .filter((option) => {
-        if (seen.has(option.id)) {
-          return false;
-        }
+        if (seen.has(option.id)) return false;
         seen.add(option.id);
         return true;
       })
@@ -53,9 +44,7 @@ export function AdminScheduleView({
       .filter((event) => event.roomId)
       .map((event) => ({ id: event.roomId as string, label: event.roomName }))
       .filter((option) => {
-        if (seen.has(option.id)) {
-          return false;
-        }
+        if (seen.has(option.id)) return false;
         seen.add(option.id);
         return true;
       })
@@ -67,9 +56,7 @@ export function AdminScheduleView({
     return events
       .map((event) => ({ id: event.subjectId, label: event.subjectName }))
       .filter((option) => {
-        if (seen.has(option.id)) {
-          return false;
-        }
+        if (seen.has(option.id)) return false;
         seen.add(option.id);
         return true;
       })
@@ -108,8 +95,10 @@ export function AdminScheduleView({
     if (selectedRoomSet.size > 0 && (!event.roomId || !selectedRoomSet.has(event.roomId))) {
       return false;
     }
-    return !(selectedSubjectSet.size > 0 && !selectedSubjectSet.has(event.subjectId));
-
+    if (selectedSubjectSet.size > 0 && !selectedSubjectSet.has(event.subjectId)) {
+      return false;
+    }
+    return true;
   };
 
   return (
@@ -162,104 +151,5 @@ export function AdminScheduleView({
         />
       </div>
     </div>
-  );
-}
-
-type FilterOption = {
-  id: string;
-  label: string;
-};
-
-interface ScheduleMultiSelectProps {
-  title: string;
-  options: FilterOption[];
-  selectedIds: string[];
-  onChange: (next: string[]) => void;
-}
-
-function ScheduleMultiSelect({
-  title,
-  options,
-  selectedIds,
-  onChange,
-}: ScheduleMultiSelectProps) {
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const selectedCount = selectedIds.length;
-  const sortedOptions = useMemo(() => {
-    const selected: FilterOption[] = [];
-    const unselected: FilterOption[] = [];
-
-    for (const option of options) {
-      if (selectedSet.has(option.id)) {
-        selected.push(option);
-      } else {
-        unselected.push(option);
-      }
-    }
-
-    return [...selected, ...unselected];
-  }, [options, selectedSet]);
-
-  const toggleOption = (id: string, checked: boolean) => {
-    if (checked) {
-      onChange([...selectedSet, id]);
-      return;
-    }
-
-    onChange(selectedIds.filter((item) => item !== id));
-  };
-
-  const clearSelection = () => onChange([]);
-
-  return (
-    <Popover>
-      <PopoverTrigger render={<Button variant="outline" className="h-9 justify-between" />}>
-        <span className="truncate text-sm">{title}</span>
-        <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
-          {selectedCount > 0 ? `${selectedCount}` : "Все"}
-          <ChevronDown className="size-3.5" />
-        </span>
-      </PopoverTrigger>
-      <PopoverContent className="w-72 p-0" align="start">
-        <div className="border-b px-3 py-2">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {title}
-          </div>
-        </div>
-
-        <div className="max-h-72 overflow-y-auto px-2 py-2">
-          {options.length === 0 ? (
-            <p className="px-2 py-3 text-sm text-muted-foreground">Нет доступных вариантов</p>
-          ) : (
-            <div className="space-y-1">
-              {sortedOptions.map((option) => {
-                const checked = selectedSet.has(option.id);
-                return (
-                  <label
-                    key={option.id}
-                    className={cn(
-                      "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted",
-                      checked && "bg-muted/70",
-                    )}
-                  >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(value) => toggleOption(option.id, Boolean(value))}
-                    />
-                    <span className="truncate text-sm text-foreground">{option.label}</span>
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end border-t px-2 py-2">
-          <Button variant="ghost" size="sm" onClick={clearSelection} disabled={selectedCount === 0}>
-            Сбросить
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
   );
 }

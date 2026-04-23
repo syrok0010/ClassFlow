@@ -171,7 +171,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
               data-slot="schedule-day-header"
               className={cn(
                 "border-r px-4 py-3 text-center last:border-r-0",
-                day.isToday && anchorDate && "bg-accent/50"
+                day.isToday && anchorDate && "bg-accent/90"
                 )}
               >
                 <div className="text-sm font-semibold capitalize">{day.weekdayLabel}</div>
