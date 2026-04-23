@@ -20,6 +20,7 @@ import {
   subjectNameSchema,
   subjectTypeSchema,
 } from "../_lib/subject-schemas";
+import {flushSync} from "react-dom";
 
 interface InlineCreateRowProps {
   onSave: (data: { name: string; type: SubjectType }) => Promise<boolean>;
@@ -41,7 +42,7 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
       });
 
       if (success) {
-        onCancel();
+        flushSync(() => form.reset());
       }
     },
   });
