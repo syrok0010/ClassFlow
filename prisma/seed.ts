@@ -153,8 +153,13 @@ async function main() {
 
   const roomByKey: Record<string, string> = {};
   for (const room of roomSeed) {
-    const { key, ...roomData } = room;
-    const created = await prisma.room.create({ data: roomData });
+    const created = await prisma.room.create({
+      data: {
+        name: room.name,
+        seatsCount: room.seatsCount,
+        buildingId: room.buildingId,
+      },
+    });
     roomByKey[room.key] = created.id;
   }
 
