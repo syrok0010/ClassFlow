@@ -1,14 +1,15 @@
+import { format } from "date-fns";
+
+import { getScheduleRange, type ScheduleViewMode } from "@/features/schedule";
 import type { GroupType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { requireStudentActor } from "@/lib/server-action-auth";
-import { getStudentScheduleRange } from "./student-schedule-params";
+
 import {
   mapScheduleEntryToStudentScheduleEvent,
   studentScheduleEntryInclude,
 } from "./student-schedule-mapper";
 import type { StudentSchedulePageData } from "./student-schedule-types";
-import { format } from "date-fns";
-import { ScheduleViewMode } from "@/features/schedule";
 
 type StudentScheduleSearchParams = {
   viewMode: ScheduleViewMode;
@@ -50,7 +51,7 @@ export async function getStudentSchedulePageData({
     };
   }
 
-  const { rangeStart, rangeEnd } = getStudentScheduleRange(anchorDate, viewMode);
+  const { rangeStart, rangeEnd } = getScheduleRange(anchorDate, viewMode);
   const scheduleEntries = await prisma.scheduleEntry.findMany({
     where: {
       groupId: { in: groupIds },

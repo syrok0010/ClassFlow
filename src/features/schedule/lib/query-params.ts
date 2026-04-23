@@ -1,14 +1,16 @@
 import { addDays, format, isValid, parse, startOfDay, startOfWeek } from "date-fns";
 
-import type { ScheduleViewMode } from "@/features/schedule";
+import type { ScheduleViewMode } from "./types";
 
-export const DEFAULT_STUDENT_SCHEDULE_VIEW: ScheduleViewMode = "week";
+export const DEFAULT_SCHEDULE_VIEW: ScheduleViewMode = "week";
 
-export function parseStudentScheduleView(value: string | string[] | undefined): ScheduleViewMode {
-  return value === "day" ? "day" : DEFAULT_STUDENT_SCHEDULE_VIEW;
+export function parseScheduleView(
+  value: string | string[] | null | undefined
+): ScheduleViewMode {
+  return value === "day" ? "day" : DEFAULT_SCHEDULE_VIEW;
 }
 
-export function parseStudentScheduleDate(value: string | string[] | undefined): Date {
+export function parseScheduleDate(value: string | string[] | null | undefined): Date {
   if (typeof value !== "string") {
     return startOfDay(new Date());
   }
@@ -22,7 +24,7 @@ export function parseStudentScheduleDate(value: string | string[] | undefined): 
   return startOfDay(parsedDate);
 }
 
-export function getStudentScheduleRange(anchorDate: Date, viewMode: ScheduleViewMode): {
+export function getScheduleRange(anchorDate: Date, viewMode: ScheduleViewMode): {
   rangeStart: Date;
   rangeEnd: Date;
 } {
