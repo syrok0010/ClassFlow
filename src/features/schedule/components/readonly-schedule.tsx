@@ -170,7 +170,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
 
                 <div
                   data-slot="schedule-event-layer"
-                  className="absolute inset-0"
+                  className="absolute inset-0 left-1 right-1"
                 >
                   {positionedEvents.map((event) => (
                     <div

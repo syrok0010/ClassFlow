@@ -1,9 +1,7 @@
+import { parseScheduleDate, parseScheduleView } from "@/features/schedule";
+
 import { StudentScheduleView } from "./_components/student-schedule-view";
 import { getStudentSchedulePageData } from "./_lib/get-student-schedule-page-data";
-import {
-    parseStudentScheduleDate,
-    parseStudentScheduleView
-} from "@/app/(dashboard)/student/schedule/_lib/student-schedule-params";
 
 export const dynamic = "force-dynamic";
 
@@ -11,11 +9,11 @@ export default async function StudentSchedulePage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const searchParams = await props.searchParams;
-  const viewMode = parseStudentScheduleView(searchParams.view);
-  const anchorDate = parseStudentScheduleDate(searchParams.date);
+  const viewMode = parseScheduleView(searchParams.view);
+  const anchorDate = parseScheduleDate(searchParams.date);
   const pageData = await getStudentSchedulePageData({
-      anchorDate,
-      viewMode,
+    anchorDate,
+    viewMode,
   });
 
   return (
