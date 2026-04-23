@@ -1,5 +1,3 @@
-"use client";
-
 import {
   AVAILABILITY_TYPE_LABELS,
   type TeacherMinuteState,
@@ -21,12 +19,12 @@ export function SingleTeacherTooltipContent({
   return (
     <div className="flex flex-col gap-2">
       <p className="font-medium text-foreground">
-        {dayLabel}, {dateLabel} · {minuteLabel}
+        {dayLabel}, {dateLabel} {minuteLabel}
       </p>
       <div className="flex flex-col gap-1 text-muted-foreground">
         <p>
           {state.availability
-            ? `${state.isOverride ? "Исключение" : "Шаблон"}: ${AVAILABILITY_TYPE_LABELS[state.availability]}`
+            ? `${AVAILABILITY_TYPE_LABELS[state.availability]} ${state.isOverride && "(Исключение)"}: `
             : "Шаблон не задан"}
         </p>
       </div>
