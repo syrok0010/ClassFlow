@@ -80,7 +80,7 @@ function resolveTeacherScheduleEventStatus(
 }
 
 const TEACHER_STATUS_LABELS: Record<TeacherScheduleEventStatus, string> = {
-  scheduled: "Обычное расписание",
+  scheduled: "",
   substitution: "Замена",
   updated: "Изменено",
   ad_hoc: "Разовое событие"

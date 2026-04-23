@@ -5,7 +5,6 @@ import { differenceInMinutes } from "date-fns";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { SUBJECT_CARD_TONES } from "@/lib/constants";
@@ -33,36 +32,34 @@ export function TeacherScheduleEventCard({ event }: TeacherScheduleEventCardProp
   ].join(", ");
 
   return (
-    <TooltipProvider delay={0}>
-      <Tooltip>
-        <TooltipTrigger
-          data-testid="teacher-schedule-card"
-          data-card-layout={layout}
-          data-subject-type={event.subjectType}
-          data-duration-minutes={durationMinutes}
-          data-status={event.status}
-          aria-label={cardLabel}
-          className="block h-full w-full bg-transparent p-0 text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring/60"
-        >
-          <TeacherScheduleEventInlineCard event={event} layout={layout} />
-        </TooltipTrigger>
-        <TooltipContent
-          data-testid="teacher-schedule-card-tooltip"
-          data-subject-type={event.subjectType}
-          data-duration-minutes={durationMinutes}
-          data-status={event.status}
-          align="start"
-          side="right"
-          sideOffset={8}
-          className="block w-80 max-w-none gap-0 bg-popover p-0 text-popover-foreground shadow-md"
-        >
-          <TeacherScheduleEventTooltipCard
-            event={event}
-            tooltipStatusLabel={tooltipStatusLabel}
-          />
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger
+        data-testid="teacher-schedule-card"
+        data-card-layout={layout}
+        data-subject-type={event.subjectType}
+        data-duration-minutes={durationMinutes}
+        data-status={event.status}
+        aria-label={cardLabel}
+        className="block h-full w-full bg-transparent p-0 text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring/60"
+      >
+        <TeacherScheduleEventInlineCard event={event} layout={layout} />
+      </TooltipTrigger>
+      <TooltipContent
+        data-testid="teacher-schedule-card-tooltip"
+        data-subject-type={event.subjectType}
+        data-duration-minutes={durationMinutes}
+        data-status={event.status}
+        align="start"
+        side="right"
+        sideOffset={8}
+        className="block w-80 max-w-none gap-0 bg-popover p-0 text-popover-foreground shadow-md"
+      >
+        <TeacherScheduleEventTooltipCard
+          event={event}
+          tooltipStatusLabel={tooltipStatusLabel}
+        />
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
