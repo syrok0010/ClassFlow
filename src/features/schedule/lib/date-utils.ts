@@ -109,7 +109,7 @@ export function buildVisibleDays(
     viewMode === "week"
       ? startOfWeek(safeAnchorDate, { weekStartsOn: 1 })
       : startOfDay(safeAnchorDate)
-  const totalDays = viewMode === "week" ? 7 : 1
+  const totalDays = viewMode === "week" ? 5 : 1
   const today = startOfDay(new Date())
 
   return Array.from({ length: totalDays }, (_, index) => {

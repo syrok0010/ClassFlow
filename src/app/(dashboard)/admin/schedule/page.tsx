@@ -1,15 +1,21 @@
-export default function SchedulePage() {
+import { AdminScheduleView } from "./_components/admin-schedule-view";
+import { getAdminSchedulePageData } from "./_lib/get-admin-schedule-page-data";
+
+export const dynamic = "force-dynamic";
+
+export default async function SchedulePage() {
+  const pageData = await getAdminSchedulePageData();
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Управление расписанием</h1>
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight">Шаблон расписания</h1>
+        <p className="text-sm text-muted-foreground">
+          Просмотр недельного шаблона по всем классам.
+        </p>
       </div>
-      <div className="flex flex-col gap-4">
-        <p className="text-muted-foreground">Генерация и перетаскивание карточек расписания.</p>
-        <div className="rounded-xl border bg-card text-card-foreground shadow min-h-64 flex items-center justify-center p-6">
-          <p className="text-sm text-muted-foreground">Сетка расписания будет здесь</p>
-        </div>
-      </div>
+
+      <AdminScheduleView {...pageData} />
     </div>
   );
 }
