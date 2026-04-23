@@ -7,6 +7,7 @@ import type {
   TeacherScheduleEvent,
   TeacherScheduleEventStatus,
 } from "./teacher-schedule-types";
+import {getMinutesSinceStartOfDay} from "@/features/schedule/lib/date-utils";
 
 export const teacherScheduleEntryInclude = {
   subject: { select: { id: true, name: true, type: true } },
@@ -69,8 +70,8 @@ function resolveTeacherScheduleEventStatus(
     entry.template.subjectId !== entry.subjectId ||
     entry.template.groupId !== entry.groupId ||
     entry.template.roomId !== entry.roomId ||
-    format(entry.startTime, "HH:mm") !== entry.template.startTime ||
-    format(entry.endTime, "HH:mm") !== entry.template.endTime
+    getMinutesSinceStartOfDay(entry.startTime) !== entry.template.startTime ||
+    getMinutesSinceStartOfDay(entry.endTime) !== entry.template.endTime
   ) {
     return "updated";
   }
