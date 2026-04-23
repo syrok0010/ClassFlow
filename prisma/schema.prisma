@@ -247,8 +247,8 @@ model TeacherAvailabilityOverride {
 model WeeklyScheduleTemplate {
   id        String @id @default(cuid())
   dayOfWeek Int
-  startTime String
-  endTime   String
+  startTime Int
+  endTime   Int
 
   groupId   String
   roomId    String?
