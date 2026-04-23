@@ -232,6 +232,58 @@ async function main() {
     ],
   });
 
+  // Schedule Entries for student1 (Class 10A)
+  const today = new Date();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7)); // Move to Monday
+
+  const createScheduleForDay = (dayOffset: number, lessons: any[]) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + dayOffset);
+    return lessons.map((lesson) => {
+      const start = new Date(date);
+      const [sh, sm] = lesson.start.split(":").map(Number);
+      start.setHours(sh, sm, 0, 0);
+
+      const end = new Date(date);
+      const [eh, em] = lesson.end.split(":").map(Number);
+      end.setHours(eh, em, 0, 0);
+
+      return {
+        date: date,
+        startTime: start,
+        endTime: end,
+        groupId: class10A.id,
+        subjectId: lesson.subjectId,
+        teacherId: lesson.teacherId,
+        roomId: lesson.roomId,
+      };
+    });
+  };
+
+  const scheduleData = [
+    ...createScheduleForDay(0, [ // Monday
+      { start: "08:30", end: "09:15", subjectId: math.id, teacherId: teacher1.id, roomId: room101.id },
+      { start: "09:25", end: "10:10", subjectId: math.id, teacherId: teacher1.id, roomId: room101.id },
+      { start: "10:25", end: "11:10", subjectId: english.id, teacherId: teacher3.id, roomId: room102.id },
+      { start: "11:20", end: "12:05", subjectId: lunch.id, roomId: canteen.id },
+      { start: "12:15", end: "13:00", subjectId: physics.id, teacherId: teacher1.id, roomId: lab1.id },
+    ]),
+    ...createScheduleForDay(1, [ // Tuesday
+      { start: "08:30", end: "09:15", subjectId: pe.id, teacherId: teacher2.id, roomId: gym.id },
+      { start: "09:25", end: "10:10", subjectId: english.id, teacherId: teacher3.id, roomId: room102.id },
+      { start: "10:25", end: "11:10", subjectId: math.id, teacherId: teacher1.id, roomId: room101.id },
+    ]),
+    ...createScheduleForDay(2, [ // Wednesday
+      { start: "08:30", end: "09:15", subjectId: physics.id, teacherId: teacher1.id, roomId: lab1.id },
+      { start: "09:25", end: "10:10", subjectId: math.id, teacherId: teacher1.id, roomId: room101.id },
+    ]),
+  ];
+
+  await prisma.scheduleEntry.createMany({
+    data: scheduleData,
+  });
+
   console.log("Database seeded successfully!");
 }
 
