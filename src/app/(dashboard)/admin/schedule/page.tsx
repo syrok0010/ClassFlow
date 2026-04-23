@@ -13,7 +13,7 @@ export default async function SchedulePage() {
       <div className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight">Шаблон расписания</h1>
         <p className="text-sm text-muted-foreground">
-          Просмотр недельного шаблона по всем классам, включая параллельные занятия подгрупп.
+          Просмотр недельного шаблона по всем классам.
         </p>
       </div>
 
