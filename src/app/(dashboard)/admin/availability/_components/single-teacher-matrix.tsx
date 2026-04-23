@@ -28,7 +28,7 @@ import { SingleTeacherTooltipContent } from "./single-teacher-tooltip-content";
 
 type SingleTeacherMatrixProps = {
   teacher: AvailabilityTeacher;
-  weekStart: string;
+  weekStart: Date;
 };
 
 export function SingleTeacherMatrix({

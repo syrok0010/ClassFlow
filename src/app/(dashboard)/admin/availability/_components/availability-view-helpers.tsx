@@ -20,7 +20,7 @@ function getTeacherTemplateBadge(teacher: AvailabilityTeacher) {
   return <Badge variant="secondary">{coverage} интервалов</Badge>;
 }
 
-export function getTeacherStatusBadges(teacher: AvailabilityTeacher, weekStart: string) {
+export function getTeacherStatusBadges(teacher: AvailabilityTeacher, weekStart: Date) {
   const badges = [getTeacherTemplateBadge(teacher)];
 
   if (hasWeekOverride(teacher, weekStart)) {

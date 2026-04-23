@@ -1,19 +1,20 @@
 "use client";
 
 import { useTransition } from "react";
+import { addDays, format } from "date-fns";
 import { useQueryState } from "nuqs";
-import { addDays, toIsoDate } from "../_lib/utils";
 
-export function useAvailabilityWeekUrlState(currentWeekStart: string) {
+export function useAvailabilityWeekUrlState(currentWeekStart: Date) {
   const [isPending, startTransition] = useTransition();
   const [, setWeekStart] = useQueryState("weekStart", {
-    defaultValue: currentWeekStart,
+    defaultValue: format(currentWeekStart, "yyyy-MM-dd"),
     shallow: false,
   });
 
   function shiftWeek(offset: number) {
-    const nextWeekStart = toIsoDate(
-      addDays(new Date(`${currentWeekStart}T00:00:00`), offset * 7),
+    const nextWeekStart = format(
+      addDays(currentWeekStart, offset * 7),
+      "yyyy-MM-dd",
     );
 
     startTransition(() => {

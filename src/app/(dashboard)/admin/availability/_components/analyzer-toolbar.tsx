@@ -4,7 +4,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { getWeekRangeLabel } from "../_lib/utils";
 
 type AnalyzerToolbarProps = {
-  weekStart: string;
+  weekStart: Date;
   isWeekLoading: boolean;
   onPreviousWeek: () => void;
   onNextWeek: () => void;

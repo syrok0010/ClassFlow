@@ -9,13 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import type {
   AvailabilityOverrideEntry,
   AvailabilityTeacher,
@@ -26,15 +20,13 @@ import {
   AVAILABILITY_TYPE_LABELS,
   DAY_CONFIG,
   formatDateRange,
-  formatTimeFromDateTime,
   formatTimeRange,
   getTeacherOverrideEntriesForWeek,
-  timeToMinutes,
 } from "../_lib/utils";
 
 type AvailabilityEditorProps = {
   teacher: AvailabilityTeacher;
-  weekStart: string;
+  weekStart: Date;
   isMutating: boolean;
   onOpenTemplateDialog: (entry?: AvailabilityTemplateEntry | null) => void;
   onDeleteTemplateEntry: (entry: AvailabilityTemplateEntry) => void;
@@ -63,7 +55,7 @@ export function AvailabilityEditor({
       .slice()
       .sort((left, right) => left.dayOfWeek !== right.dayOfWeek
           ? left.dayOfWeek - right.dayOfWeek
-          : timeToMinutes(left.startTime) - timeToMinutes(right.startTime)
+          : left.startTime - right.startTime
       ),
   }));
 
@@ -90,18 +82,15 @@ export function AvailabilityEditor({
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {teacher.templateEntries.length === 0 ? (
-            <Empty className="min-h-80 py-8">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <CalendarDays />
-                </EmptyMedia>
-                <EmptyTitle>Базовый шаблон еще не задан</EmptyTitle>
-                <EmptyDescription>
-                  Добавьте первый слот доступности, чтобы сформировать недельный шаблон
-                  преподавателя.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+            <FilterableEmptyState
+              hasFilters={false}
+              empty={{
+                icon: <CalendarDays />,
+                title: "Базовый шаблон еще не задан",
+                description: "Добавьте первый слот доступности, чтобы сформировать недельный шаблон преподавателя.",
+                className: "min-h-80 py-8",
+              }}
+            />
           ) : (
             templateGroups.map((group) => (
               <div key={group.type} className="rounded-xl bg-background">
@@ -180,18 +169,15 @@ export function AvailabilityEditor({
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {teacher.overrides.length === 0 ? (
-            <Empty className="min-h-80 py-8">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <CalendarDays />
-                </EmptyMedia>
-                <EmptyTitle>Исключений пока нет</EmptyTitle>
-                <EmptyDescription>
-                  Добавляйте отгулы, больничные и временные окна доступности поверх базового
-                  шаблона.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+            <FilterableEmptyState
+              hasFilters={false}
+              empty={{
+                icon: <CalendarDays />,
+                title: "Исключений пока нет",
+                description: "Добавляйте отгулы, больничные и временные окна доступности поверх базового шаблона.",
+                className: "min-h-80 py-8",
+              }}
+            />
           ) : (
             <>
               {weekOverrides.length > 0 ? (
@@ -203,10 +189,10 @@ export function AvailabilityEditor({
 
               {teacher.overrides
                 .slice()
-                .sort((left, right) => left.startTime.localeCompare(right.startTime))
+                .sort((left, right) => left.startTime.getTime() - right.startTime.getTime())
                 .map((entry) => (
-                  <div key={entry.id} className="rounded-xl border bg-background p-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div key={entry.id} className="rounded-xl bg-background py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-col gap-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant={AVAILABILITY_TYPE_BADGE_VARIANTS[entry.type]}>
@@ -221,8 +207,8 @@ export function AvailabilityEditor({
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {formatTimeRange(
-                            formatTimeFromDateTime(entry.startTime),
-                            formatTimeFromDateTime(entry.endTime),
+                            entry.startTime.getHours() * 60 + entry.startTime.getMinutes(),
+                            entry.endTime.getHours() * 60 + entry.endTime.getMinutes(),
                           )}
                         </p>
                       </div>

@@ -21,6 +21,7 @@ import { TemplateEntryDialog } from "./template-entry-dialog";
 import { useAvailabilityMutations } from "../_hooks/use-availability-mutations";
 import { useAvailabilityViewState } from "../_hooks/use-availability-view-state";
 import { useAvailabilityWeekUrlState } from "../_hooks/use-availability-week-url-state";
+import { format } from "date-fns";
 
 export function AdminAvailabilityPageClient({
   initialData,
@@ -160,7 +161,7 @@ export function AdminAvailabilityPageClient({
       {selectedTeacher ? (
         <>
           <TemplateEntryDialog
-            key={`template-${weekStart}-${templateDialog.entry?.id ?? "new"}-${templateDialog.open ? "open" : "closed"}`}
+            key={`template-${format(weekStart, "yyyy-MM-dd")}-${templateDialog.entry?.id ?? "new"}-${templateDialog.open ? "open" : "closed"}`}
             open={templateDialog.open}
             teacher={selectedTeacher}
             entry={templateDialog.entry}
@@ -170,7 +171,7 @@ export function AdminAvailabilityPageClient({
           />
 
           <OverrideEntryDialog
-            key={`override-${weekStart}-${overrideDialog.entry?.id ?? "new"}-${overrideDialog.open ? "open" : "closed"}`}
+            key={`override-${format(weekStart, "yyyy-MM-dd")}-${overrideDialog.entry?.id ?? "new"}-${overrideDialog.open ? "open" : "closed"}`}
             open={overrideDialog.open}
             teacher={selectedTeacher}
             entry={overrideDialog.entry}

@@ -1,3 +1,11 @@
+import {
+  addDays,
+  differenceInMinutes,
+  format,
+  isSameMonth,
+  startOfDay,
+} from "date-fns";
+import { ru } from "date-fns/locale";
 import type { AvailabilityType } from "@/generated/prisma/enums";
 import type {
   AvailabilityOverrideEntry,
@@ -36,99 +44,35 @@ export const AVAILABILITY_TYPE_BADGE_VARIANTS: Record<
   UNAVAILABLE: "destructive",
 };
 
-export function startOfWeek(value: Date): Date {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-
-  const day = date.getDay();
-  const offset = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + offset);
-
-  return date;
-}
-
-export function addDays(value: Date, amount: number): Date {
-  const date = new Date(value);
-  date.setDate(date.getDate() + amount);
-  return date;
-}
-
-export function toIsoDate(value: Date): string {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-export function getWeekEndExclusive(weekStartIso: string): string {
-  return toIsoDate(addDays(new Date(`${weekStartIso}T00:00:00`), 7));
-}
-
-export function getWeekRangeLabel(weekStartIso: string): string {
-  const start = new Date(`${weekStartIso}T00:00:00`);
+export function getWeekRangeLabel(weekStart: Date): string {
+  const start = weekStart;
   const end = addDays(start, 6);
-
-  const sameMonth = start.getMonth() === end.getMonth();
-  const startLabel = new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: sameMonth ? undefined : "long",
-  }).format(start);
-  const endLabel = new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "long",
-  }).format(end);
+  const endLabel = format(end, "d MMMM", { locale: ru });
+  const startLabel = format(
+    start,
+    isSameMonth(start, end)
+      ? "d"
+      : "d MMMM",
+    { locale: ru }
+  );
 
   return `${startLabel} - ${endLabel}`;
 }
 
-export function getDayDate(weekStartIso: string, dayOfWeek: number): Date {
-  return addDays(new Date(`${weekStartIso}T00:00:00`), dayOfWeek - 1);
+export function getDayDateLabel(weekStart: Date, dayOfWeek: number): string {
+  const date = addDays(weekStart, dayOfWeek - 1);
+  return format(date, "d MMM", { locale: ru });
 }
 
-export function getDayDateLabel(weekStartIso: string, dayOfWeek: number): string {
-  const date = getDayDate(weekStartIso, dayOfWeek);
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "short",
-  }).format(date);
+export function formatTimeRange(startTimeMinutes: number, endTimeMinutes: number): string {
+  return `${minutesToTime(startTimeMinutes)} - ${minutesToTime(endTimeMinutes)}`;
 }
 
-export function formatTimeRange(startTime: string, endTime: string): string {
-  return `${startTime} - ${endTime}`;
-}
-
-export function formatTimeFromDateTime(iso: string): string {
-  const date = new Date(iso);
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
-export function formatDateLabel(iso: string): string {
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "short",
-  }).format(new Date(iso));
-}
-
-export function formatDateRange(startIso: string, endIso: string): string {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  const startLabel = new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "short",
-  }).format(start);
-  const endLabel = new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "short",
-  }).format(end);
+export function formatDateRange(start: Date, end: Date): string {
+  const startLabel = format(start, "d MMM", { locale: ru });
+  const endLabel = format(end, "d MMM", { locale: ru });
 
   return startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`;
-}
-
-export function timeToMinutes(value: string): number {
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
 }
 
 export function minutesToTime(value: number): string {
@@ -153,27 +97,26 @@ export function getTeacherDayEntries(
 ): AvailabilityTemplateEntry[] {
   return teacher.templateEntries
     .filter((entry) => entry.dayOfWeek === dayOfWeek)
-    .sort((left, right) => timeToMinutes(left.startTime) - timeToMinutes(right.startTime));
+    .sort((left, right) => left.startTime - right.startTime);
 }
 
 export function getTeacherOverrideEntriesForWeek(
   teacher: AvailabilityTeacher,
-  weekStartIso: string,
+  weekStart: Date,
 ): AvailabilityOverrideEntry[] {
-  const weekStart = new Date(`${weekStartIso}T00:00:00`);
   const weekEnd = addDays(weekStart, 7);
 
   return teacher.overrides
     .filter((entry) => {
-      const start = new Date(entry.startTime);
-      const end = new Date(entry.endTime);
+      const start = entry.startTime;
+      const end = entry.endTime;
       return start < weekEnd && end > weekStart;
     })
-    .sort((left, right) => left.startTime.localeCompare(right.startTime));
+    .sort((left, right) => left.startTime.getTime() - right.startTime.getTime());
 }
 
-export function hasWeekOverride(teacher: AvailabilityTeacher, weekStartIso: string): boolean {
-  return getTeacherOverrideEntriesForWeek(teacher, weekStartIso).length > 0;
+export function hasWeekOverride(teacher: AvailabilityTeacher, weekStart: Date): boolean {
+  return getTeacherOverrideEntriesForWeek(teacher, weekStart).length > 0;
 }
 
 export function getTemplateCoverageCount(teacher: AvailabilityTeacher): number {
@@ -191,27 +134,21 @@ export function normalizeTemplateEntries(
   for (const day of DAY_CONFIG) {
     const dayEntries = entries
       .filter((entry) => entry.dayOfWeek === day.dayOfWeek)
-      .map((entry, index) => ({
-        ...entry,
-        _index: index,
-        startMinutes: timeToMinutes(entry.startTime),
-        endMinutes: timeToMinutes(entry.endTime),
-      }))
-      .filter((entry) => entry.startMinutes < entry.endMinutes);
+      .filter((entry) => entry.startTime < entry.endTime);
 
     if (dayEntries.length === 0) {
       continue;
     }
 
     const points = Array.from(
-      new Set(dayEntries.flatMap((entry) => [entry.startMinutes, entry.endMinutes])),
+      new Set(dayEntries.flatMap((entry) => [entry.startTime, entry.endTime])),
     ).sort((left, right) => left - right);
 
     for (let pointIndex = 0; pointIndex < points.length - 1; pointIndex += 1) {
       const segmentStart = points[pointIndex];
       const segmentEnd = points[pointIndex + 1];
       const overlapping = dayEntries.filter(
-        (entry) => entry.startMinutes < segmentEnd && entry.endMinutes > segmentStart,
+        (entry) => entry.startTime < segmentEnd && entry.endTime > segmentStart,
       );
 
       if (overlapping.length === 0) {
@@ -228,26 +165,22 @@ export function normalizeTemplateEntries(
         previous
         && previous.dayOfWeek === day.dayOfWeek
         && previous.type === active.type
-        && previous.endTime === minutesToTime(segmentStart)
+        && previous.endTime === segmentStart
       ) {
-        previous.endTime = minutesToTime(segmentEnd);
+        previous.endTime = segmentEnd;
         continue;
       }
 
       normalized.push({
         dayOfWeek: day.dayOfWeek,
-        startTime: minutesToTime(segmentStart),
-        endTime: minutesToTime(segmentEnd),
+        startTime: segmentStart,
+        endTime: segmentEnd,
         type: active.type,
       });
     }
   }
 
   return normalized;
-}
-
-export function combineDateAndTime(date: string, time: string): Date {
-  return new Date(`${date}T${time}:00`);
 }
 
 type MinuteRange = {
@@ -294,7 +227,7 @@ function clampMinuteRange(startMinute: number, endMinute: number): MinuteRange |
 }
 
 function getMinuteOffsetFromDayStart(value: Date, dayStart: Date): number {
-  return Math.round((value.getTime() - dayStart.getTime()) / 60_000);
+  return differenceInMinutes(value, dayStart);
 }
 
 function rangesOverlap(left: MinuteRange, right: MinuteRange): boolean {
@@ -303,23 +236,22 @@ function rangesOverlap(left: MinuteRange, right: MinuteRange): boolean {
 
 function getTeacherDayOverrides(
   teacher: AvailabilityTeacher,
-  weekStartIso: string,
+  weekStart: Date,
   dayOfWeek: number,
 ): OverrideMinuteRange[] {
-  const dayStart = getDayDate(weekStartIso, dayOfWeek);
-  dayStart.setHours(0, 0, 0, 0);
+  const dayStart = startOfDay(addDays(weekStart, dayOfWeek - 1));
   const dayEnd = addDays(dayStart, 1);
 
   return teacher.overrides
     .filter((entry) => {
-      const start = new Date(entry.startTime);
-      const end = new Date(entry.endTime);
+      const start = entry.startTime;
+      const end = entry.endTime;
       return start < dayEnd && end > dayStart;
     })
     .map((entry) => {
       const range = clampMinuteRange(
-        getMinuteOffsetFromDayStart(new Date(entry.startTime), dayStart),
-        getMinuteOffsetFromDayStart(new Date(entry.endTime), dayStart),
+        getMinuteOffsetFromDayStart(entry.startTime, dayStart),
+        getMinuteOffsetFromDayStart(entry.endTime, dayStart),
       );
 
       return range ? { ...entry, ...range } : null;
@@ -330,20 +262,16 @@ function getTeacherDayOverrides(
 
 export function getTeacherDayAvailabilitySegments(
   teacher: AvailabilityTeacher,
-  weekStartIso: string,
+  weekStart: Date,
   dayOfWeek: number,
 ): AvailabilityTimelineSegment[] {
   const templateRanges = getTeacherDayEntries(teacher, dayOfWeek)
     .map((entry) => {
-      const range = clampMinuteRange(
-        timeToMinutes(entry.startTime),
-        timeToMinutes(entry.endTime),
-      );
-
+      const range = clampMinuteRange(entry.startTime, entry.endTime);
       return range ? { ...entry, ...range } : null;
     })
     .filter((entry): entry is AvailabilityTemplateEntry & MinuteRange => Boolean(entry));
-  const overrideRanges = getTeacherDayOverrides(teacher, weekStartIso, dayOfWeek);
+  const overrideRanges = getTeacherDayOverrides(teacher, weekStart, dayOfWeek);
 
   const points = Array.from(
     new Set([

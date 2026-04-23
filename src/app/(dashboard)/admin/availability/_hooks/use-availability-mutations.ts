@@ -19,7 +19,7 @@ import type {
   AvailabilityTeacher,
   AvailabilityTemplateEntry,
 } from "../_lib/types";
-import { normalizeTemplateEntries, timeToMinutes } from "../_lib/utils";
+import { normalizeTemplateEntries } from "../_lib/utils";
 
 type UseAvailabilityMutationsOptions = {
   selectedTeacher: AvailabilityTeacher | null;
@@ -69,13 +69,9 @@ export function useAvailabilityMutations({
               type: entry.type,
             })),
           nextEntry,
-        ].sort((left, right) => {
-          if (left.dayOfWeek !== right.dayOfWeek) {
-            return left.dayOfWeek - right.dayOfWeek;
-          }
-
-          return timeToMinutes(left.startTime) - timeToMinutes(right.startTime);
-        }),
+        ].sort((left, right) => left.dayOfWeek !== right.dayOfWeek
+          ? left.dayOfWeek - right.dayOfWeek
+          : left.startTime - right.startTime),
       );
 
       return mutate(

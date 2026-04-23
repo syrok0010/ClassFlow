@@ -25,7 +25,7 @@ import {
   type TeacherAvailabilityEntryInput,
 } from "../_lib/schemas";
 import type { AvailabilityTeacher, AvailabilityTemplateEntry } from "../_lib/types";
-import { AVAILABILITY_TYPE_LABELS, DAY_CONFIG } from "../_lib/utils";
+import { AVAILABILITY_TYPE_LABELS, DAY_CONFIG, minutesToTime } from "../_lib/utils";
 
 const DAY_LABELS_BY_VALUE = new Map(
   DAY_CONFIG.map((day) => [String(day.dayOfWeek), day.label]),
@@ -52,16 +52,16 @@ export function TemplateEntryDialog({
   const form = useForm({
     defaultValues: {
       dayOfWeek: entry?.dayOfWeek ?? 1,
-      startTime: entry?.startTime ?? "08:00",
-      endTime: entry?.endTime ?? "09:00",
+      startTime: entry?.startTime ?? 8 * 60,
+      endTime: entry?.endTime ?? 9 * 60,
       type: entry?.type ?? "AVAILABLE",
     },
     validators: {
-      onChange: teacherAvailabilityEntrySchema,
-      onSubmit: teacherAvailabilityEntrySchema,
+      onChange: teacherAvailabilityEntrySchema
     },
     onSubmit: async ({ value }) => {
       setSubmitError(null);
+      
       const success = await onSubmit(value, entry?.id);
 
       if (!success) {
@@ -137,10 +137,10 @@ export function TemplateEntryDialog({
                       <Input
                         id="template-start-time"
                         type="time"
-                        value={field.state.value}
+                        value={minutesToTime(field.state.value as number)}
                         aria-invalid={errors.length > 0 || undefined}
                         onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.value)}
+                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
                       />
                       {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>
@@ -157,10 +157,10 @@ export function TemplateEntryDialog({
                       <Input
                         id="template-end-time"
                         type="time"
-                        value={field.state.value}
+                        value={minutesToTime(field.state.value as number)}
                         aria-invalid={errors.length > 0 || undefined}
                         onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.value)}
+                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
                       />
                       {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>

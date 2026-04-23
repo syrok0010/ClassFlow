@@ -24,7 +24,7 @@ type TeacherSelectorPanelProps = {
   teachers: AvailabilityTeacher[];
   allTeachersCount: number;
   selectedTeacherIds: string[];
-  weekStart: string;
+  weekStart: Date;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   onTeacherToggle: (teacherId: string) => void;
@@ -61,12 +61,12 @@ export function TeacherSelectorPanel({
             />
           </div>
 
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div className="flex items-center justify-between text-sm text-muted-foreground h-7">
             <span>
               Выбрано {selectedTeacherIds.length} из {allTeachersCount}
             </span>
             {selectedTeacherIds.length > 0 ? (
-              <Button variant="ghost" size="sm" onClick={onClearSelection}>
+              <Button variant="outline" size="sm" onClick={onClearSelection}>
                 <X data-icon="inline-start" />
                 Сбросить
               </Button>

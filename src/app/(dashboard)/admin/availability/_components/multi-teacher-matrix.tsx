@@ -30,7 +30,7 @@ import { MultiTeacherTooltipContent } from "./multi-teacher-tooltip-content";
 
 type MultiTeacherMatrixProps = {
   teachers: AvailabilityTeacher[];
-  weekStart: string;
+  weekStart: Date;
 };
 
 type DayAggregation = {

@@ -223,8 +223,8 @@ model TeacherAvailability {
   id        String           @id @default(cuid())
   teacherId String
   dayOfWeek Int
-  startTime DateTime         @db.Time
-  endTime   DateTime         @db.Time
+  startTime Int
+  endTime   Int
   type      AvailabilityType @default(AVAILABLE)
 
   teacher Teacher @relation(fields: [teacherId], references: [id])

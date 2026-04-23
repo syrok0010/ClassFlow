@@ -1,9 +1,9 @@
+import { parseISO, startOfWeek } from "date-fns";
 import { AlertTriangle } from "lucide-react";
 import {
   getAdminAvailabilityWeekDataAction,
 } from "./_actions/availability-actions";
 import { AdminAvailabilityPageClient } from "./_components/admin-availability-page-client";
-import { startOfWeek, toIsoDate } from "./_lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +11,9 @@ export default async function AdminAvailabilityPage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const searchParams = await props.searchParams;
-  const weekStartParam =
-    typeof searchParams.weekStart === "string" ? searchParams.weekStart : undefined;
-  const weekStart = weekStartParam ?? toIsoDate(startOfWeek(new Date()));
+  const weekStart = typeof searchParams.weekStart === "string"
+    ? parseISO(searchParams.weekStart)
+    : startOfWeek(new Date(), { weekStartsOn: 1 });
 
   const response = await getAdminAvailabilityWeekDataAction(weekStart);
 

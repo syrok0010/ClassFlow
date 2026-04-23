@@ -1,5 +1,6 @@
 "use client";
 
+import { addMinutes, format, parseISO } from "date-fns";
 import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { Button } from "@/components/ui/button";
@@ -29,11 +30,7 @@ import type {
 } from "../_lib/schemas";
 import { teacherAvailabilityOverrideFormSchema } from "../_lib/schemas";
 import type { AvailabilityOverrideEntry, AvailabilityTeacher } from "../_lib/types";
-import {
-  AVAILABILITY_TYPE_LABELS,
-  formatTimeFromDateTime,
-  toIsoDate,
-} from "../_lib/utils";
+import { AVAILABILITY_TYPE_LABELS, minutesToTime } from "../_lib/utils";
 
 type OverrideEntryDialogProps = {
   open: boolean;
@@ -58,10 +55,10 @@ export function OverrideEntryDialog({
   const form = useForm({
     defaultValues: {
       teacherId: teacher.teacherId,
-      startDate: entry ? toIsoDate(new Date(entry.startTime)) : toIsoDate(new Date()),
-      endDate: entry ? toIsoDate(new Date(entry.endTime)) : toIsoDate(new Date()),
-      startTime: entry ? formatTimeFromDateTime(entry.startTime) : "08:00",
-      endTime: entry ? formatTimeFromDateTime(entry.endTime) : "09:00",
+      startDate: format(entry?.startTime ?? new Date(), "yyyy-MM-dd"),
+      endDate: format(entry?.endTime ?? new Date(), "yyyy-MM-dd"),
+      startTime: entry ? entry.startTime.getHours() * 60 + entry.startTime.getMinutes() : 8 * 60,
+      endTime: entry ? entry.endTime.getHours() * 60 + entry.endTime.getMinutes() : 9 * 60,
       type: entry?.type ?? "UNAVAILABLE",
     } satisfies TeacherAvailabilityOverrideFormInput,
     validators: {
@@ -71,9 +68,16 @@ export function OverrideEntryDialog({
     onSubmit: async ({ value }) => {
       setSubmitError(null);
 
+      const payload = {
+        teacherId: value.teacherId,
+        type: value.type,
+        startTime: addMinutes(parseISO(value.startDate), value.startTime),
+        endTime: addMinutes(parseISO(value.endDate), value.endTime),
+      };
+
       const success = entry
-        ? await onUpdate({ ...value, overrideId: entry.id })
-        : await onCreate(value);
+        ? await onUpdate({ ...payload, overrideId: entry.id })
+        : await onCreate(payload);
 
       if (!success) {
         setSubmitError("Не удалось сохранить исключение");
@@ -152,10 +156,10 @@ export function OverrideEntryDialog({
                       <Input
                         id="override-start-time"
                         type="time"
-                        value={field.state.value}
+                        value={minutesToTime(field.state.value)}
                         aria-invalid={errors.length > 0 || undefined}
                         onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.value)}
+                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
                       />
                       {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>
@@ -172,10 +176,10 @@ export function OverrideEntryDialog({
                       <Input
                         id="override-end-time"
                         type="time"
-                        value={field.state.value}
+                        value={minutesToTime(field.state.value)}
                         aria-invalid={errors.length > 0 || undefined}
                         onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.value)}
+                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
                       />
                       {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>

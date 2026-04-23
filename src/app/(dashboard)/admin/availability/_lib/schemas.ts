@@ -1,20 +1,15 @@
+import {addMinutes, parse} from "date-fns";
 import { z } from "zod/v4";
 
-const timeStringSchema = z
-  .string()
-  .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Укажите время в формате ЧЧ:ММ");
-
-const isoDateSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Укажите дату в формате ГГГГ-ММ-ДД");
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Укажите дату в формате ГГГГ-ММ-ДД");
 
 export const availabilityTypeSchema = z.enum(["PREFERRED", "AVAILABLE", "UNAVAILABLE"]);
 
 export const teacherAvailabilityEntrySchema = z
   .object({
-    dayOfWeek: z.number().int().min(1).max(5),
-    startTime: timeStringSchema,
-    endTime: timeStringSchema,
+    dayOfWeek: z.number().int().min(1).max(7),
+    startTime: z.number().int().min(0).max(1439),
+    endTime: z.number().int().min(0).max(1440),
     type: availabilityTypeSchema,
   })
   .refine((value) => value.startTime < value.endTime, {
@@ -31,33 +26,40 @@ export const teacherAvailabilityOverrideFormSchema = z
   .object({
     teacherId: z.string().min(1, "Не выбран преподаватель"),
     startDate: isoDateSchema,
-    startTime: timeStringSchema,
+    startTime: z.number().int().min(0).max(1439),
     endDate: isoDateSchema,
-    endTime: timeStringSchema,
+    endTime: z.number().int().min(0).max(1440),
     type: availabilityTypeSchema,
   })
   .refine(
-    (value) =>
-      `${value.startDate}T${value.startTime}:00` < `${value.endDate}T${value.endTime}:00`,
+    (value) => {
+      const start = addMinutes(parse(value.startDate, "yyyy-MM-dd", new Date()), value.startTime);
+      const end = addMinutes(parse(value.endDate, "yyyy-MM-dd", new Date()), value.endTime);
+      return start < end;
+    },
     {
       message: "Окончание исключения должно быть позже начала",
       path: ["endTime"],
     },
   );
 
-export const createTeacherAvailabilityOverrideSchema = teacherAvailabilityOverrideFormSchema;
+export const createTeacherAvailabilityOverrideSchema = z.object({
+  teacherId: z.string().min(1, "Не выбран преподаватель"),
+  startTime: z.date(),
+  endTime: z.date(),
+  type: availabilityTypeSchema,
+}).refine(val => val.startTime < val.endTime, {
+  message: "Окончание исключения должно быть позже начала",
+  path: ["endTime"]
+});
 
-export const updateTeacherAvailabilityOverrideSchema = teacherAvailabilityOverrideFormSchema.extend({
+export const updateTeacherAvailabilityOverrideSchema = createTeacherAvailabilityOverrideSchema.extend({
   overrideId: z.string().min(1, "Не найдено исключение"),
 });
 
 export const deleteTeacherAvailabilityOverrideSchema = z.object({
   teacherId: z.string().min(1, "Не выбран преподаватель"),
   overrideId: z.string().min(1, "Не найдено исключение"),
-});
-
-export const availabilityWeekQuerySchema = z.object({
-  weekStart: isoDateSchema,
 });
 
 export type TeacherAvailabilityEntryInput = z.infer<typeof teacherAvailabilityEntrySchema>;

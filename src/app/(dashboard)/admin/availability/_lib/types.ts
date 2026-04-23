@@ -3,15 +3,15 @@ import type { AvailabilityType } from "@/generated/prisma/enums";
 export type AvailabilityTemplateEntry = {
   id: string;
   dayOfWeek: number;
-  startTime: string;
-  endTime: string;
+  startTime: number;
+  endTime: number;
   type: AvailabilityType;
 };
 
 export type AvailabilityOverrideEntry = {
   id: string;
-  startTime: string;
-  endTime: string;
+  startTime: Date;
+  endTime: Date;
   type: AvailabilityType;
 };
 
@@ -25,8 +25,8 @@ export type AvailabilityTeacher = {
 };
 
 export type AdminAvailabilityWeekData = {
-  weekStart: string;
-  weekEnd: string;
+  weekStart: Date;
+  weekEnd: Date;
   teachers: AvailabilityTeacher[];
 };
 
