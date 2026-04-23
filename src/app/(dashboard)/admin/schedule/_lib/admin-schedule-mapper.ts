@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { addDays, format, set, startOfWeek } from "date-fns";
 
 import { Prisma } from "@/generated/prisma/client";
 import { getUserFullName } from "@/lib/auth-access";
@@ -53,21 +53,16 @@ function getClassInfo(entry: AdminScheduleTemplateRecord) {
 }
 
 function mapDayOfWeekToDate(dayOfWeek: number) {
-  const current = new Date();
-  const mondayOffset = (current.getDay() + 6) % 7;
-  const monday = new Date(current);
-  monday.setDate(current.getDate() - mondayOffset);
-  monday.setHours(0, 0, 0, 0);
-
-  const date = new Date(monday);
-  date.setDate(monday.getDate() + (dayOfWeek - 1));
-  return date;
+  return addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), dayOfWeek - 1);
 }
 
 function mapTimeToDate(baseDate: Date, minutesFromMidnight: number) {
-  const date = new Date(baseDate);
-  date.setHours(Math.floor(minutesFromMidnight / 60), minutesFromMidnight % 60, 0, 0);
-  return date;
+  return set(baseDate, {
+    hours: Math.floor(minutesFromMidnight / 60),
+    minutes: minutesFromMidnight % 60,
+    seconds: 0,
+    milliseconds: 0,
+  });
 }
 
 export function mapWeeklyTemplateToAdminScheduleEvent(
@@ -87,6 +82,9 @@ export function mapWeeklyTemplateToAdminScheduleEvent(
     id: entry.id,
     start,
     end,
+    subjectId: entry.subject.id,
+    teacherId: entry.teacher?.id ?? null,
+    roomId: entry.room?.id ?? null,
     classId: classInfo.classId,
     className: classInfo.className,
     groupName: entry.group.name,

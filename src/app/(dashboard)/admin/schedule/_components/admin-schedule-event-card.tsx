@@ -13,15 +13,32 @@ import type { AdminScheduleEvent } from "../_lib/admin-schedule-types";
 
 interface AdminScheduleEventCardProps {
   event: AdminScheduleEvent;
+  isDimmed?: boolean;
 }
 
 type AdminScheduleCardLayout = "title-only" | "title-time" | "full";
 
-export function AdminScheduleEventCard({ event }: AdminScheduleEventCardProps) {
+export function AdminScheduleEventCard({ event, isDimmed = false }: AdminScheduleEventCardProps) {
   const durationMinutes = getEventDurationMinutes(event);
   const layout = getCardLayout(durationMinutes);
   const subjectTypeLabel = SUBJECT_LABELS[event.subjectType];
   const groupLabel = event.groupName === event.className ? "Весь класс" : event.groupName;
+  const cardLabel = `${event.subjectName}, ${event.timeLabel}, ${groupLabel}, ${event.roomName}, ${event.teacherName}`;
+
+  if (isDimmed) {
+    return (
+      <div
+        data-testid="admin-schedule-card"
+        data-card-layout={layout}
+        data-subject-type={event.subjectType}
+        data-duration-minutes={durationMinutes}
+        className="block h-full w-full bg-transparent p-0 text-left"
+        aria-label={cardLabel}
+      >
+        <AdminScheduleEventInlineCard event={event} groupLabel={groupLabel} layout={layout} isDimmed />
+      </div>
+    );
+  }
 
   return (
     <Tooltip>
@@ -31,9 +48,9 @@ export function AdminScheduleEventCard({ event }: AdminScheduleEventCardProps) {
         data-subject-type={event.subjectType}
         data-duration-minutes={durationMinutes}
         className="block h-full w-full bg-transparent p-0 text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring/60"
-        aria-label={`${event.subjectName}, ${event.timeLabel}, ${groupLabel}, ${event.roomName}, ${event.teacherName}`}
+        aria-label={cardLabel}
       >
-        <AdminScheduleEventInlineCard event={event} groupLabel={groupLabel} layout={layout} />
+        <AdminScheduleEventInlineCard event={event} groupLabel={groupLabel} layout={layout} isDimmed={isDimmed} />
       </TooltipTrigger>
       <TooltipContent
         data-testid="admin-schedule-card-tooltip"
@@ -74,12 +91,14 @@ interface AdminScheduleEventInlineCardProps {
   event: AdminScheduleEvent;
   groupLabel: string;
   layout: AdminScheduleCardLayout;
+  isDimmed: boolean;
 }
 
 function AdminScheduleEventInlineCard({
   event,
   groupLabel,
   layout,
+  isDimmed,
 }: AdminScheduleEventInlineCardProps) {
   return (
     <div
@@ -87,6 +106,7 @@ function AdminScheduleEventInlineCard({
         "flex h-full w-full flex-col overflow-hidden rounded-lg border px-1 text-left shadow-sm",
         SUBJECT_CARD_TONES[event.subjectType],
         layout === "title-only" ? "justify-center py-0" : "justify-start py-0.5",
+        isDimmed && "opacity-35 saturate-50",
       )}
     >
       <div className="truncate text-xs font-semibold leading-tight text-foreground">{event.subjectName}</div>

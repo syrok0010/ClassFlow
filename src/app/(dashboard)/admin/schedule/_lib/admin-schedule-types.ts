@@ -2,6 +2,9 @@ import type { BaseScheduleEvent } from "@/features/schedule";
 import type { GroupType, SubjectType } from "@/generated/prisma/enums";
 
 export interface AdminScheduleEvent extends BaseScheduleEvent {
+  subjectId: string;
+  teacherId: string | null;
+  roomId: string | null;
   classId: string;
   className: string;
   groupName: string;
