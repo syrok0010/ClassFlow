@@ -42,7 +42,7 @@ test.describe("Admin groups", () => {
   });
 
   test("creates a class with inline row", async ({ page }) => {
-    const groupName = `11 Е2Е ${Date.now()}`;
+    const groupName = `11 E2E ${Date.now()}`;
     const addButton = page.getByRole("button", { name: "Добавить класс/группу" });
     const nameInput = page.getByPlaceholder("Название (напр. 10А)");
 
@@ -58,26 +58,36 @@ test.describe("Admin groups", () => {
   });
 
   test("renames a group with inline edit", async ({ page }) => {
-    const initialName = `10 Rename ${Date.now()}`;
-    const nextName = `${initialName} Updated`;
-
-    await page.getByRole("button", { name: "Добавить класс/группу" }).click();
-    await page.getByPlaceholder("Название (напр. 10А)").fill(initialName);
-    await page.getByPlaceholder("Параллель").fill("10");
-    await page.getByRole("button", { name: "Сохранить" }).click();
+    const initialName = "10 Б";
+    const nextName = `10 Rename ${Date.now()}`;
 
     const createdRow = groupRow(page, initialName);
     await expect(createdRow).toBeVisible();
 
-    await createdRow.getByRole("button").last().click();
-    await page.getByRole("menuitem", { name: "Переименовать" }).click();
-    const renameInput = page.locator("tbody tr input").first();
+    await createdRow
+      .getByTitle("Двойной клик для переименования")
+      .dblclick({ force: true });
+
+    const renameInput = page.getByRole("textbox").nth(1);
     await expect(renameInput).toBeVisible();
     await renameInput.fill(nextName);
     await page.getByRole("button", { name: "Сохранить" }).click();
 
     await expect(page.getByText("Группа переименована")).toBeVisible();
-    await expect(groupRow(page, nextName)).toBeVisible();
+    const renamedRow = groupRow(page, nextName);
+    await expect(renamedRow).toBeVisible();
+
+    await renamedRow
+      .getByTitle("Двойной клик для переименования")
+      .dblclick({ force: true });
+
+    const revertInput = page.getByRole("textbox").nth(1);
+    await expect(revertInput).toBeVisible();
+    await revertInput.fill(initialName);
+    await page.getByRole("button", { name: "Сохранить" }).click();
+
+    await expect(page.getByText("Группа переименована")).toBeVisible();
+    await expect(groupRow(page, initialName)).toBeVisible();
   });
 
   test("splits a seeded class into subject subgroups", async ({ page }) => {
