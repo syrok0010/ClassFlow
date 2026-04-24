@@ -1,4 +1,5 @@
-import { getAllScheduleSlots, getCompatibleRoomIds } from "./activity-utils";
+import { getAllScheduleSlots, getCompatibleRoomIds, getOrdinarySubjectWindow } from "./activity-utils";
+import { FET_CORE_WINDOW_WEIGHT } from "./env";
 import { assignTeachers } from "./teacher-assignment";
 import type { FetActivity, FetImportedActivity, FetInput } from "./types";
 
@@ -50,7 +51,11 @@ export function buildFullActivities(
         subjectId: requirement.subjectId,
         teacherId: teacherId ?? null,
         durationInMinutes: requirement.durationInMinutes,
-        allowedSlots: getAllScheduleSlots(requirement.durationInMinutes),
+        allowedSlots: getAllScheduleSlots(
+          requirement.durationInMinutes,
+          getOrdinarySubjectWindow(requirement.subject.type),
+        ),
+        timeConstraintWeight: FET_CORE_WINDOW_WEIGHT,
         roomIds: getCompatibleRoomIds(input, requirement.subjectId),
       });
       nextId += 1;

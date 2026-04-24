@@ -1,4 +1,5 @@
-import { FET_DAY_END_MINUTES, FET_DAY_START_MINUTES, FET_PERIOD_MINUTES } from "./env";
+import { FET_CORE_END_MINUTES, FET_DAY_END_MINUTES, FET_DAY_START_MINUTES, FET_PERIOD_MINUTES } from "./env";
+import type { SubjectType } from "@/generated/prisma/enums";
 import type { FetDayOfWeek, FetInput, FetRequirement, FetTimeSlot } from "./types";
 
 export function getCompatibleRoomIds(input: FetInput, subjectId: string): string[] {
@@ -8,13 +9,19 @@ export function getCompatibleRoomIds(input: FetInput, subjectId: string): string
     .sort();
 }
 
-export function getAllScheduleSlots(durationInMinutes: number): FetTimeSlot[] {
+export function getAllScheduleSlots(
+  durationInMinutes: number,
+  window: { startTime: number; endTime: number } = {
+    startTime: FET_DAY_START_MINUTES,
+    endTime: FET_DAY_END_MINUTES,
+  },
+): FetTimeSlot[] {
   const slots: FetTimeSlot[] = [];
 
   for (const dayOfWeek of [1, 2, 3, 4, 5] as FetDayOfWeek[]) {
     for (
-      let startTime = FET_DAY_START_MINUTES;
-      startTime + durationInMinutes <= FET_DAY_END_MINUTES;
+      let startTime = window.startTime;
+      startTime + durationInMinutes <= window.endTime;
       startTime += FET_PERIOD_MINUTES
     ) {
       slots.push({ dayOfWeek, startTime });
@@ -22,6 +29,20 @@ export function getAllScheduleSlots(durationInMinutes: number): FetTimeSlot[] {
   }
 
   return slots;
+}
+
+export function getOrdinarySubjectWindow(subjectType: SubjectType): { startTime: number; endTime: number } {
+  if (subjectType === "ACADEMIC") {
+    return {
+      startTime: FET_DAY_START_MINUTES,
+      endTime: FET_CORE_END_MINUTES,
+    };
+  }
+
+  return {
+    startTime: FET_CORE_END_MINUTES,
+    endTime: FET_DAY_END_MINUTES,
+  };
 }
 
 export function getWindowSlots(

@@ -1,4 +1,11 @@
-import { FET_DAY_END_MINUTES, FET_DAY_START_MINUTES, FET_DAYS, FET_PERIOD_MINUTES } from "./env";
+import {
+  FET_DAY_END_MINUTES,
+  FET_DAY_START_MINUTES,
+  FET_DAYS,
+  FET_PERIOD_MINUTES,
+  FET_STUDENTS_MAX_GAPS_PER_WEEK,
+  FET_STUDENTS_MAX_GAPS_WEIGHT,
+} from "./env";
 import type { FetActivity, FetInput, FetTimeSlot } from "./types";
 
 const DAY_NAME_BY_NUMBER = new Map(FET_DAYS.map((day) => [day.dayOfWeek, day.name]));
@@ -39,7 +46,7 @@ function getActivityStartingTimesXml(activity: FetActivity): string {
 
   return [
     "    <ConstraintActivityPreferredStartingTimes>",
-    "      <Weight_Percentage>100</Weight_Percentage>",
+    `      <Weight_Percentage>${activity.timeConstraintWeight ?? 100}</Weight_Percentage>`,
     `      <Activity_Id>${activity.id}</Activity_Id>`,
     `      <Number_of_Preferred_Starting_Times>${slots.length}</Number_of_Preferred_Starting_Times>`,
     ...slots.flatMap((slot) => [
@@ -122,14 +129,81 @@ function getTeacherNotAvailableXml(input: FetInput): string[] {
     });
 }
 
-export function buildFetXml(input: FetInput, activities: FetActivity[]): string {
+function getActiveStudentSetIds(input: FetInput, activeGroupIds: string[]): Set<string> {
+  const groupsById = new Map(input.groups.map((group) => [group.id, group]));
+  const activeStudentSetIds = new Set(activeGroupIds);
+
+  for (const groupId of activeGroupIds) {
+    let current = groupsById.get(groupId);
+
+    while (current?.parentId) {
+      activeStudentSetIds.add(current.parentId);
+      current = groupsById.get(current.parentId);
+    }
+  }
+
+  return activeStudentSetIds;
+}
+
+function getStudentsXml(input: FetInput, activeGroupIds: string[]): string {
+  const groupsById = new Map(input.groups.map((group) => [group.id, group]));
+  const activeStudentSetIds = getActiveStudentSetIds(input, activeGroupIds);
+  const rootGroups = input.groups
+    .filter((group) => activeStudentSetIds.has(group.id) && !group.parentId)
+    .sort((left, right) => (left.grade ?? 0) - (right.grade ?? 0) || left.name.localeCompare(right.name, "ru"));
+
+  const renderGroup = (groupId: string, depth: number): string => {
+    const group = groupsById.get(groupId);
+    if (!group) return "";
+
+    const children = input.groups
+      .filter((candidate) => candidate.parentId === group.id && activeStudentSetIds.has(candidate.id))
+      .sort((left, right) => left.name.localeCompare(right.name, "ru"));
+    const tagName = depth === 0 ? "Year" : depth === 1 ? "Group" : "Subgroup";
+    const indent = "  ".repeat(depth + 2);
+    const childXml = depth >= 2 ? "" : children.map((child) => renderGroup(child.id, depth + 1)).join("\n");
+
+    return [
+      `${indent}<${tagName}>`,
+      `${indent}  <Name>${escapeXml(group.id)}</Name>`,
+      `${indent}  <Number_of_Students>0</Number_of_Students>`,
+      `${indent}  <Comments>${escapeXml(group.name)}</Comments>`,
+      childXml,
+      `${indent}</${tagName}>`,
+    ].filter(Boolean).join("\n");
+  };
+
+  return rootGroups.map((group) => renderGroup(group.id, 0)).join("\n");
+}
+
+function getActivityTeachersXml(activity: FetActivity): string {
+  return activity.teacherId ? `      <Teacher>${escapeXml(activity.teacherId)}</Teacher>\n` : "";
+}
+
+function getStudentGapConstraintsXml(enabled: boolean): string {
+  if (!enabled || FET_STUDENTS_MAX_GAPS_WEIGHT <= 0) return "";
+
+  return [
+    "    <ConstraintStudentsMaxGapsPerWeek>",
+    `      <Weight_Percentage>${FET_STUDENTS_MAX_GAPS_WEIGHT}</Weight_Percentage>`,
+    `      <Max_Gaps>${FET_STUDENTS_MAX_GAPS_PER_WEEK}</Max_Gaps>`,
+    "      <Active>true</Active>",
+    "      <Comments>Soft preference: keep student days compact</Comments>",
+    "    </ConstraintStudentsMaxGapsPerWeek>",
+  ].join("\n");
+}
+
+export function buildFetXml(
+  input: FetInput,
+  activities: FetActivity[],
+  options: { includeStudentGapConstraints?: boolean } = {},
+): string {
   const activeGroupIds = unique(activities.map((activity) => activity.groupId));
   const activeSubjectIds = unique(activities.map((activity) => activity.subjectId));
   const activeTeacherIds = unique(
     activities.map((activity) => activity.teacherId).filter((teacherId): teacherId is string => Boolean(teacherId)),
   );
   const activeRoomIds = unique(activities.flatMap((activity) => activity.fixedRoomId ? [activity.fixedRoomId] : activity.roomIds));
-  const groupsById = new Map(input.groups.map((group) => [group.id, group]));
   const subjectsById = new Map(input.subjects.map((subject) => [subject.id, subject]));
   const roomsById = new Map(input.rooms.map((room) => [room.id, room]));
   const hours = getHours();
@@ -154,12 +228,11 @@ ${activeSubjectIds.map((subjectId) => `    <Subject><Name>${escapeXml(subjectId)
 ${activeTeacherIds.map((teacherId) => `    <Teacher><Name>${escapeXml(teacherId)}</Name><Target_Number_of_Hours>0</Target_Number_of_Hours><Qualified_Subjects></Qualified_Subjects><Comments></Comments></Teacher>`).join("\n")}
   </Teachers_List>
   <Students_List>
-${activeGroupIds.map((groupId) => `    <Year><Name>${escapeXml(groupId)}</Name><Number_of_Students>0</Number_of_Students><Comments>${escapeXml(groupsById.get(groupId)?.name ?? groupId)}</Comments></Year>`).join("\n")}
+${getStudentsXml(input, activeGroupIds)}
   </Students_List>
   <Activities_List>
 ${activities.map((activity) => `    <Activity>
-      <Teacher>${activity.teacherId ? escapeXml(activity.teacherId) : ""}</Teacher>
-      <Subject>${escapeXml(activity.subjectId)}</Subject>
+${getActivityTeachersXml(activity)}      <Subject>${escapeXml(activity.subjectId)}</Subject>
       <Students>${escapeXml(activity.groupId)}</Students>
       <Duration>${periodCount(activity.durationInMinutes)}</Duration>
       <Total_Duration>${periodCount(activity.durationInMinutes)}</Total_Duration>
@@ -181,6 +254,7 @@ ${activeRoomIds.map((roomId) => `    <Room><Name>${escapeXml(roomId)}</Name><Bui
     </ConstraintBasicCompulsoryTime>
 ${activities.map(getActivityStartingTimesXml).join("\n")}
 ${getTeacherNotAvailableXml(input).join("\n")}
+${getStudentGapConstraintsXml(Boolean(options.includeStudentGapConstraints))}
   </Time_Constraints_List>
   <Space_Constraints_List>
     <ConstraintBasicCompulsorySpace>

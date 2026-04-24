@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { PrismaClient } from "../../src/generated/prisma/client";
-import { buildFullActivities } from "../../src/features/fet/build-full-activities";
-import { buildRegimeActivities } from "../../src/features/fet/build-regime-activities";
-import { generateWeeklyScheduleTemplate } from "../../src/features/fet/generate-weekly-template";
-import { importFetActivitiesXml, mapImportedActivitiesToTemplateRows } from "../../src/features/fet/importer";
-import { preflightFetInput } from "../../src/features/fet/preflight";
-import { getRegimeConstraintRule } from "../../src/features/fet/regime-constraints";
-import type { FetInput, FetRunRequest } from "../../src/features/fet/types";
+import type { PrismaClient } from "@/generated/prisma/client";
+import { buildFullActivities } from "@/features/fet/build-full-activities";
+import { buildRegimeActivities } from "@/features/fet/build-regime-activities";
+import { generateWeeklyScheduleTemplate } from "@/features/fet/generate-weekly-template";
+import { buildFetXml } from "@/features/fet/fet-xml";
+import { importFetActivitiesXml, mapImportedActivitiesToTemplateRows } from "@/features/fet/importer";
+import { preflightFetInput } from "@/features/fet/preflight";
+import { getRegimeConstraintRule } from "@/features/fet/regime-constraints";
+import type { FetInput, FetRunRequest } from "@/features/fet/types";
 
 function createInput(overrides: Partial<FetInput> = {}): FetInput {
   const input: FetInput = {
@@ -142,6 +143,34 @@ test("teacher assignment keeps one teacher for group + subject lessons and reuse
   assert.equal(new Set(ordinary.map((activity) => activity.teacherId)).size, 1);
 });
 
+test("ordinary builder schedules academics before electives window", () => {
+  const { activities } = buildFullActivities(createInput(), []);
+  const academicActivity = activities.find((activity) => activity.subjectId === "math");
+  assert.ok(academicActivity);
+  assert.ok(academicActivity.allowedSlots.every((slot) => slot.startTime + academicActivity.durationInMinutes <= 14 * 60));
+
+  const input = createInput({
+    subjects: [
+      { id: "elective", name: "Кулинария", type: "ELECTIVE_OPTIONAL" },
+    ],
+    requirements: [
+      {
+        groupId: "group-1",
+        subjectId: "elective",
+        lessonsPerWeek: 1,
+        durationInMinutes: 45,
+        breakDuration: 0,
+        group: { id: "group-1", name: "1А", type: "CLASS", grade: 1, parentId: null },
+        subject: { id: "elective", name: "Кулинария", type: "ELECTIVE_OPTIONAL" },
+      },
+    ],
+    teacherSubjects: [{ teacherId: "teacher-1", subjectId: "elective", minGrade: 1, maxGrade: 4 }],
+    roomSubjects: [{ roomId: "room-101", subjectId: "elective" }],
+  });
+  const { activities: electiveActivities } = buildFullActivities(input, []);
+  assert.ok(electiveActivities[0].allowedSlots.every((slot) => slot.startTime >= 14 * 60));
+});
+
 test("importer maps FET activities to WeeklyScheduleTemplate rows", () => {
   const activities = buildRegimeActivities(createInput()).slice(0, 1);
   const imported = importFetActivitiesXml(activityXml([1]));
@@ -156,6 +185,55 @@ test("importer maps FET activities to WeeklyScheduleTemplate rows", () => {
     teacherId: null,
     subjectId: "breakfast",
   });
+});
+
+test("FET XML omits empty teacher tags for teacherless regime activities", () => {
+  const xml = buildFetXml(createInput(), buildRegimeActivities(createInput()).slice(0, 1));
+
+  assert.equal(xml.includes("<Teacher></Teacher>"), false);
+  assert.equal(xml.includes("<Teacher/>"), false);
+});
+
+test("FET XML nests subject subgroups under their parent class", () => {
+  const input = createInput({
+    groups: [
+      { id: "class-1", name: "3 А", type: "CLASS", grade: 3, parentId: null },
+      { id: "subgroup-1", name: "3 А - подгруппа 1", type: "SUBJECT_SUBGROUP", grade: 3, parentId: "class-1" },
+    ],
+    requirements: [
+      {
+        groupId: "class-1",
+        subjectId: "math",
+        lessonsPerWeek: 1,
+        durationInMinutes: 45,
+        breakDuration: 0,
+        group: { id: "class-1", name: "3 А", type: "CLASS", grade: 3, parentId: null },
+        subject: { id: "math", name: "Математика", type: "ACADEMIC" },
+      },
+      {
+        groupId: "subgroup-1",
+        subjectId: "math",
+        lessonsPerWeek: 1,
+        durationInMinutes: 45,
+        breakDuration: 0,
+        group: { id: "subgroup-1", name: "3 А - подгруппа 1", type: "SUBJECT_SUBGROUP", grade: 3, parentId: "class-1" },
+        subject: { id: "math", name: "Математика", type: "ACADEMIC" },
+      },
+    ],
+  });
+  const { activities } = buildFullActivities(input, []);
+  const xml = buildFetXml(input, activities);
+
+  assert.match(xml, /<Year>[\s\S]*<Name>class-1<\/Name>[\s\S]*<Group>[\s\S]*<Name>subgroup-1<\/Name>[\s\S]*<\/Group>[\s\S]*<\/Year>/);
+});
+
+test("FET XML can include compact student day preference for full pass", () => {
+  const xml = buildFetXml(createInput(), buildRegimeActivities(createInput()).slice(0, 1), {
+    includeStudentGapConstraints: true,
+  });
+
+  assert.match(xml, /<ConstraintStudentsMaxGapsPerWeek>/);
+  assert.match(xml, /<Max_Gaps>0<\/Max_Gaps>/);
 });
 
 test("generation with mocked FET runner replaces templates after full pass", async () => {

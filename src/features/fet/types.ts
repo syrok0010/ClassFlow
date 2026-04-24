@@ -17,6 +17,7 @@ export type FetActivity = {
   teacherId: string | null;
   durationInMinutes: number;
   allowedSlots: FetTimeSlot[];
+  timeConstraintWeight?: number;
   roomIds: string[];
   fixedSlot?: FetTimeSlot;
   fixedRoomId?: string | null;

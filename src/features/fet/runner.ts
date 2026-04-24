@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { FET_CLI_PATH, FET_TIMEOUT_MS, FET_WORK_DIR } from "./env";
+import { FET_CLI_PATH, FET_ENABLE_STUDENT_GAP_CONSTRAINTS, FET_TIMEOUT_MS, FET_WORK_DIR } from "./env";
 import { buildFetXml } from "./fet-xml";
 import type { FetRunRequest, FetRunResult } from "./types";
 
@@ -74,7 +74,13 @@ export async function runFetCliPass(request: FetRunRequest): Promise<FetRunResul
   await mkdir(outputDir, { recursive: true });
 
   const inputFilePath = path.join(artifactDir, `${request.kind}.fet`);
-  await writeFile(inputFilePath, buildFetXml(request.input, request.activities), "utf8");
+  await writeFile(
+    inputFilePath,
+    buildFetXml(request.input, request.activities, {
+      includeStudentGapConstraints: request.kind === "full" && FET_ENABLE_STUDENT_GAP_CONSTRAINTS,
+    }),
+    "utf8",
+  );
 
   const cliOutput = await runFetCli(inputFilePath, outputDir);
   const outputActivitiesXmlPath = await findActivitiesXml(outputDir);
