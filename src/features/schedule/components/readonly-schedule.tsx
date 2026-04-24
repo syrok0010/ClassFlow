@@ -32,6 +32,13 @@ interface ReadonlyScheduleProps<TEvent extends BaseScheduleEvent> {
   rows?: readonly ReadonlyScheduleRow[]
   getEventRowId?: (event: TEvent) => string
   rowColumnTitle?: string
+  renderDayColumnOverlay?: (context: {
+    dayKey: string
+    rowId: string | null
+    startMinutes: number
+    endMinutes: number
+    heightPx: number
+  }) => React.ReactNode
   timeRange?: ScheduleTimeRange
   className?: string
 }
@@ -45,6 +52,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
   rows,
   getEventRowId,
   rowColumnTitle = "Класс",
+  renderDayColumnOverlay,
   timeRange,
   className,
 }: ReadonlyScheduleProps<TEvent>) {
@@ -249,6 +257,15 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
                     className="relative border-r last:border-r-0"
                     style={{ height: `${currentLayout.timeRange.heightPx}px` }}
                   >
+                    {renderDayColumnOverlay
+                      ? renderDayColumnOverlay({
+                          dayKey: day.key,
+                          rowId: rowLayoutItem.row?.id ?? null,
+                          startMinutes: currentLayout.timeRange.startMinutes,
+                          endMinutes: currentLayout.timeRange.endMinutes,
+                          heightPx: currentLayout.timeRange.heightPx,
+                        })
+                      : null}
                     {currentLayout.timeSlots.map((slot) => (
                       <div
                         key={`${rowLayoutItem.id}-${day.key}-${slot.key}`}
