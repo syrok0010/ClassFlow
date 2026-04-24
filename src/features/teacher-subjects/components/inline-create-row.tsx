@@ -22,6 +22,7 @@ import {
   type CreateTeacherSubjectFormInput,
 } from "../lib/schemas";
 import type { SubjectOption } from "../lib/types";
+import {flushSync} from "react-dom";
 
 interface InlineCreateTeacherSubjectRowProps {
   subjectOptions: SubjectOption[];
@@ -50,7 +51,7 @@ export function InlineCreateRow({
       const success = await onSave(parsed);
 
       if (success) {
-        onCancel();
+        flushSync(() => form.reset())
       }
     },
   });

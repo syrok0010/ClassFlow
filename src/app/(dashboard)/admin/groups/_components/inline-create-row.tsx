@@ -20,6 +20,7 @@ import {
   groupNameSchema,
   parseGroupGradeInput,
 } from "../_lib/group-schemas";
+import {flushSync} from "react-dom";
 
 const INLINE_CREATE_TYPE_OPTIONS = [
   { value: "CLASS", label: "Класс" },
@@ -55,7 +56,7 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
         grade: parseGroupGradeInput(value.grade),
       });
       if (success) {
-        onCancel();
+        flushSync(() => form.reset());
       }
     },
   });
