@@ -602,6 +602,52 @@ async function main() {
     existing.maxGrade = Math.max(existing.maxGrade, lesson.grade);
   }
 
+  const widenTeacherSubject = (teacherKey: string, subjectName: string, minGrade: number, maxGrade: number) => {
+    const teacherId = teacherByKey[teacherKey];
+    const subjectId = subjectByName[subjectName];
+    const key = `${teacherId}:${subjectId}`;
+    const existing = teacherSubjectRows.get(key);
+
+    if (!existing) {
+      teacherSubjectRows.set(key, { teacherId, subjectId, minGrade, maxGrade });
+      return;
+    }
+
+    existing.minGrade = Math.min(existing.minGrade, minGrade);
+    existing.maxGrade = Math.max(existing.maxGrade, maxGrade);
+  };
+
+  widenTeacherSubject("C3_MATH", "Математика", 3, 4);
+  widenTeacherSubject("C3_RUS", "Русский язык", 3, 4);
+  widenTeacherSubject("C3_LIT", "Литература", 3, 4);
+  widenTeacherSubject("C3_WORLD", "Окружающий мир", 3, 4);
+  widenTeacherSubject("C3_ENGLISH", "Английский язык", 3, 4);
+  widenTeacherSubject("C3_PE", "Физическая культура", 3, 8);
+  widenTeacherSubject("C3_MUSIC", "Музыка", 3, 8);
+  widenTeacherSubject("C3_ART", "ИЗО", 3, 8);
+  widenTeacherSubject("C3_CALLIG", "Каллиграфия", 3, 4);
+  widenTeacherSubject("C3_EXPERIMENT", "Эксперименты", 3, 4);
+  widenTeacherSubject("C3_ARCH", "Архитектура", 3, 4);
+  widenTeacherSubject("C3_DANCE", "Хореография", 3, 4);
+  widenTeacherSubject("C3_YOGA", "Йога", 3, 4);
+  widenTeacherSubject("C3_CHESS", "Шахматы и шашки", 3, 4);
+  widenTeacherSubject("C3_COOKING", "Кулинария", 3, 4);
+  widenTeacherSubject("C3_GAMES", "Игры радости", 0, 6);
+  widenTeacherSubject("C3_FENCING", "Фехтование", 3, 8);
+  widenTeacherSubject("C3_MUSIC", "Музыка", 0, 8);
+  widenTeacherSubject("C3_ART", "ИЗО", 0, 8);
+  widenTeacherSubject("C6_MATH", "Математика", 6, 8);
+  widenTeacherSubject("C6_RUS", "Русский язык", 6, 8);
+  widenTeacherSubject("C6_LIT", "Литература", 6, 8);
+  widenTeacherSubject("C6_BIO", "Биология", 6, 8);
+  widenTeacherSubject("C6_GEOGRAPHY", "География", 6, 8);
+  widenTeacherSubject("C6_HISTORY", "История", 6, 8);
+  widenTeacherSubject("C6_ENGLISH", "Английский язык", 6, 8);
+  widenTeacherSubject("C6_COMM", "Коммуникация", 6, 8);
+  widenTeacherSubject("C6_ARCH", "Архитектура", 6, 8);
+  widenTeacherSubject("C6_JOURNAL", "Журналистика", 6, 8);
+  widenTeacherSubject("C6_THEATER", "Театр", 6, 8);
+
   await prisma.teacherSubject.createMany({
     data: Array.from(teacherSubjectRows.values()),
   });
@@ -660,6 +706,22 @@ async function main() {
     breakDuration: number;
   }>();
 
+  const addRequirement = (
+    groupId: string,
+    subjectName: string,
+    lessonsPerWeek: number,
+    durationInMinutes = 45,
+    breakDuration = 0,
+  ) => {
+    requirementRows.set(`${groupId}:${subjectByName[subjectName]}`, {
+      groupId,
+      subjectId: subjectByName[subjectName],
+      lessonsPerWeek,
+      durationInMinutes,
+      breakDuration,
+    });
+  };
+
   for (const row of weeklyRows) {
     const grade = gradeByGroupId.get(row.groupId);
     if (grade !== 3 && grade !== 6) {
@@ -688,6 +750,66 @@ async function main() {
 
     existing.lessonsPerWeek += 1;
   }
+
+  const commonRegime = [
+    ["Завтрак", 5, 15, 0],
+    ["Обед", 5, 15, 0],
+    ["Полдник", 5, 15, 0],
+  ] as const;
+
+  for (const [subjectName, lessonsPerWeek, durationInMinutes, breakDuration] of commonRegime) {
+    addRequirement(class3.id, subjectName, lessonsPerWeek, durationInMinutes, breakDuration);
+    addRequirement(class4.id, subjectName, lessonsPerWeek, durationInMinutes, breakDuration);
+    addRequirement(class6.id, subjectName, lessonsPerWeek, durationInMinutes, breakDuration);
+  }
+  addRequirement(class3.id, "Прогулка", 5, 45, 0);
+  addRequirement(class4.id, "Прогулка", 5, 45, 0);
+
+  addRequirement(class4.id, "Математика", 5, 45, 10);
+  addRequirement(class4.id, "Русский язык", 5, 45, 10);
+  addRequirement(class4.id, "Литература", 3, 45, 10);
+  addRequirement(class4.id, "Окружающий мир", 2, 45, 10);
+  addRequirement(class4.id, "Английский язык", 2, 45, 10);
+  addRequirement(class4.id, "Физическая культура", 3, 45, 10);
+  addRequirement(class4.id, "Музыка", 1, 45, 10);
+  addRequirement(class4.id, "ИЗО", 1, 45, 10);
+  addRequirement(class4.id, "Каллиграфия", 1, 45, 10);
+  addRequirement(class4.id, "Эксперименты", 1, 45, 10);
+  addRequirement(class4.id, "Архитектура", 1, 90, 10);
+  addRequirement(class4.id, "Хореография", 1, 45, 10);
+  addRequirement(class4.id, "Йога", 1, 45, 0);
+  addRequirement(class4.id, "Шахматы и шашки", 1, 45, 0);
+  addRequirement(class4.id, "Кулинария", 1, 90, 0);
+
+  addRequirement(class8.id, "Математика", 5, 45, 10);
+  addRequirement(class8.id, "Русский язык", 4, 45, 10);
+  addRequirement(class8.id, "Литература", 3, 45, 10);
+  addRequirement(class8.id, "Биология", 2, 45, 10);
+  addRequirement(class8.id, "География", 2, 45, 10);
+  addRequirement(class8.id, "История", 2, 45, 10);
+  addRequirement(class8.id, "Английский язык", 3, 45, 10);
+  addRequirement(class8.id, "Коммуникация", 1, 45, 10);
+  addRequirement(class8.id, "Физическая культура", 3, 45, 10);
+  addRequirement(class8.id, "ИЗО", 1, 45, 10);
+  addRequirement(class8.id, "Музыка", 1, 45, 10);
+  addRequirement(class8.id, "Архитектура", 1, 90, 10);
+  addRequirement(class8.id, "Журналистика", 1, 45, 0);
+  addRequirement(class8.id, "Театр", 1, 90, 0);
+  addRequirement(class8.id, "Фехтование", 1, 45, 0);
+
+  addRequirement(class3Subgroup1.id, "Английский язык", 2, 45, 10);
+  addRequirement(class3Subgroup2.id, "Английский язык", 2, 45, 10);
+  addRequirement(class6Subgroup1.id, "Испанский язык", 1, 45, 10);
+  addRequirement(class6Subgroup2.id, "Игры радости", 1, 45, 0);
+
+  addRequirement(electiveChess.id, "Шахматы и шашки", 2, 45, 0);
+  addRequirement(electiveMedia.id, "Журналистика", 2, 45, 0);
+  addRequirement(electiveMedia.id, "Писательский клуб", 1, 45, 0);
+  addRequirement(kindergarten.id, "Игры радости", 3, 30, 0);
+  addRequirement(kindergarten.id, "Музыка", 2, 30, 0);
+  addRequirement(kindergarten.id, "ИЗО", 2, 30, 0);
+  addRequirement(kindergarten.id, "Прогулка", 5, 45, 0);
+  addRequirement(kindergarten.id, "Обед", 5, 20, 0);
 
   await prisma.groupSubjectRequirement.createMany({
     data: Array.from(requirementRows.values()),
