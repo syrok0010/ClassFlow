@@ -25,7 +25,7 @@ import {
   AvailabilityTimelineCanvas,
   AvailabilityTimelineRow,
   AvailabilityTimelineScale,
-} from "./availability-timeline-shared";
+} from "@/features/availability/components/availability-timeline-shared";
 import { MultiTeacherTooltipContent } from "./multi-teacher-tooltip-content";
 
 type MultiTeacherMatrixProps = {
