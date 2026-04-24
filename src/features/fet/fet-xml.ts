@@ -1,3 +1,4 @@
+import XMLBuilder from "fast-xml-builder";
 import {
   FET_DAY_END_MINUTES,
   FET_DAY_START_MINUTES,
@@ -9,15 +10,6 @@ import {
 import type { FetActivity, FetInput, FetTimeSlot } from "./types";
 
 const DAY_NAME_BY_NUMBER = new Map(FET_DAYS.map((day) => [day.dayOfWeek, day.name]));
-
-function escapeXml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
 
 export function minutesToFetHour(minutes: number): string {
   const hours = Math.floor(minutes / 60);
@@ -41,58 +33,53 @@ function getHours(): string[] {
   return hours;
 }
 
-function getActivityStartingTimesXml(activity: FetActivity): string {
+function getActivityStartingTimes(activity: FetActivity) {
   const slots = activity.fixedSlot ? [activity.fixedSlot] : activity.allowedSlots;
 
-  return [
-    "    <ConstraintActivityPreferredStartingTimes>",
-    `      <Weight_Percentage>${activity.timeConstraintWeight ?? 100}</Weight_Percentage>`,
-    `      <Activity_Id>${activity.id}</Activity_Id>`,
-    `      <Number_of_Preferred_Starting_Times>${slots.length}</Number_of_Preferred_Starting_Times>`,
-    ...slots.flatMap((slot) => [
-      "      <Preferred_Starting_Time>",
-      `        <Preferred_Starting_Day>${DAY_NAME_BY_NUMBER.get(slot.dayOfWeek)}</Preferred_Starting_Day>`,
-      `        <Preferred_Starting_Hour>${minutesToFetHour(slot.startTime)}</Preferred_Starting_Hour>`,
-      "      </Preferred_Starting_Time>",
-    ]),
-    "      <Active>true</Active>",
-    "      <Comments></Comments>",
-    "    </ConstraintActivityPreferredStartingTimes>",
-  ].join("\n");
+  return {
+    Weight_Percentage: activity.timeConstraintWeight ?? 100,
+    Activity_Id: activity.id,
+    Number_of_Preferred_Starting_Times: slots.length,
+    Preferred_Starting_Time: slots.map((slot) => ({
+      Preferred_Starting_Day: DAY_NAME_BY_NUMBER.get(slot.dayOfWeek),
+      Preferred_Starting_Hour: minutesToFetHour(slot.startTime),
+    })),
+    Active: true,
+    Comments: "",
+  };
 }
 
-function getActivityRoomXml(activity: FetActivity): string | null {
+function getActivityRoomConstraints(activity: FetActivity) {
   if (activity.fixedRoomId) {
-    return [
-      "    <ConstraintActivityPreferredRoom>",
-      "      <Weight_Percentage>100</Weight_Percentage>",
-      `      <Activity_Id>${activity.id}</Activity_Id>`,
-      `      <Room>${escapeXml(activity.fixedRoomId)}</Room>`,
-      "      <Permanently_Locked>true</Permanently_Locked>",
-      "      <Active>true</Active>",
-      "      <Comments></Comments>",
-      "    </ConstraintActivityPreferredRoom>",
-    ].join("\n");
+    return {
+      ConstraintActivityPreferredRoom: {
+        Weight_Percentage: 100,
+        Activity_Id: activity.id,
+        Room: activity.fixedRoomId,
+        Permanently_Locked: true,
+        Active: true,
+        Comments: "",
+      },
+    };
   }
 
   if (activity.roomIds.length === 0) return null;
 
-  return [
-    "    <ConstraintActivityPreferredRooms>",
-    "      <Weight_Percentage>100</Weight_Percentage>",
-    `      <Activity_Id>${activity.id}</Activity_Id>`,
-    `      <Number_of_Preferred_Rooms>${activity.roomIds.length}</Number_of_Preferred_Rooms>`,
-    ...activity.roomIds.map((roomId) => `      <Preferred_Room>${escapeXml(roomId)}</Preferred_Room>`),
-    "      <Active>true</Active>",
-    "      <Comments></Comments>",
-    "    </ConstraintActivityPreferredRooms>",
-  ].join("\n");
+  return {
+    ConstraintActivityPreferredRooms: {
+      Weight_Percentage: 100,
+      Activity_Id: activity.id,
+      Number_of_Preferred_Rooms: activity.roomIds.length,
+      Preferred_Room: activity.roomIds,
+      Active: true,
+      Comments: "",
+    },
+  };
 }
 
-function getTeacherNotAvailableXml(input: FetInput): string[] {
+function getTeacherNotAvailableConstraints(input: FetInput) {
   const normalizeTime = (value: number | Date) => {
     if (typeof value === "number") return value;
-
     return value.getHours() * 60 + value.getMinutes();
   };
 
@@ -111,21 +98,17 @@ function getTeacherNotAvailableXml(input: FetInput): string[] {
         slots.push({ dayOfWeek: availability.dayOfWeek as FetTimeSlot["dayOfWeek"], startTime });
       }
 
-      return [
-        "    <ConstraintTeacherNotAvailableTimes>",
-        "      <Weight_Percentage>100</Weight_Percentage>",
-        `      <Teacher>${escapeXml(availability.teacherId)}</Teacher>`,
-        `      <Number_of_Not_Available_Times>${slots.length}</Number_of_Not_Available_Times>`,
-        ...slots.flatMap((slot) => [
-          "      <Not_Available_Time>",
-          `        <Day>${DAY_NAME_BY_NUMBER.get(slot.dayOfWeek)}</Day>`,
-          `        <Hour>${minutesToFetHour(slot.startTime)}</Hour>`,
-          "      </Not_Available_Time>",
-        ]),
-        "      <Active>true</Active>",
-        "      <Comments></Comments>",
-        "    </ConstraintTeacherNotAvailableTimes>",
-      ].join("\n");
+      return {
+        Weight_Percentage: 100,
+        Teacher: availability.teacherId,
+        Number_of_Not_Available_Times: slots.length,
+        Not_Available_Time: slots.map((slot) => ({
+          Day: DAY_NAME_BY_NUMBER.get(slot.dayOfWeek),
+          Hour: minutesToFetHour(slot.startTime),
+        })),
+        Active: true,
+        Comments: "",
+      };
     });
 }
 
@@ -145,52 +128,39 @@ function getActiveStudentSetIds(input: FetInput, activeGroupIds: string[]): Set<
   return activeStudentSetIds;
 }
 
-function getStudentsXml(input: FetInput, activeGroupIds: string[]): string {
+function getStudentsStructure(input: FetInput, activeGroupIds: string[]) {
   const groupsById = new Map(input.groups.map((group) => [group.id, group]));
   const activeStudentSetIds = getActiveStudentSetIds(input, activeGroupIds);
   const rootGroups = input.groups
     .filter((group) => activeStudentSetIds.has(group.id) && !group.parentId)
     .sort((left, right) => (left.grade ?? 0) - (right.grade ?? 0) || left.name.localeCompare(right.name, "ru"));
 
-  const renderGroup = (groupId: string, depth: number): string => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const buildGroup = (groupId: string, depth: number): any => {
     const group = groupsById.get(groupId);
-    if (!group) return "";
+    if (!group) return null;
 
     const children = input.groups
       .filter((candidate) => candidate.parentId === group.id && activeStudentSetIds.has(candidate.id))
       .sort((left, right) => left.name.localeCompare(right.name, "ru"));
-    const tagName = depth === 0 ? "Year" : depth === 1 ? "Group" : "Subgroup";
-    const indent = "  ".repeat(depth + 2);
-    const childXml = depth >= 2 ? "" : children.map((child) => renderGroup(child.id, depth + 1)).join("\n");
 
-    return [
-      `${indent}<${tagName}>`,
-      `${indent}  <Name>${escapeXml(group.id)}</Name>`,
-      `${indent}  <Number_of_Students>0</Number_of_Students>`,
-      `${indent}  <Comments>${escapeXml(group.name)}</Comments>`,
-      childXml,
-      `${indent}</${tagName}>`,
-    ].filter(Boolean).join("\n");
+    const tagName = depth === 0 ? "Year" : depth === 1 ? "Group" : "Subgroup";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = {
+      Name: group.id,
+      Number_of_Students: 0,
+      Comments: group.name,
+    };
+
+    if (depth < 2 && children.length > 0) {
+      const childTagName = depth === 0 ? "Group" : "Subgroup";
+      data[childTagName] = children.map((child) => buildGroup(child.id, depth + 1)[childTagName]);
+    }
+
+    return { [tagName]: data };
   };
 
-  return rootGroups.map((group) => renderGroup(group.id, 0)).join("\n");
-}
-
-function getActivityTeachersXml(activity: FetActivity): string {
-  return activity.teacherId ? `      <Teacher>${escapeXml(activity.teacherId)}</Teacher>\n` : "";
-}
-
-function getStudentGapConstraintsXml(enabled: boolean): string {
-  if (!enabled || FET_STUDENTS_MAX_GAPS_WEIGHT <= 0) return "";
-
-  return [
-    "    <ConstraintStudentsMaxGapsPerWeek>",
-    `      <Weight_Percentage>${FET_STUDENTS_MAX_GAPS_WEIGHT}</Weight_Percentage>`,
-    `      <Max_Gaps>${FET_STUDENTS_MAX_GAPS_PER_WEEK}</Max_Gaps>`,
-    "      <Active>true</Active>",
-    "      <Comments>Soft preference: keep student days compact</Comments>",
-    "    </ConstraintStudentsMaxGapsPerWeek>",
-  ].join("\n");
+  return rootGroups.map((group) => buildGroup(group.id, 0).Year);
 }
 
 export function buildFetXml(
@@ -208,62 +178,111 @@ export function buildFetXml(
   const roomsById = new Map(input.rooms.map((room) => [room.id, room]));
   const hours = getHours();
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<fet version="6.25.0">
-  <Mode>Official</Mode>
-  <Institution_Name>ClassFlow</Institution_Name>
-  <Comments></Comments>
-  <Days_List>
-    <Number_of_Days>${FET_DAYS.length}</Number_of_Days>
-${FET_DAYS.map((day) => `    <Day><Name>${day.name}</Name></Day>`).join("\n")}
-  </Days_List>
-  <Hours_List>
-    <Number_of_Hours>${hours.length}</Number_of_Hours>
-${hours.map((hour) => `    <Hour><Name>${hour}</Name></Hour>`).join("\n")}
-  </Hours_List>
-  <Subjects_List>
-${activeSubjectIds.map((subjectId) => `    <Subject><Name>${escapeXml(subjectId)}</Name><Comments>${escapeXml(subjectsById.get(subjectId)?.name ?? subjectId)}</Comments></Subject>`).join("\n")}
-  </Subjects_List>
-  <Teachers_List>
-${activeTeacherIds.map((teacherId) => `    <Teacher><Name>${escapeXml(teacherId)}</Name><Target_Number_of_Hours>0</Target_Number_of_Hours><Qualified_Subjects></Qualified_Subjects><Comments></Comments></Teacher>`).join("\n")}
-  </Teachers_List>
-  <Students_List>
-${getStudentsXml(input, activeGroupIds)}
-  </Students_List>
-  <Activities_List>
-${activities.map((activity) => `    <Activity>
-${getActivityTeachersXml(activity)}      <Subject>${escapeXml(activity.subjectId)}</Subject>
-      <Students>${escapeXml(activity.groupId)}</Students>
-      <Duration>${periodCount(activity.durationInMinutes)}</Duration>
-      <Total_Duration>${periodCount(activity.durationInMinutes)}</Total_Duration>
-      <Id>${activity.id}</Id>
-      <Activity_Group_Id>0</Activity_Group_Id>
-      <Active>true</Active>
-      <Comments>${activity.source}</Comments>
-    </Activity>`).join("\n")}
-  </Activities_List>
-  <Buildings_List></Buildings_List>
-  <Rooms_List>
-${activeRoomIds.map((roomId) => `    <Room><Name>${escapeXml(roomId)}</Name><Building></Building><Capacity>0</Capacity><Virtual>false</Virtual><Comments>${escapeXml(roomsById.get(roomId)?.name ?? roomId)}</Comments></Room>`).join("\n")}
-  </Rooms_List>
-  <Time_Constraints_List>
-    <ConstraintBasicCompulsoryTime>
-      <Weight_Percentage>100</Weight_Percentage>
-      <Active>true</Active>
-      <Comments></Comments>
-    </ConstraintBasicCompulsoryTime>
-${activities.map(getActivityStartingTimesXml).join("\n")}
-${getTeacherNotAvailableXml(input).join("\n")}
-${getStudentGapConstraintsXml(Boolean(options.includeStudentGapConstraints))}
-  </Time_Constraints_List>
-  <Space_Constraints_List>
-    <ConstraintBasicCompulsorySpace>
-      <Weight_Percentage>100</Weight_Percentage>
-      <Active>true</Active>
-      <Comments></Comments>
-    </ConstraintBasicCompulsorySpace>
-${activities.map(getActivityRoomXml).filter((xml): xml is string => Boolean(xml)).join("\n")}
-  </Space_Constraints_List>
-</fet>
-`;
+  const builder = new XMLBuilder({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    format: true,
+    suppressEmptyNode: true,
+  });
+
+  const roomConstraints = activities
+    .map(getActivityRoomConstraints)
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
+  const fetObject = {
+    "?xml": { "@_version": "1.0", "@_encoding": "UTF-8" },
+    fet: {
+      "@_version": "6.25.0",
+      Mode: "Official",
+      Institution_Name: "ClassFlow",
+      Comments: "",
+      Days_List: {
+        Number_of_Days: FET_DAYS.length,
+        Day: FET_DAYS.map((day) => ({ Name: day.name })),
+      },
+      Hours_List: {
+        Number_of_Hours: hours.length,
+        Hour: hours.map((hour) => ({ Name: hour })),
+      },
+      Subjects_List: {
+        Subject: activeSubjectIds.map((subjectId) => ({
+          Name: subjectId,
+          Comments: subjectsById.get(subjectId)?.name ?? subjectId,
+        })),
+      },
+      Teachers_List: {
+        Teacher: activeTeacherIds.map((teacherId) => ({
+          Name: teacherId,
+          Target_Number_of_Hours: 0,
+          Qualified_Subjects: "",
+          Comments: "",
+        })),
+      },
+      Students_List: {
+        Year: getStudentsStructure(input, activeGroupIds),
+      },
+      Activities_List: {
+        Activity: activities.map((activity) => ({
+          Teacher: activity.teacherId ? [activity.teacherId] : undefined,
+          Subject: activity.subjectId,
+          Students: activity.groupId,
+          Duration: periodCount(activity.durationInMinutes),
+          Total_Duration: periodCount(activity.durationInMinutes),
+          Id: activity.id,
+          Activity_Group_Id: 0,
+          Active: true,
+          Comments: activity.source,
+        })),
+      },
+      Buildings_List: "",
+      Rooms_List: {
+        Room: activeRoomIds.map((roomId) => ({
+          Name: roomId,
+          Building: "",
+          Capacity: 0,
+          Virtual: false,
+          Comments: roomsById.get(roomId)?.name ?? roomId,
+        })),
+      },
+      Time_Constraints_List: {
+        ConstraintBasicCompulsoryTime: {
+          Weight_Percentage: 100,
+          Active: true,
+          Comments: "",
+        },
+        ConstraintActivityPreferredStartingTimes: activities.map(getActivityStartingTimes),
+        ConstraintTeacherNotAvailableTimes: getTeacherNotAvailableConstraints(input),
+        ...(options.includeStudentGapConstraints && FET_STUDENTS_MAX_GAPS_WEIGHT > 0
+          ? {
+              ConstraintStudentsMaxGapsPerWeek: {
+                Weight_Percentage: FET_STUDENTS_MAX_GAPS_WEIGHT,
+                Max_Gaps: FET_STUDENTS_MAX_GAPS_PER_WEEK,
+                Active: true,
+                Comments: "Soft preference: keep student days compact",
+              },
+            }
+          : {}),
+      },
+      Space_Constraints_List: {
+        ConstraintBasicCompulsorySpace: {
+          Weight_Percentage: 100,
+          Active: true,
+          Comments: "",
+        },
+        ...roomConstraints.reduce((acc, curr) => {
+          if ("ConstraintActivityPreferredRoom" in curr) {
+            acc.ConstraintActivityPreferredRoom = acc.ConstraintActivityPreferredRoom || [];
+            acc.ConstraintActivityPreferredRoom.push(curr.ConstraintActivityPreferredRoom);
+          } else {
+            acc.ConstraintActivityPreferredRooms = acc.ConstraintActivityPreferredRooms || [];
+            acc.ConstraintActivityPreferredRooms.push(curr.ConstraintActivityPreferredRooms);
+          }
+          return acc;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        }, {} as any),
+      },
+    },
+  };
+
+  return builder.build(fetObject);
 }

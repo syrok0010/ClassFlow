@@ -1,22 +1,9 @@
+import { XMLParser } from "fast-xml-parser";
 import { FET_DAYS } from "./env";
 import { minutesToFetHour } from "./fet-xml";
 import type { FetActivity, FetDayOfWeek, FetImportedActivity, FetTemplateRow } from "./types";
 
 const DAY_BY_NAME = new Map(FET_DAYS.map((day) => [day.name, day.dayOfWeek]));
-
-function decodeXml(value: string): string {
-  return value
-    .replaceAll("&apos;", "'")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&gt;", ">")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&amp;", "&");
-}
-
-function getTagValue(xml: string, tagName: string): string | null {
-  const match = xml.match(new RegExp(`<${tagName}>([\\s\\S]*?)</${tagName}>`));
-  return match ? decodeXml(match[1].trim()) : null;
-}
 
 function parseHour(hour: string): number {
   const [hours, minutes] = hour.split(":").map(Number);
@@ -28,29 +15,34 @@ function parseHour(hour: string): number {
 }
 
 export function importFetActivitiesXml(xml: string): FetImportedActivity[] {
-  const matches = xml.matchAll(/<Activity>([\s\S]*?)<\/Activity>/g);
+  const parser = new XMLParser({
+    ignoreAttributes: true,
+  });
+  const result = parser.parse(xml);
+
+  const rawActivities = result?.Activities_Timetable?.Activity;
+  if (!rawActivities) return [];
+
+  const activityList = Array.isArray(rawActivities) ? rawActivities : [rawActivities];
   const activities: FetImportedActivity[] = [];
 
-  for (const match of matches) {
-    const activityXml = match[1];
-    const idValue = getTagValue(activityXml, "Id") ?? getTagValue(activityXml, "Activity_Id");
-    const dayValue = getTagValue(activityXml, "Day");
-    const hourValue = getTagValue(activityXml, "Hour");
+  for (const raw of activityList) {
+    const idValue = raw.Id ?? raw.Activity_Id;
+    const dayValue = raw.Day;
+    const hourValue = raw.Hour;
 
-    if (!idValue || !dayValue || !hourValue) continue;
+    if (idValue === undefined || !dayValue || !hourValue) continue;
 
     const dayOfWeek = DAY_BY_NAME.get(dayValue);
     if (!dayOfWeek) {
       throw new Error(`FET вернул неизвестный день "${dayValue}"`);
     }
 
-    const roomId = getTagValue(activityXml, "Room");
-
     activities.push({
       activityId: Number(idValue),
       dayOfWeek,
       startTime: parseHour(hourValue),
-      roomId: roomId || null,
+      roomId: raw.Room || null,
     });
   }
 

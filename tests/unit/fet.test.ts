@@ -77,9 +77,9 @@ function createInput(overrides: Partial<FetInput> = {}): FetInput {
 
 function activityXml(ids: number[]): string {
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-  return `<Activities_List>
+  return `<Activities_Timetable>
 ${ids.map((id, index) => `<Activity><Id>${id}</Id><Day>${days[index % days.length]}</Day><Hour>08:30</Hour><Room>canteen</Room></Activity>`).join("\n")}
-</Activities_List>`;
+ </Activities_Timetable>`;
 }
 
 test("regime config lookup finds breakfast rule", () => {
