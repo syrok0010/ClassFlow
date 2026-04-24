@@ -76,12 +76,19 @@ export function mapWeeklyTemplateToAdminScheduleEvent(
     ? getUserFullName(entry.teacher.user) || MISSING_TEACHER_LABEL
     : MISSING_TEACHER_LABEL;
   const roomName = entry.room?.name ?? MISSING_ROOM_LABEL;
+  const detached = entry.startTime === 0 && entry.endTime === 1;
   const timeLabel = `${format(start, "HH:mm")}-${format(end, "HH:mm")}`;
 
   return {
     id: entry.id,
+    templateId: entry.id,
     start,
     end,
+    groupId: entry.group.id,
+    dayOfWeek: entry.dayOfWeek,
+    startMinutes: entry.startTime,
+    endMinutes: entry.endTime,
+    detached,
     subjectId: entry.subject.id,
     teacherId: entry.teacher?.id ?? null,
     roomId: entry.room?.id ?? null,
