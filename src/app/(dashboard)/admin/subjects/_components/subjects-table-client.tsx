@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQueryState } from "nuqs";
+import { useDebouncedQueryState } from "@/hooks/use-debounced-query-state";
 import { SubjectDeleteDialog } from "./subject-delete-dialog";
 import { SubjectsTable } from "./subjects-table";
 import { SubjectsToolbar } from "./subjects-toolbar";
@@ -27,6 +28,7 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
     defaultValue: "",
     shallow: true,
   });
+  const [searchInput, setSearchInput] = useDebouncedQueryState(searchQuery, setSearchQuery);
   const [filterType, setFilterType] = useQueryState("type", {
     defaultValue: "ALL",
     shallow: true,
@@ -92,10 +94,8 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
       </div>
 
       <SubjectsToolbar
-        searchQuery={searchQuery}
-        onSearchQueryChange={(value) => {
-          void setSearchQuery(value || null);
-        }}
+        searchQuery={searchInput}
+        onSearchQueryChange={setSearchInput}
         filterType={safeType as SubjectFilterType}
         onFilterTypeChange={(value) => {
           void setFilterType(value === "ALL" ? null : value);

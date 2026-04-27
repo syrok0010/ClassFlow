@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQueryState } from "nuqs";
+import { useDebouncedQueryState } from "@/hooks/use-debounced-query-state";
 import type { SubjectFilterType } from "@/lib/types";
 import { useTeacherSubjectsCrud } from "../hooks/use-teacher-subjects-crud";
 import { filterAndSortTeacherSubjects } from "../lib/teacher-subject-table-utils";
@@ -46,6 +47,7 @@ export function TeacherSubjectsEditor({
     defaultValue: "",
     shallow: true,
   });
+  const [searchInput, setSearchInput] = useDebouncedQueryState(searchQuery, setSearchQuery);
   const [filterType, setFilterType] = useQueryState("type", {
     defaultValue: "ALL",
     shallow: true,
@@ -77,10 +79,8 @@ export function TeacherSubjectsEditor({
       <TeacherSubjectsSummary summary={summary} />
 
       <TeacherSubjectsToolbar
-        searchQuery={searchQuery}
-        onSearchQueryChange={(value) => {
-          void setSearchQuery(value || null);
-        }}
+        searchQuery={searchInput}
+        onSearchQueryChange={setSearchInput}
         filterType={safeFilterType}
         onFilterTypeChange={(value) => {
           void setFilterType(value === "ALL" ? null : value);

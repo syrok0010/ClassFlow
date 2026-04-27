@@ -21,6 +21,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
+import { useDebouncedQueryState } from "@/hooks/use-debounced-query-state";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -44,6 +45,7 @@ export function RoomsTableView() {
   const { buildings } = useRoomsData();
 
   const [search, setSearch] = useQueryState("search", { defaultValue: "", shallow: true });
+  const [searchInput, setSearchInput] = useDebouncedQueryState(search, setSearch);
   const [capacityFilter, setCapacityFilter] = useQueryState("capacity", { defaultValue: "", shallow: true });
   const [sorting, setSorting] = useState<SortingState>([]);
   const [smartRowActive, setSmartRowActive] = useState(false);
@@ -157,8 +159,8 @@ export function RoomsTableView() {
         <div className="relative min-w-60 flex-1 max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Поиск кабинета..."
             className="pl-9"
           />

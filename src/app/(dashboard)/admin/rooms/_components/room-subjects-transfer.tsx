@@ -13,6 +13,7 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Inbox, Minus, Plus, Search } from "lucide-react";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -90,6 +91,7 @@ export function RoomSubjectsTransfer({
 }: RoomSubjectsTransferProps) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [debouncedSearch] = useDebouncedValue(search, { wait: 350 });
   const [localSelected, setLocalSelected] = useState<string[]>(selectedSubjectIds);
 
   useEffect(() => {
@@ -99,10 +101,10 @@ export function RoomSubjectsTransfer({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const filteredSubjects = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = debouncedSearch.trim().toLowerCase();
     if (!needle) return allSubjects;
     return allSubjects.filter((subject) => subject.name.toLowerCase().includes(needle));
-  }, [allSubjects, search]);
+  }, [allSubjects, debouncedSearch]);
 
   const mutation = useMutation({
     mutationFn: async (nextSubjectIds: string[]) => {
