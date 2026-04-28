@@ -7,39 +7,42 @@ import { err, ok, type Result } from "@/lib/result";
 import { getActionErrorMessage } from "@/lib/action-error";
 import { requireTeacherActor } from "@/lib/server-action-auth";
 import {
-  createTeacherAvailabilityOverrideActionSchema,
-  deleteTeacherAvailabilityOverrideActionSchema,
-  updateTeacherAvailabilityOverrideActionSchema,
-  upsertTeacherAvailabilityActionSchema,
-  type CreateTeacherAvailabilityOverrideActionInput,
-  type DeleteTeacherAvailabilityOverrideActionInput,
-  type UpdateTeacherAvailabilityOverrideActionInput,
-  type UpsertTeacherAvailabilityActionInput,
-} from "../_lib/schemas";
-import type { TeacherAvailabilityPageData } from "../_lib/types";
-import { getTeacherAvailabilityPageData } from "../_lib/get-teacher-availability-page-data";
+  type CreateTeacherAvailabilityOverrideInput,
+  type UpdateTeacherAvailabilityOverrideInput,
+  createTeacherAvailabilityOverrideSchema,
+  deleteTeacherAvailabilityOverrideSchema,
+  updateTeacherAvailabilityOverrideSchema,
+  teacherAvailabilityEntrySchema,
+} from "@/features/availability/lib/schemas";
+import { getTeacherAvailabilityPageData } from "@/features/availability/lib/page-data";
 import { normalizeTemplateEntries } from "@/features/availability/lib/utils";
 
 const TEACHER_AVAILABILITY_PATH = "/teacher/availability";
 
 export async function getTeacherAvailabilityAction(
   weekStart: Date,
-): Promise<Result<TeacherAvailabilityPageData>> {
+): Promise<Result<Awaited<ReturnType<typeof getTeacherAvailabilityPageData>>>> {
   try {
+    const actor = await requireTeacherActor();
     const normalizedWeekStart = startOfWeek(weekStart, { weekStartsOn: 1 });
-    return ok(await getTeacherAvailabilityPageData(normalizedWeekStart));
+    return ok(await getTeacherAvailabilityPageData(normalizedWeekStart, actor.teacherId));
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось загрузить вашу доступность"));
   }
 }
 
-export async function upsertTeacherAvailabilityAction(
-  input: UpsertTeacherAvailabilityActionInput,
-): Promise<Result<TeacherAvailabilityPageData>> {
+export async function upsertTeacherAvailabilityAction(input: {
+  entries: Array<{
+    dayOfWeek: number;
+    startTime: number;
+    endTime: number;
+    type: "PREFERRED" | "AVAILABLE" | "UNAVAILABLE";
+  }>;
+}): Promise<Result<Awaited<ReturnType<typeof getTeacherAvailabilityPageData>>>> {
   try {
     const actor = await requireTeacherActor();
-    const validated = upsertTeacherAvailabilityActionSchema.parse(input);
-    const normalizedEntries = normalizeTemplateEntries(validated.entries);
+    const validatedEntries = input.entries.map((entry) => teacherAvailabilityEntrySchema.parse(entry));
+    const normalizedEntries = normalizeTemplateEntries(validatedEntries);
 
     await prisma.$transaction(async (tx) => {
       await tx.teacherAvailability.deleteMany({
@@ -60,18 +63,23 @@ export async function upsertTeacherAvailabilityAction(
     });
 
     revalidatePath(TEACHER_AVAILABILITY_PATH);
-    return ok(await getTeacherAvailabilityPageData(startOfWeek(new Date(), { weekStartsOn: 1 })));
+    return ok(
+      await getTeacherAvailabilityPageData(startOfWeek(new Date(), { weekStartsOn: 1 }), actor.teacherId),
+    );
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось сохранить недельный шаблон"));
   }
 }
 
 export async function createTeacherAvailabilityOverrideAction(
-  input: CreateTeacherAvailabilityOverrideActionInput,
-): Promise<Result<TeacherAvailabilityPageData>> {
+  input: Pick<CreateTeacherAvailabilityOverrideInput, "startTime" | "endTime" | "type">,
+): Promise<Result<Awaited<ReturnType<typeof getTeacherAvailabilityPageData>>>> {
   try {
     const actor = await requireTeacherActor();
-    const validated = createTeacherAvailabilityOverrideActionSchema.parse(input);
+    const validated = createTeacherAvailabilityOverrideSchema.parse({
+      ...input,
+      teacherId: actor.teacherId,
+    });
 
     await prisma.teacherAvailabilityOverride.create({
       data: {
@@ -83,18 +91,23 @@ export async function createTeacherAvailabilityOverrideAction(
     });
 
     revalidatePath(TEACHER_AVAILABILITY_PATH);
-    return ok(await getTeacherAvailabilityPageData(startOfWeek(new Date(), { weekStartsOn: 1 })));
+    return ok(
+      await getTeacherAvailabilityPageData(startOfWeek(new Date(), { weekStartsOn: 1 }), actor.teacherId),
+    );
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось создать исключение"));
   }
 }
 
 export async function updateTeacherAvailabilityOverrideAction(
-  input: UpdateTeacherAvailabilityOverrideActionInput,
-): Promise<Result<TeacherAvailabilityPageData>> {
+  input: Pick<UpdateTeacherAvailabilityOverrideInput, "overrideId" | "startTime" | "endTime" | "type">,
+): Promise<Result<Awaited<ReturnType<typeof getTeacherAvailabilityPageData>>>> {
   try {
     const actor = await requireTeacherActor();
-    const validated = updateTeacherAvailabilityOverrideActionSchema.parse(input);
+    const validated = updateTeacherAvailabilityOverrideSchema.parse({
+      ...input,
+      teacherId: actor.teacherId,
+    });
 
     const existing = await prisma.teacherAvailabilityOverride.findUnique({
       where: { id: validated.overrideId },
@@ -115,18 +128,23 @@ export async function updateTeacherAvailabilityOverrideAction(
     });
 
     revalidatePath(TEACHER_AVAILABILITY_PATH);
-    return ok(await getTeacherAvailabilityPageData(startOfWeek(new Date(), { weekStartsOn: 1 })));
+    return ok(
+      await getTeacherAvailabilityPageData(startOfWeek(new Date(), { weekStartsOn: 1 }), actor.teacherId),
+    );
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось обновить исключение"));
   }
 }
 
 export async function deleteTeacherAvailabilityOverrideAction(
-  input: DeleteTeacherAvailabilityOverrideActionInput,
-): Promise<Result<TeacherAvailabilityPageData>> {
+  input: { overrideId: string },
+): Promise<Result<Awaited<ReturnType<typeof getTeacherAvailabilityPageData>>>> {
   try {
     const actor = await requireTeacherActor();
-    const validated = deleteTeacherAvailabilityOverrideActionSchema.parse(input);
+    const validated = deleteTeacherAvailabilityOverrideSchema.parse({
+      ...input,
+      teacherId: actor.teacherId,
+    });
 
     const existing = await prisma.teacherAvailabilityOverride.findUnique({
       where: { id: validated.overrideId },
@@ -142,7 +160,9 @@ export async function deleteTeacherAvailabilityOverrideAction(
     });
 
     revalidatePath(TEACHER_AVAILABILITY_PATH);
-    return ok(await getTeacherAvailabilityPageData(startOfWeek(new Date(), { weekStartsOn: 1 })));
+    return ok(
+      await getTeacherAvailabilityPageData(startOfWeek(new Date(), { weekStartsOn: 1 }), actor.teacherId),
+    );
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось удалить исключение"));
   }

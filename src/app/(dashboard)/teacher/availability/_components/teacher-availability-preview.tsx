@@ -16,10 +16,10 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import type {
-  TeacherAvailabilityEntry,
-  TeacherAvailabilityOverride,
-  TeacherAvailabilitySelf,
-} from "../_lib/types";
+  AvailabilityOverrideEntry,
+  AvailabilityTemplateEntry,
+  AvailabilityTeacher,
+} from "@/features/availability/lib/types";
 import {
   AvailabilityTimelineCanvas,
   AvailabilityTimelineRow,
@@ -37,11 +37,11 @@ import {
 } from "@/features/availability/lib/utils";
 
 type TeacherAvailabilityPreviewProps = {
-  teacher: TeacherAvailabilitySelf;
+  teacher: AvailabilityTeacher;
   weekStart: Date;
   selectedOverrideId: string | null;
-  onOpenTemplateEditAction: (entry: TeacherAvailabilityEntry) => void;
-  onOpenOverrideEditAction: (entry: TeacherAvailabilityOverride) => void;
+  onOpenTemplateEditAction: (entry: AvailabilityTemplateEntry) => void;
+  onOpenOverrideEditAction: (entry: AvailabilityOverrideEntry) => void;
 };
 
 export function TeacherAvailabilityPreview({
@@ -176,13 +176,9 @@ export function TeacherAvailabilityPreview({
                 <div
                   className="absolute top-2 z-10 flex gap-2"
                   style={{
-                    left: `${Math.min(
-                      78,
-                      Math.max(2, minuteToTimelinePercent(hovered.minute) - 10),
-                    )}%`,
+                    left: `${Math.min(78, Math.max(2, minuteToTimelinePercent(hovered.minute) - 10))}%`,
                   }}
-                >
-                </div>
+                />
               ) : null}
             </AvailabilityTimelineCanvas>
           </AvailabilityTimelineRow>

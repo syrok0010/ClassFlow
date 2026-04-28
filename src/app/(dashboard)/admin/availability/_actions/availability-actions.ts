@@ -1,11 +1,10 @@
 "use server";
 
-import { addDays, startOfWeek } from "date-fns";
+import { startOfWeek } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getUserFullName } from "@/lib/auth-access";
 import { getActionErrorMessage } from "@/lib/action-error";
 import { prisma } from "@/lib/prisma";
 import { err, ok, type Result } from "@/lib/result";
@@ -14,15 +13,10 @@ import {
   deleteTeacherAvailabilityOverrideSchema,
   updateTeacherAvailabilityOverrideSchema,
   upsertTeacherAvailabilitySchema,
-  type CreateTeacherAvailabilityOverrideInput,
-  type DeleteTeacherAvailabilityOverrideInput,
-  type UpdateTeacherAvailabilityOverrideInput,
-  type UpsertTeacherAvailabilityInput,
-} from "../_lib/schemas";
-import type { AdminAvailabilityWeekData } from "../_lib/types";
-import {
-  normalizeTemplateEntries,
-} from "../_lib/utils";
+} from "@/features/availability/lib/schemas";
+import type { AvailabilityWeekData } from "@/features/availability/lib/types";
+import { getAdminAvailabilityWeekData } from "@/features/availability/lib/page-data";
+import { normalizeTemplateEntries } from "@/features/availability/lib/utils";
 
 const ADMIN_AVAILABILITY_PATH = "/admin/availability";
 
@@ -34,82 +28,22 @@ async function ensureAdminAccess(): Promise<void> {
   }
 }
 
-async function getWeekData(weekStart: Date): Promise<AdminAvailabilityWeekData> {
-  const teachers = await prisma.teacher.findMany({
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          surname: true,
-          name: true,
-          patronymicName: true,
-        },
-      },
-      teacherAvailabilities: {
-        select: {
-          id: true,
-          dayOfWeek: true,
-          startTime: true,
-          endTime: true,
-          type: true,
-        },
-        orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
-      },
-      teacherAvailabilityOverrides: {
-        select: {
-          id: true,
-          startTime: true,
-          endTime: true,
-          type: true,
-        },
-        orderBy: [{ startTime: "asc" }],
-      },
-    },
-    orderBy: [{ user: { surname: "asc" } }, { user: { name: "asc" } }],
-  });
-
-  return {
-    weekStart,
-    weekEnd: addDays(weekStart, 7),
-    teachers: teachers.map((teacher) => ({
-      teacherId: teacher.id,
-      userId: teacher.user.id,
-      fullName: getUserFullName(teacher.user) || teacher.user.email || "Без имени",
-      email: teacher.user.email,
-      templateEntries: teacher.teacherAvailabilities.map((entry) => ({
-        id: entry.id,
-        dayOfWeek: entry.dayOfWeek,
-        startTime: entry.startTime,
-        endTime: entry.endTime,
-        type: entry.type,
-      })),
-      overrides: teacher.teacherAvailabilityOverrides.map((entry) => ({
-        id: entry.id,
-        startTime: entry.startTime,
-        endTime: entry.endTime,
-        type: entry.type,
-      })),
-    })),
-  };
-}
-
 export async function getAdminAvailabilityWeekDataAction(
   weekStart: Date,
-): Promise<Result<AdminAvailabilityWeekData>> {
+): Promise<Result<AvailabilityWeekData>> {
   await ensureAdminAccess();
 
   try {
     const normalizedWeekStart = startOfWeek(weekStart, { weekStartsOn: 1 });
-    return ok(await getWeekData(normalizedWeekStart));
+    return ok(await getAdminAvailabilityWeekData(normalizedWeekStart));
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось загрузить матрицу доступности"));
   }
 }
 
 export async function upsertTeacherAvailabilityAction(
-  input: UpsertTeacherAvailabilityInput,
-): Promise<Result<AdminAvailabilityWeekData>> {
+  input: Parameters<typeof upsertTeacherAvailabilitySchema.parse>[0],
+): Promise<Result<AvailabilityWeekData>> {
   await ensureAdminAccess();
 
   try {
@@ -145,17 +79,15 @@ export async function upsertTeacherAvailabilityAction(
     });
 
     revalidatePath(ADMIN_AVAILABILITY_PATH);
-    return ok(
-      await getWeekData(startOfWeek(new Date(), { weekStartsOn: 1 })),
-    );
+    return ok(await getAdminAvailabilityWeekData(startOfWeek(new Date(), { weekStartsOn: 1 })));
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось сохранить недельный шаблон"));
   }
 }
 
 export async function createTeacherAvailabilityOverrideAction(
-  input: CreateTeacherAvailabilityOverrideInput,
-): Promise<Result<AdminAvailabilityWeekData>> {
+  input: Parameters<typeof createTeacherAvailabilityOverrideSchema.parse>[0],
+): Promise<Result<AvailabilityWeekData>> {
   await ensureAdminAccess();
 
   try {
@@ -171,17 +103,15 @@ export async function createTeacherAvailabilityOverrideAction(
     });
 
     revalidatePath(ADMIN_AVAILABILITY_PATH);
-    return ok(
-      await getWeekData(startOfWeek(new Date(), { weekStartsOn: 1 })),
-    );
+    return ok(await getAdminAvailabilityWeekData(startOfWeek(new Date(), { weekStartsOn: 1 })));
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось создать исключение"));
   }
 }
 
 export async function updateTeacherAvailabilityOverrideAction(
-  input: UpdateTeacherAvailabilityOverrideInput,
-): Promise<Result<AdminAvailabilityWeekData>> {
+  input: Parameters<typeof updateTeacherAvailabilityOverrideSchema.parse>[0],
+): Promise<Result<AvailabilityWeekData>> {
   await ensureAdminAccess();
 
   try {
@@ -206,17 +136,15 @@ export async function updateTeacherAvailabilityOverrideAction(
     });
 
     revalidatePath(ADMIN_AVAILABILITY_PATH);
-    return ok(
-      await getWeekData(startOfWeek(new Date(), { weekStartsOn: 1 })),
-    );
+    return ok(await getAdminAvailabilityWeekData(startOfWeek(new Date(), { weekStartsOn: 1 })));
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось обновить исключение"));
   }
 }
 
 export async function deleteTeacherAvailabilityOverrideAction(
-  input: DeleteTeacherAvailabilityOverrideInput,
-): Promise<Result<AdminAvailabilityWeekData>> {
+  input: Parameters<typeof deleteTeacherAvailabilityOverrideSchema.parse>[0],
+): Promise<Result<AvailabilityWeekData>> {
   await ensureAdminAccess();
 
   try {
@@ -236,9 +164,7 @@ export async function deleteTeacherAvailabilityOverrideAction(
     });
 
     revalidatePath(ADMIN_AVAILABILITY_PATH);
-    return ok(
-      await getWeekData(startOfWeek(new Date(), { weekStartsOn: 1 })),
-    );
+    return ok(await getAdminAvailabilityWeekData(startOfWeek(new Date(), { weekStartsOn: 1 })));
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось удалить исключение"));
   }

@@ -1,7 +1,7 @@
 import {
   AVAILABILITY_TYPE_LABELS,
   type TeacherMinuteState,
-} from "../_lib/utils";
+} from "@/features/availability/lib/utils";
 
 type SingleTeacherTooltipContentProps = {
   dayLabel: string;

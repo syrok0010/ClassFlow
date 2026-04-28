@@ -1,7 +1,5 @@
-"use client";
-
-import { addMinutes, format, parseISO } from "date-fns";
 import { useState } from "react";
+import { format } from "date-fns";
 import { useForm } from "@tanstack/react-form";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,58 +21,63 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getFieldErrorMessages } from "@/lib/form-errors";
-import type {
-  CreateTeacherAvailabilityOverrideInput,
-  UpdateTeacherAvailabilityOverrideInput,
-  TeacherAvailabilityOverrideFormInput,
-} from "../_lib/schemas";
-import { teacherAvailabilityOverrideFormSchema } from "../_lib/schemas";
-import type { AvailabilityOverrideEntry, AvailabilityTeacher } from "../_lib/types";
-import { AVAILABILITY_TYPE_LABELS, minutesToTime } from "../_lib/utils";
+import {
+  mapOverrideEditorToActionInput,
+  teacherAvailabilityOverrideEditorSchema,
+  type TeacherAvailabilityOverrideEditorInput,
+  type CreateTeacherAvailabilityOverrideInput,
+  type UpdateTeacherAvailabilityOverrideInput,
+} from "@/features/availability/lib/schemas";
+import type { AvailabilityOverrideEntry } from "@/features/availability/lib/types";
+import { AVAILABILITY_TYPE_LABELS, minutesToTime } from "@/features/availability/lib/utils";
 
-type OverrideEntryDialogProps = {
-  open: boolean;
-  teacher: AvailabilityTeacher;
-  entry: AvailabilityOverrideEntry | null;
-  isSaving: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCreate: (payload: CreateTeacherAvailabilityOverrideInput) => Promise<boolean>;
-  onUpdate: (payload: UpdateTeacherAvailabilityOverrideInput) => Promise<boolean>;
-};
-
-export function OverrideEntryDialog({
+export function OverrideEntryFormDialog({
   open,
-  teacher,
+  teacherName,
   entry,
+  initialValues,
   isSaving,
   onOpenChange,
   onCreate,
   onUpdate,
-}: OverrideEntryDialogProps) {
+}: {
+  open: boolean;
+  teacherName: string;
+  entry: AvailabilityOverrideEntry | null;
+  initialValues?: { date?: Date; startTime?: number; endTime?: number };
+  isSaving: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreate: (
+    payload: Pick<CreateTeacherAvailabilityOverrideInput, "startTime" | "endTime" | "type">,
+  ) => Promise<boolean>;
+  onUpdate: (
+    payload: Pick<UpdateTeacherAvailabilityOverrideInput, "overrideId" | "startTime" | "endTime" | "type">,
+  ) => Promise<boolean>;
+}) {
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const initialDate = entry?.startTime ?? initialValues?.date ?? new Date();
+  const initialEndDate = entry?.endTime ?? initialValues?.date ?? new Date();
+  const initialStartTime = entry
+    ? entry.startTime.getHours() * 60 + entry.startTime.getMinutes()
+    : initialValues?.startTime ?? 8 * 60;
+  const initialEndTime = entry
+    ? entry.endTime.getHours() * 60 + entry.endTime.getMinutes()
+    : initialValues?.endTime ?? 9 * 60;
   const form = useForm({
     defaultValues: {
-      teacherId: teacher.teacherId,
-      startDate: format(entry?.startTime ?? new Date(), "yyyy-MM-dd"),
-      endDate: format(entry?.endTime ?? new Date(), "yyyy-MM-dd"),
-      startTime: entry ? entry.startTime.getHours() * 60 + entry.startTime.getMinutes() : 8 * 60,
-      endTime: entry ? entry.endTime.getHours() * 60 + entry.endTime.getMinutes() : 9 * 60,
+      startDate: format(initialDate, "yyyy-MM-dd"),
+      endDate: format(initialEndDate, "yyyy-MM-dd"),
+      startTime: initialStartTime,
+      endTime: initialEndTime,
       type: entry?.type ?? "UNAVAILABLE",
-    } satisfies TeacherAvailabilityOverrideFormInput,
+    } satisfies TeacherAvailabilityOverrideEditorInput,
     validators: {
-      onChange: teacherAvailabilityOverrideFormSchema,
-      onSubmit: teacherAvailabilityOverrideFormSchema,
+      onChange: teacherAvailabilityOverrideEditorSchema,
+      onSubmit: teacherAvailabilityOverrideEditorSchema,
     },
     onSubmit: async ({ value }) => {
       setSubmitError(null);
-
-      const payload = {
-        teacherId: value.teacherId,
-        type: value.type,
-        startTime: addMinutes(parseISO(value.startDate), value.startTime),
-        endTime: addMinutes(parseISO(value.endDate), value.endTime),
-      };
-
+      const payload = mapOverrideEditorToActionInput(value);
       const success = entry
         ? await onUpdate({ ...payload, overrideId: entry.id })
         : await onCreate(payload);
@@ -98,7 +101,7 @@ export function OverrideEntryDialog({
           <DialogHeader>
             <DialogTitle>{entry ? "Изменить исключение" : "Добавить исключение"}</DialogTitle>
             <DialogDescription>
-              {teacher.fullName}. Исключение перекроет недельный шаблон в указанном диапазоне дат и
+              {teacherName}. Исключение перекроет недельный шаблон в указанном диапазоне дат и
               времени.
             </DialogDescription>
           </DialogHeader>
@@ -197,19 +200,17 @@ export function OverrideEntryDialog({
                     <Select
                       value={field.state.value}
                       onValueChange={(value) => {
-                        field.handleChange(value as TeacherAvailabilityOverrideFormInput["type"]);
+                        field.handleChange(value as TeacherAvailabilityOverrideEditorInput["type"]);
                         field.handleBlur();
                       }}
                     >
-                    <SelectTrigger
-                      id="override-type"
-                      className="w-full"
-                      aria-invalid={errors.length > 0 || undefined}
-                    >
-                      <SelectValue>
-                        {AVAILABILITY_TYPE_LABELS[field.state.value]}
-                      </SelectValue>
-                    </SelectTrigger>
+                      <SelectTrigger
+                        id="override-type"
+                        className="w-full"
+                        aria-invalid={errors.length > 0 || undefined}
+                      >
+                        <SelectValue>{AVAILABILITY_TYPE_LABELS[field.state.value]}</SelectValue>
+                      </SelectTrigger>
                       <SelectContent align="start">
                         <SelectGroup>
                           {Object.entries(AVAILABILITY_TYPE_LABELS).map(([value, label]) => (

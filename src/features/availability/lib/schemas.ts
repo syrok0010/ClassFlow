@@ -1,4 +1,4 @@
-import { addMinutes, parse } from "date-fns";
+import { addMinutes, parse, parseISO } from "date-fns";
 import { z } from "zod/v4";
 
 const isoDateSchema = z
@@ -66,6 +66,48 @@ export const deleteTeacherAvailabilityOverrideSchema = z.object({
   overrideId: z.string().min(1, "Не найдено исключение"),
 });
 
+export const teacherAvailabilityTemplateEditorSchema = z
+  .object({
+    dayOfWeek: z.number().int().min(1).max(7),
+    startTime: z.number().int().min(0).max(1439),
+    endTime: z.number().int().min(0).max(1440),
+    type: z.enum(["PREFERRED", "AVAILABLE", "UNAVAILABLE", "ERASE"]),
+  })
+  .refine((value) => value.startTime < value.endTime, {
+    message: "Время окончания должно быть позже времени начала",
+    path: ["endTime"],
+  });
+
+export const teacherAvailabilityOverrideEditorSchema = z
+  .object({
+    startDate: isoDateSchema,
+    startTime: z.number().int().min(0).max(1439),
+    endDate: isoDateSchema,
+    endTime: z.number().int().min(0).max(1440),
+    type: availabilityTypeSchema,
+  })
+  .refine(
+    (value) => {
+      const start = addMinutes(parse(value.startDate, "yyyy-MM-dd", new Date()), value.startTime);
+      const end = addMinutes(parse(value.endDate, "yyyy-MM-dd", new Date()), value.endTime);
+      return start < end;
+    },
+    {
+      message: "Окончание исключения должно быть позже начала",
+      path: ["endTime"],
+    },
+  );
+
+export function mapOverrideEditorToActionInput(
+  value: TeacherAvailabilityOverrideEditorInput,
+): Pick<CreateTeacherAvailabilityOverrideInput, "startTime" | "endTime" | "type"> {
+  return {
+    startTime: addMinutes(parseISO(value.startDate), value.startTime),
+    endTime: addMinutes(parseISO(value.endDate), value.endTime),
+    type: value.type,
+  };
+}
+
 export type TeacherAvailabilityEntryInput = z.infer<typeof teacherAvailabilityEntrySchema>;
 export type UpsertTeacherAvailabilityInput = z.infer<typeof upsertTeacherAvailabilitySchema>;
 export type TeacherAvailabilityOverrideFormInput = z.infer<
@@ -79,4 +121,10 @@ export type UpdateTeacherAvailabilityOverrideInput = z.infer<
 >;
 export type DeleteTeacherAvailabilityOverrideInput = z.infer<
   typeof deleteTeacherAvailabilityOverrideSchema
+>;
+export type TeacherAvailabilityTemplateEditorInput = z.infer<
+  typeof teacherAvailabilityTemplateEditorSchema
+>;
+export type TeacherAvailabilityOverrideEditorInput = z.infer<
+  typeof teacherAvailabilityOverrideEditorSchema
 >;

@@ -6,7 +6,7 @@ import type {
   AvailabilityOverrideEntry,
   AvailabilityTeacher,
   AvailabilityTemplateEntry,
-} from "../_lib/types";
+} from "@/features/availability/lib/types";
 import { filterTeachers } from "../_components/availability-view-helpers";
 
 export type TemplateDialogState = {

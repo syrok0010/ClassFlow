@@ -3,31 +3,37 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { getWeekRangeLabel } from "@/features/availability/lib/utils";
 
-type TeacherAvailabilityToolbarProps = {
-  weekStart: Date;
-  isWeekLoading: boolean;
-  onPreviousWeek: () => void;
-  onNextWeek: () => void;
-};
-
-export function TeacherAvailabilityToolbar({
+export function AvailabilityWeekToolbar({
   weekStart,
   isWeekLoading,
   onPreviousWeek,
   onNextWeek,
-}: TeacherAvailabilityToolbarProps) {
+  previousButtonTestId,
+  nextButtonTestId,
+  labelMinWidthClassName = "min-w-52",
+  className = "flex flex-wrap items-center justify-center gap-3",
+}: {
+  weekStart: Date;
+  isWeekLoading: boolean;
+  onPreviousWeek: () => void;
+  onNextWeek: () => void;
+  previousButtonTestId?: string;
+  nextButtonTestId?: string;
+  labelMinWidthClassName?: string;
+  className?: string;
+}) {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-3">
+    <div className={className}>
       <Button
         variant="outline"
         size="icon-sm"
         onClick={onPreviousWeek}
         disabled={isWeekLoading}
-        data-testid="teacher-availability-prev-week"
+        data-testid={previousButtonTestId}
       >
         <ChevronLeft />
       </Button>
-      <div className="relative min-w-56">
+      <div className={`relative ${labelMinWidthClassName}`}>
         <div className="rounded-lg border bg-background px-3 py-2 text-center text-base font-medium">
           {getWeekRangeLabel(weekStart)}
         </div>
@@ -42,7 +48,7 @@ export function TeacherAvailabilityToolbar({
         size="icon-sm"
         onClick={onNextWeek}
         disabled={isWeekLoading}
-        data-testid="teacher-availability-next-week"
+        data-testid={nextButtonTestId}
       >
         <ChevronRight />
       </Button>

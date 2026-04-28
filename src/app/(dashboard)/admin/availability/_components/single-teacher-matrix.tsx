@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { AvailabilityTeacher } from "../_lib/types";
+import type { AvailabilityTeacher } from "@/features/availability/lib/types";
 import {
   AVAILABILITY_TYPE_LABELS,
   DAY_CONFIG,
@@ -18,7 +18,7 @@ import {
   getTeacherMinuteState,
   minuteToTimelinePercent,
   minutesToTime,
-} from "../_lib/utils";
+} from "@/features/availability/lib/utils";
 import {
   AvailabilityTimelineCanvas,
   AvailabilityTimelineRow,
