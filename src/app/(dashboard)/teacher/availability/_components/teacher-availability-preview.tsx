@@ -78,7 +78,7 @@ export function TeacherAvailabilityPreview({
       <CardHeader className="border-b">
         <CardTitle>Превью недели</CardTitle>
         <CardDescription>
-          Сначала показывается базовый шаблон, затем исключения поверх него. Наведите на слот,
+          Сначала показывается базовый шаблон, затем исключения поверх него. Нажмите на слот,
           чтобы быстро его изменить.
         </CardDescription>
       </CardHeader>
