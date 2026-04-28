@@ -105,7 +105,7 @@ export function AvailabilityOverridesList({
                       {AVAILABILITY_TYPE_LABELS[entry.type]}
                     </Badge>
                     {weekOverrideIds.has(entry.id) ? (
-                      <Badge variant="outline">РўРµРєСѓС‰Р°СЏ РЅРµРґРµР»СЏ</Badge>
+                      <Badge variant="outline">Текущая неделя</Badge>
                     ) : null}
                   </div>
                   <p className="font-medium text-foreground">

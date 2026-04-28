@@ -79,7 +79,7 @@ export function TeacherAvailabilityPreview({
         <CardTitle>Превью недели</CardTitle>
         <CardDescription>
           Сначала показывается базовый шаблон, затем исключения поверх него. Наведите на слот,
-          чтобы быстро добавить доступность или override.
+          чтобы быстро его изменить.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">

@@ -77,10 +77,10 @@ export function TeacherAvailabilityOverridesPanel({
         <CardHeader className="border-b">
           <CardTitle>Исключения</CardTitle>
           <CardDescription>
-            Разовые изменения поверх шаблона. В списке показана вся история override.
+            Разовые изменения поверх шаблона.
           </CardDescription>
           <CardAction>
-            <Button variant="default" size="sm" disabled={isSaving} onClick={onOpenCreate}>
+            <Button variant="default" size="xs" disabled={isSaving} onClick={onOpenCreate}>
               <Plus data-icon="inline-start" />
               Добавить исключение
             </Button>
