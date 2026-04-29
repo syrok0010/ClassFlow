@@ -26,7 +26,14 @@ import type {
 } from "@/features/availability/lib/schemas";
 import { teacherAvailabilityTemplateEditorSchema } from "@/features/availability/lib/schemas";
 import type { AvailabilityTemplateEntry } from "@/features/availability/lib/types";
-import { AVAILABILITY_TYPE_LABELS, DAY_CONFIG, minutesToTime } from "@/features/availability/lib/utils";
+import {
+  AVAILABILITY_TYPE_LABELS,
+  DAY_CONFIG,
+  getAvailabilityTimeFieldError,
+  getMinutesFromTimeInput,
+  getTimeInputValue,
+  hasAvailabilityTimeErrors,
+} from "@/features/availability/lib/utils";
 
 const DAY_LABELS_BY_VALUE = new Map(DAY_CONFIG.map((day) => [String(day.dayOfWeek), day.label]));
 
@@ -69,6 +76,11 @@ export function TemplateEntryFormDialog({
     },
     onSubmit: async ({ value }) => {
       setSubmitError(null);
+
+      if (hasAvailabilityTimeErrors(value)) {
+        return;
+      }
+
       const success = await onSubmit(value, entry?.id);
 
       if (!success) {
@@ -143,43 +155,57 @@ export function TemplateEntryFormDialog({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <form.Field name="startTime">
-                {(field) => {
-                  const errors = getFieldErrorMessages(field);
-                  return (
-                    <Field data-invalid={errors.length > 0}>
-                      <FieldLabel htmlFor="template-start-time">Начало</FieldLabel>
-                      <Input
-                        id="template-start-time"
-                        type="time"
-                        value={minutesToTime(field.state.value)}
-                        aria-invalid={errors.length > 0 || undefined}
-                        onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
-                      />
-                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                    </Field>
-                  );
-                }}
+                {(field) => (
+                  <form.Subscribe selector={(state) => state.values}>
+                    {(values) => {
+                      const error = getAvailabilityTimeFieldError("startTime", values);
+
+                      return (
+                        <Field data-invalid={Boolean(error)}>
+                          <FieldLabel htmlFor="template-start-time">Начало</FieldLabel>
+                          <Input
+                            id="template-start-time"
+                            type="time"
+                            value={getTimeInputValue(field.state.value)}
+                            aria-invalid={Boolean(error) || undefined}
+                            onBlur={field.handleBlur}
+                            onChange={(event) =>
+                              field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
+                            }
+                          />
+                          {error ? <FieldError>{error}</FieldError> : null}
+                        </Field>
+                      );
+                    }}
+                  </form.Subscribe>
+                )}
               </form.Field>
 
               <form.Field name="endTime">
-                {(field) => {
-                  const errors = getFieldErrorMessages(field);
-                  return (
-                    <Field data-invalid={errors.length > 0}>
-                      <FieldLabel htmlFor="template-end-time">Окончание</FieldLabel>
-                      <Input
-                        id="template-end-time"
-                        type="time"
-                        value={minutesToTime(field.state.value)}
-                        aria-invalid={errors.length > 0 || undefined}
-                        onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
-                      />
-                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                    </Field>
-                  );
-                }}
+                {(field) => (
+                  <form.Subscribe selector={(state) => state.values}>
+                    {(values) => {
+                      const error = getAvailabilityTimeFieldError("endTime", values);
+
+                      return (
+                        <Field data-invalid={Boolean(error)}>
+                          <FieldLabel htmlFor="template-end-time">Окончание</FieldLabel>
+                          <Input
+                            id="template-end-time"
+                            type="time"
+                            value={getTimeInputValue(field.state.value)}
+                            aria-invalid={Boolean(error) || undefined}
+                            onBlur={field.handleBlur}
+                            onChange={(event) =>
+                              field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
+                            }
+                          />
+                          {error ? <FieldError>{error}</FieldError> : null}
+                        </Field>
+                      );
+                    }}
+                  </form.Subscribe>
+                )}
               </form.Field>
             </div>
 
@@ -236,10 +262,11 @@ export function TemplateEntryFormDialog({
               selector={(state) => ({
                 canSubmit: state.canSubmit,
                 isSubmitting: state.isSubmitting,
+                hasLocalErrors: hasAvailabilityTimeErrors(state.values),
               })}
             >
-              {({ canSubmit, isSubmitting }) => (
-                <Button type="submit" disabled={!canSubmit || isSubmitting || isSaving}>
+              {({ canSubmit, isSubmitting, hasLocalErrors }) => (
+                <Button type="submit" disabled={!canSubmit || hasLocalErrors || isSubmitting || isSaving}>
                   {entry ? "Сохранить" : "Добавить"}
                 </Button>
               )}

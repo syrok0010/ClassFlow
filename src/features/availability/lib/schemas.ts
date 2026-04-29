@@ -3,7 +3,7 @@ import { z } from "zod/v4";
 
 const isoDateSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Укажите дату в формате ГГГГ-ММ-ДД");
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Укажите дату в формате ДД-ММ-ГГГГ");
 
 export const availabilityTypeSchema = z.enum(["PREFERRED", "AVAILABLE", "UNAVAILABLE"]);
 
@@ -23,27 +23,6 @@ export const upsertTeacherAvailabilitySchema = z.object({
   teacherId: z.string().min(1, "Не выбран преподаватель"),
   entries: z.array(teacherAvailabilityEntrySchema),
 });
-
-export const teacherAvailabilityOverrideFormSchema = z
-  .object({
-    teacherId: z.string().min(1, "Не выбран преподаватель"),
-    startDate: isoDateSchema,
-    startTime: z.number().int().min(0).max(1439),
-    endDate: isoDateSchema,
-    endTime: z.number().int().min(0).max(1440),
-    type: availabilityTypeSchema,
-  })
-  .refine(
-    (value) => {
-      const start = addMinutes(parse(value.startDate, "yyyy-MM-dd", new Date()), value.startTime);
-      const end = addMinutes(parse(value.endDate, "yyyy-MM-dd", new Date()), value.endTime);
-      return start < end;
-    },
-    {
-      message: "Окончание исключения должно быть позже начала",
-      path: ["endTime"],
-    },
-  );
 
 export const createTeacherAvailabilityOverrideSchema = z
   .object({
@@ -109,18 +88,11 @@ export function mapOverrideEditorToActionInput(
 }
 
 export type TeacherAvailabilityEntryInput = z.infer<typeof teacherAvailabilityEntrySchema>;
-export type UpsertTeacherAvailabilityInput = z.infer<typeof upsertTeacherAvailabilitySchema>;
-export type TeacherAvailabilityOverrideFormInput = z.infer<
-  typeof teacherAvailabilityOverrideFormSchema
->;
 export type CreateTeacherAvailabilityOverrideInput = z.infer<
   typeof createTeacherAvailabilityOverrideSchema
 >;
 export type UpdateTeacherAvailabilityOverrideInput = z.infer<
   typeof updateTeacherAvailabilityOverrideSchema
->;
-export type DeleteTeacherAvailabilityOverrideInput = z.infer<
-  typeof deleteTeacherAvailabilityOverrideSchema
 >;
 export type TeacherAvailabilityTemplateEditorInput = z.infer<
   typeof teacherAvailabilityTemplateEditorSchema
