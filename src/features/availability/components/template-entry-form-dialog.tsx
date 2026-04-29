@@ -24,9 +24,13 @@ import type {
   TeacherAvailabilityEntryInput,
   TeacherAvailabilityTemplateEditorInput,
 } from "@/features/availability/lib/schemas";
-import { teacherAvailabilityTemplateEditorSchema } from "@/features/availability/lib/schemas";
+import {
+  mapTemplateEditorToEntryInput,
+  minutesToTimeString,
+  teacherAvailabilityTemplateEditorSchema,
+} from "@/features/availability/lib/schemas";
 import type { AvailabilityTemplateEntry } from "@/features/availability/lib/types";
-import { AVAILABILITY_TYPE_LABELS, DAY_CONFIG, minutesToTime } from "@/features/availability/lib/utils";
+import { AVAILABILITY_TYPE_LABELS, DAY_CONFIG } from "@/features/availability/lib/utils";
 
 const DAY_LABELS_BY_VALUE = new Map(DAY_CONFIG.map((day) => [String(day.dayOfWeek), day.label]));
 
@@ -43,9 +47,7 @@ export function TemplateEntryFormDialog({
   open: boolean;
   teacherName: string;
   entry: AvailabilityTemplateEntry | null;
-  initialValues?: Partial<
-    Pick<TeacherAvailabilityTemplateEditorInput, "dayOfWeek" | "startTime" | "endTime">
-  >;
+  initialValues?: Partial<Pick<TeacherAvailabilityEntryInput, "dayOfWeek" | "startTime" | "endTime">>;
   allowErase: boolean;
   isSaving: boolean;
   onOpenChange: (open: boolean) => void;
@@ -57,8 +59,8 @@ export function TemplateEntryFormDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const defaultValues: TeacherAvailabilityTemplateEditorInput = {
     dayOfWeek: entry?.dayOfWeek ?? initialValues?.dayOfWeek ?? 1,
-    startTime: entry?.startTime ?? initialValues?.startTime ?? 8 * 60,
-    endTime: entry?.endTime ?? initialValues?.endTime ?? 9 * 60,
+    startTime: minutesToTimeString(entry?.startTime ?? initialValues?.startTime ?? 8 * 60),
+    endTime: minutesToTimeString(entry?.endTime ?? initialValues?.endTime ?? 9 * 60),
     type: entry?.type ?? "AVAILABLE",
   };
   const form = useForm({
@@ -69,7 +71,13 @@ export function TemplateEntryFormDialog({
     },
     onSubmit: async ({ value }) => {
       setSubmitError(null);
-      const success = await onSubmit(value, entry?.id);
+      let success: boolean;
+
+      if (value.type === "ERASE") {
+        success = await onSubmit(value, entry?.id);
+      } else {
+        success = await onSubmit(mapTemplateEditorToEntryInput(value), entry?.id);
+      }
 
       if (!success) {
         setSubmitError("Не удалось сохранить интервал");
@@ -151,10 +159,10 @@ export function TemplateEntryFormDialog({
                       <Input
                         id="template-start-time"
                         type="time"
-                        value={minutesToTime(field.state.value)}
+                        value={field.state.value}
                         aria-invalid={errors.length > 0 || undefined}
                         onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
+                        onChange={(event) => field.handleChange(event.target.value)}
                       />
                       {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>
@@ -171,10 +179,10 @@ export function TemplateEntryFormDialog({
                       <Input
                         id="template-end-time"
                         type="time"
-                        value={minutesToTime(field.state.value)}
+                        value={field.state.value}
                         aria-invalid={errors.length > 0 || undefined}
                         onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
+                        onChange={(event) => field.handleChange(event.target.value)}
                       />
                       {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>

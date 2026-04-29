@@ -26,7 +26,7 @@ export function useAvailabilityTemplateMutations({
 
   const handleTemplateSave = useCallback(
     async (
-      nextEntry: TeacherAvailabilityEntryInput | TeacherAvailabilityTemplateEditorInput,
+      nextEntry: TeacherAvailabilityEntryInput | Pick<TeacherAvailabilityTemplateEditorInput, "type">,
       previousId?: string,
     ) => {
       if (nextEntry.type === "ERASE") {
@@ -40,13 +40,19 @@ export function useAvailabilityTemplateMutations({
         );
       }
 
+      if (!("dayOfWeek" in nextEntry)) {
+        return false;
+      }
+
+      const nextEntryToSave: TeacherAvailabilityEntryInput = nextEntry;
+
       const nextEntries = buildEntriesAfterTemplateSave(
         teacher.templateEntries,
         {
-          dayOfWeek: nextEntry.dayOfWeek,
-          startTime: nextEntry.startTime,
-          endTime: nextEntry.endTime,
-          type: nextEntry.type,
+          dayOfWeek: nextEntryToSave.dayOfWeek,
+          startTime: nextEntryToSave.startTime,
+          endTime: nextEntryToSave.endTime,
+          type: nextEntryToSave.type,
         },
         previousId,
       );

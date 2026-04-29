@@ -1,7 +1,4 @@
-import type {
-  TeacherAvailabilityEntryInput,
-  TeacherAvailabilityTemplateEditorInput,
-} from "./schemas";
+import type { TeacherAvailabilityEntryInput } from "./schemas";
 import { normalizeTemplateEntries } from "./utils";
 import type { AvailabilityTemplateEntry } from "./types";
 
@@ -24,11 +21,7 @@ export function toTeacherAvailabilityEntryInputs(
 
 export function buildEntriesAfterTemplateSave(
   entries: AvailabilityTemplateEntry[],
-  nextEntry:
-    | TeacherAvailabilityEntryInput
-    | Omit<TeacherAvailabilityTemplateEditorInput, "type"> & {
-        type: TeacherAvailabilityEntryInput["type"];
-      },
+  nextEntry: TeacherAvailabilityEntryInput,
   previousId?: string,
 ): TeacherAvailabilityEntryInput[] {
   return normalizeTemplateEntries(
