@@ -10,10 +10,7 @@ import {
 } from "@/components/ui/card";
 import { AvailabilityTemplateList } from "@/features/availability/components/availability-template-list";
 import { TemplateEntryFormDialog } from "@/features/availability/components/template-entry-form-dialog";
-import type {
-  TeacherAvailabilityEntryInput,
-  TeacherAvailabilityTemplateEditorInput,
-} from "@/features/availability/lib/schemas";
+import type { TeacherAvailabilityTemplateEditorInput } from "@/features/availability/lib/schemas";
 import type {
   AvailabilityTemplateEntry,
   AvailabilityTeacher,
@@ -44,10 +41,7 @@ export function TeacherAvailabilityTemplateEditor({
   onOpenEdit: (entry: AvailabilityTemplateEntry) => void;
   onDeleteEntry: (entry: AvailabilityTemplateEntry) => void;
   onDialogChange: (open: boolean) => void;
-  onSubmit: (
-    entry: TeacherAvailabilityEntryInput | TeacherAvailabilityTemplateEditorInput,
-    previousId?: string,
-  ) => Promise<boolean>;
+  onSubmit: (entry: TeacherAvailabilityTemplateEditorInput, previousId?: string) => Promise<boolean>;
 }) {
   return (
     <>

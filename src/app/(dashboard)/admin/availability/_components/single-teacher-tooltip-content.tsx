@@ -24,7 +24,7 @@ export function SingleTeacherTooltipContent({
       <div className="flex flex-col gap-1 text-muted-foreground">
         <p>
           {state.availability
-            ? `${AVAILABILITY_TYPE_LABELS[state.availability]} ${state.isOverride ? "(Исключение)" : ""}`
+            ? `${AVAILABILITY_TYPE_LABELS[state.availability]} ${state.isOverride && "(Исключение)"}: `
             : "Шаблон не задан"}
         </p>
       </div>

@@ -23,14 +23,13 @@ import {
 import { getFieldErrorMessages } from "@/lib/form-errors";
 import {
   mapOverrideEditorToActionInput,
-  minutesToTimeString,
   teacherAvailabilityOverrideEditorSchema,
   type TeacherAvailabilityOverrideEditorInput,
   type CreateTeacherAvailabilityOverrideInput,
   type UpdateTeacherAvailabilityOverrideInput,
 } from "@/features/availability/lib/schemas";
 import type { AvailabilityOverrideEntry } from "@/features/availability/lib/types";
-import { AVAILABILITY_TYPE_LABELS } from "@/features/availability/lib/utils";
+import { AVAILABILITY_TYPE_LABELS, minutesToTime } from "@/features/availability/lib/utils";
 
 export function OverrideEntryFormDialog({
   open,
@@ -68,8 +67,8 @@ export function OverrideEntryFormDialog({
     defaultValues: {
       startDate: format(initialDate, "yyyy-MM-dd"),
       endDate: format(initialEndDate, "yyyy-MM-dd"),
-      startTime: minutesToTimeString(initialStartTime),
-      endTime: minutesToTimeString(initialEndTime),
+      startTime: initialStartTime,
+      endTime: initialEndTime,
       type: entry?.type ?? "UNAVAILABLE",
     } satisfies TeacherAvailabilityOverrideEditorInput,
     validators: {
@@ -160,10 +159,10 @@ export function OverrideEntryFormDialog({
                       <Input
                         id="override-start-time"
                         type="time"
-                        value={field.state.value}
+                        value={minutesToTime(field.state.value)}
                         aria-invalid={errors.length > 0 || undefined}
                         onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.value)}
+                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
                       />
                       {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>
@@ -180,10 +179,10 @@ export function OverrideEntryFormDialog({
                       <Input
                         id="override-end-time"
                         type="time"
-                        value={field.state.value}
+                        value={minutesToTime(field.state.value)}
                         aria-invalid={errors.length > 0 || undefined}
                         onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.value)}
+                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
                       />
                       {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>
