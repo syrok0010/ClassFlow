@@ -3,8 +3,6 @@ import {
   differenceInMinutes,
   format,
   isSameMonth,
-  isValid,
-  parse,
   startOfDay,
 } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -74,103 +72,12 @@ export function minutesToTime(value: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
-export const AVAILABILITY_DATE_FORMAT_ERROR = "Укажите дату в формате ДД/ММ/ГГГГ";
-export const AVAILABILITY_TIME_FORMAT_ERROR = "Укажите дату в формате ЧЧ:ММ";
-export const AVAILABILITY_END_DATE_BEFORE_START_ERROR = "Дата окончания раньше даты начала";
-export const AVAILABILITY_END_TIME_BEFORE_START_ERROR = "Время окончания раньше времени начала";
-
-type AvailabilityDateRangeValue = {
-  startDate: string;
-  endDate: string;
-};
-
-type AvailabilityTimeRangeValue = {
-  startTime: number;
-  endTime: number;
-};
-
 export function getTimeInputValue(value: number): string {
   return Number.isFinite(value) ? minutesToTime(value) : "";
 }
 
 export function getMinutesFromTimeInput(valueAsNumber: number): number {
   return Number.isFinite(valueAsNumber) ? valueAsNumber / 60_000 : Number.NaN;
-}
-
-export function isValidAvailabilityDateInput(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
-  }
-
-  const parsed = parse(value, "yyyy-MM-dd", new Date());
-  return isValid(parsed) && format(parsed, "yyyy-MM-dd") === value;
-}
-
-export function isValidAvailabilityTimeMinutes(value: number, max: number): boolean {
-  return Number.isInteger(value) && value >= 0 && value <= max;
-}
-
-export function getAvailabilityDateFieldError(
-  fieldName: "startDate" | "endDate",
-  value: AvailabilityDateRangeValue,
-): string | null {
-  const isStartDateValid = isValidAvailabilityDateInput(value.startDate);
-  const isEndDateValid = isValidAvailabilityDateInput(value.endDate);
-
-  if (fieldName === "startDate" && !isStartDateValid) {
-    return AVAILABILITY_DATE_FORMAT_ERROR;
-  }
-
-  if (fieldName === "endDate" && !isEndDateValid) {
-    return AVAILABILITY_DATE_FORMAT_ERROR;
-  }
-
-  if (fieldName === "endDate" && isStartDateValid && isEndDateValid) {
-    const startDate = parse(value.startDate, "yyyy-MM-dd", new Date());
-    const endDate = parse(value.endDate, "yyyy-MM-dd", new Date());
-
-    if (endDate < startDate) {
-      return AVAILABILITY_END_DATE_BEFORE_START_ERROR;
-    }
-  }
-
-  return null;
-}
-
-export function getAvailabilityTimeFieldError(
-  fieldName: "startTime" | "endTime",
-  value: AvailabilityTimeRangeValue,
-): string | null {
-  const isStartTimeValid = isValidAvailabilityTimeMinutes(value.startTime, 1439);
-  const isEndTimeValid = isValidAvailabilityTimeMinutes(value.endTime, 1440);
-
-  if (fieldName === "startTime" && !isStartTimeValid) {
-    return AVAILABILITY_TIME_FORMAT_ERROR;
-  }
-
-  if (fieldName === "endTime" && !isEndTimeValid) {
-    return AVAILABILITY_TIME_FORMAT_ERROR;
-  }
-
-  if (fieldName === "endTime" && isStartTimeValid && isEndTimeValid && value.endTime <= value.startTime) {
-    return AVAILABILITY_END_TIME_BEFORE_START_ERROR;
-  }
-
-  return null;
-}
-
-export function hasAvailabilityDateErrors(value: AvailabilityDateRangeValue): boolean {
-  return (
-    getAvailabilityDateFieldError("startDate", value) !== null ||
-    getAvailabilityDateFieldError("endDate", value) !== null
-  );
-}
-
-export function hasAvailabilityTimeErrors(value: AvailabilityTimeRangeValue): boolean {
-  return (
-    getAvailabilityTimeFieldError("startTime", value) !== null ||
-    getAvailabilityTimeFieldError("endTime", value) !== null
-  );
 }
 
 export function buildSlotLabels(): string[] {

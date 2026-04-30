@@ -2,8 +2,9 @@
 
 import { useCallback } from "react";
 import type {
-  CreateTeacherAvailabilityOverrideInput,
-  UpdateTeacherAvailabilityOverrideInput,
+  TeacherCreateAvailabilityOverrideInput,
+  TeacherDeleteAvailabilityOverrideInput,
+  TeacherUpdateAvailabilityOverrideInput,
 } from "@/features/availability/lib/schemas";
 import type { AvailabilityOverrideEntry } from "@/features/availability/lib/types";
 import { useAvailabilityMutationRunner } from "./use-availability-mutation-runner";
@@ -13,32 +14,21 @@ export function useAvailabilityOverrideMutations({
   updateAction,
   deleteAction,
 }: {
-  createAction: (
-    payload: Pick<CreateTeacherAvailabilityOverrideInput, "startTime" | "endTime" | "type">,
-  ) => Promise<{ error: string | null }>;
-  updateAction: (
-    payload: Pick<
-      UpdateTeacherAvailabilityOverrideInput,
-      "overrideId" | "startTime" | "endTime" | "type"
-    >,
-  ) => Promise<{ error: string | null }>;
-  deleteAction: (payload: { overrideId: string }) => Promise<{ error: string | null }>;
+  createAction: (payload: TeacherCreateAvailabilityOverrideInput) => Promise<{ error: string | null }>;
+  updateAction: (payload: TeacherUpdateAvailabilityOverrideInput) => Promise<{ error: string | null }>;
+  deleteAction: (payload: TeacherDeleteAvailabilityOverrideInput) => Promise<{ error: string | null }>;
 }) {
   const { isMutating, mutate } = useAvailabilityMutationRunner();
 
   const handleOverrideCreate = useCallback(
-    async (payload: Pick<CreateTeacherAvailabilityOverrideInput, "startTime" | "endTime" | "type">) =>
+    async (payload: TeacherCreateAvailabilityOverrideInput) =>
       mutate(() => createAction(payload), "Исключение добавлено"),
     [createAction, mutate],
   );
 
   const handleOverrideUpdate = useCallback(
-    async (
-      payload: Pick<
-        UpdateTeacherAvailabilityOverrideInput,
-        "overrideId" | "startTime" | "endTime" | "type"
-      >,
-    ) => mutate(() => updateAction(payload), "Исключение обновлено"),
+    async (payload: TeacherUpdateAvailabilityOverrideInput) =>
+      mutate(() => updateAction(payload), "Исключение обновлено"),
     [mutate, updateAction],
   );
 

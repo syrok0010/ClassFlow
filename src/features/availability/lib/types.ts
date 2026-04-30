@@ -30,6 +30,12 @@ export type AvailabilityWeekData = {
   teachers: AvailabilityTeacher[];
 };
 
+export type TeacherAvailabilityPageData = {
+  weekStart: Date;
+  weekEnd: Date;
+  teacher: AvailabilityTeacher;
+};
+
 export type DayConfig = {
   dayOfWeek: number;
   shortLabel: string;

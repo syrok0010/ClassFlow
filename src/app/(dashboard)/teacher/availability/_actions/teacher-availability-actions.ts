@@ -7,13 +7,16 @@ import { err, ok, type Result } from "@/lib/result";
 import { getActionErrorMessage } from "@/lib/action-error";
 import { requireTeacherActor } from "@/lib/server-action-auth";
 import {
-  type CreateTeacherAvailabilityOverrideInput,
-  type UpdateTeacherAvailabilityOverrideInput,
+  type TeacherCreateAvailabilityOverrideInput,
+  type TeacherDeleteAvailabilityOverrideInput,
+  type TeacherUpdateAvailabilityOverrideInput,
+  type TeacherUpsertAvailabilityInput,
   createTeacherAvailabilityOverrideSchema,
   deleteTeacherAvailabilityOverrideSchema,
   updateTeacherAvailabilityOverrideSchema,
-  teacherAvailabilityEntrySchema,
+  upsertTeacherAvailabilitySchema,
 } from "@/features/availability/lib/schemas";
+import type { TeacherAvailabilityPageData } from "@/features/availability/lib/types";
 import { getTeacherAvailabilityPageData } from "@/features/availability/lib/page-data";
 import { normalizeTemplateEntries } from "@/features/availability/lib/utils";
 
@@ -21,7 +24,7 @@ const TEACHER_AVAILABILITY_PATH = "/teacher/availability";
 
 export async function getTeacherAvailabilityAction(
   weekStart: Date,
-): Promise<Result<Awaited<ReturnType<typeof getTeacherAvailabilityPageData>>>> {
+): Promise<Result<TeacherAvailabilityPageData>> {
   try {
     const actor = await requireTeacherActor();
     const normalizedWeekStart = startOfWeek(weekStart, { weekStartsOn: 1 });
@@ -31,18 +34,16 @@ export async function getTeacherAvailabilityAction(
   }
 }
 
-export async function upsertTeacherAvailabilityAction(input: {
-  entries: Array<{
-    dayOfWeek: number;
-    startTime: number;
-    endTime: number;
-    type: "PREFERRED" | "AVAILABLE" | "UNAVAILABLE";
-  }>;
-}): Promise<Result<Awaited<ReturnType<typeof getTeacherAvailabilityPageData>>>> {
+export async function upsertTeacherAvailabilityAction(
+  input: TeacherUpsertAvailabilityInput,
+): Promise<Result<TeacherAvailabilityPageData>> {
   try {
     const actor = await requireTeacherActor();
-    const validatedEntries = input.entries.map((entry) => teacherAvailabilityEntrySchema.parse(entry));
-    const normalizedEntries = normalizeTemplateEntries(validatedEntries);
+    const validated = upsertTeacherAvailabilitySchema.parse({
+      teacherId: actor.teacherId,
+      entries: input.entries,
+    });
+    const normalizedEntries = normalizeTemplateEntries(validated.entries);
 
     await prisma.$transaction(async (tx) => {
       await tx.teacherAvailability.deleteMany({
@@ -72,8 +73,8 @@ export async function upsertTeacherAvailabilityAction(input: {
 }
 
 export async function createTeacherAvailabilityOverrideAction(
-  input: Pick<CreateTeacherAvailabilityOverrideInput, "startTime" | "endTime" | "type">,
-): Promise<Result<Awaited<ReturnType<typeof getTeacherAvailabilityPageData>>>> {
+  input: TeacherCreateAvailabilityOverrideInput,
+): Promise<Result<TeacherAvailabilityPageData>> {
   try {
     const actor = await requireTeacherActor();
     const validated = createTeacherAvailabilityOverrideSchema.parse({
@@ -100,8 +101,8 @@ export async function createTeacherAvailabilityOverrideAction(
 }
 
 export async function updateTeacherAvailabilityOverrideAction(
-  input: Pick<UpdateTeacherAvailabilityOverrideInput, "overrideId" | "startTime" | "endTime" | "type">,
-): Promise<Result<Awaited<ReturnType<typeof getTeacherAvailabilityPageData>>>> {
+  input: TeacherUpdateAvailabilityOverrideInput,
+): Promise<Result<TeacherAvailabilityPageData>> {
   try {
     const actor = await requireTeacherActor();
     const validated = updateTeacherAvailabilityOverrideSchema.parse({
@@ -137,8 +138,8 @@ export async function updateTeacherAvailabilityOverrideAction(
 }
 
 export async function deleteTeacherAvailabilityOverrideAction(
-  input: { overrideId: string },
-): Promise<Result<Awaited<ReturnType<typeof getTeacherAvailabilityPageData>>>> {
+  input: TeacherDeleteAvailabilityOverrideInput,
+): Promise<Result<TeacherAvailabilityPageData>> {
   try {
     const actor = await requireTeacherActor();
     const validated = deleteTeacherAvailabilityOverrideSchema.parse({

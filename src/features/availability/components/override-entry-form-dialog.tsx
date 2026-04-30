@@ -25,18 +25,14 @@ import {
   mapOverrideEditorToActionInput,
   teacherAvailabilityOverrideEditorSchema,
   type TeacherAvailabilityOverrideEditorInput,
-  type CreateTeacherAvailabilityOverrideInput,
-  type UpdateTeacherAvailabilityOverrideInput,
+  type TeacherCreateAvailabilityOverrideInput,
+  type TeacherUpdateAvailabilityOverrideInput,
 } from "@/features/availability/lib/schemas";
 import type { AvailabilityOverrideEntry } from "@/features/availability/lib/types";
 import {
   AVAILABILITY_TYPE_LABELS,
-  getAvailabilityDateFieldError,
-  getAvailabilityTimeFieldError,
   getMinutesFromTimeInput,
   getTimeInputValue,
-  hasAvailabilityDateErrors,
-  hasAvailabilityTimeErrors,
 } from "@/features/availability/lib/utils";
 
 export function OverrideEntryFormDialog({
@@ -55,12 +51,8 @@ export function OverrideEntryFormDialog({
   initialValues?: { date?: Date; startTime?: number; endTime?: number };
   isSaving: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (
-    payload: Pick<CreateTeacherAvailabilityOverrideInput, "startTime" | "endTime" | "type">,
-  ) => Promise<boolean>;
-  onUpdate: (
-    payload: Pick<UpdateTeacherAvailabilityOverrideInput, "overrideId" | "startTime" | "endTime" | "type">,
-  ) => Promise<boolean>;
+  onCreate: (payload: TeacherCreateAvailabilityOverrideInput) => Promise<boolean>;
+  onUpdate: (payload: TeacherUpdateAvailabilityOverrideInput) => Promise<boolean>;
 }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const initialDate = entry?.startTime ?? initialValues?.date ?? new Date();
@@ -85,10 +77,6 @@ export function OverrideEntryFormDialog({
     },
     onSubmit: async ({ value }) => {
       setSubmitError(null);
-
-      if (hasAvailabilityDateErrors(value) || hasAvailabilityTimeErrors(value)) {
-        return;
-      }
 
       const payload = mapOverrideEditorToActionInput(value);
       const success = entry
@@ -122,109 +110,93 @@ export function OverrideEntryFormDialog({
           <FieldGroup>
             <div className="grid gap-4 sm:grid-cols-2">
               <form.Field name="startDate">
-                {(field) => (
-                  <form.Subscribe selector={(state) => state.values}>
-                    {(values) => {
-                      const error = getAvailabilityDateFieldError("startDate", values);
+                {(field) => {
+                  const errors = getFieldErrorMessages(field);
 
-                      return (
-                        <Field data-invalid={Boolean(error)}>
-                          <FieldLabel htmlFor="override-start-date">Дата начала</FieldLabel>
-                          <Input
-                            id="override-start-date"
-                            type="date"
-                            value={field.state.value}
-                            aria-invalid={Boolean(error) || undefined}
-                            onBlur={field.handleBlur}
-                            onChange={(event) => field.handleChange(event.currentTarget.value)}
-                          />
-                          {error ? <FieldError>{error}</FieldError> : null}
-                        </Field>
-                      );
-                    }}
-                  </form.Subscribe>
-                )}
+                  return (
+                    <Field data-invalid={errors.length > 0}>
+                      <FieldLabel htmlFor="override-start-date">Дата начала</FieldLabel>
+                      <Input
+                        id="override-start-date"
+                        type="date"
+                        value={field.state.value}
+                        aria-invalid={errors.length > 0 || undefined}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.currentTarget.value)}
+                      />
+                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+                    </Field>
+                  );
+                }}
               </form.Field>
 
               <form.Field name="endDate">
-                {(field) => (
-                  <form.Subscribe selector={(state) => state.values}>
-                    {(values) => {
-                      const error = getAvailabilityDateFieldError("endDate", values);
+                {(field) => {
+                  const errors = getFieldErrorMessages(field);
 
-                      return (
-                        <Field data-invalid={Boolean(error)}>
-                          <FieldLabel htmlFor="override-end-date">Дата окончания</FieldLabel>
-                          <Input
-                            id="override-end-date"
-                            type="date"
-                            value={field.state.value}
-                            aria-invalid={Boolean(error) || undefined}
-                            onBlur={field.handleBlur}
-                            onChange={(event) => field.handleChange(event.currentTarget.value)}
-                          />
-                          {error ? <FieldError>{error}</FieldError> : null}
-                        </Field>
-                      );
-                    }}
-                  </form.Subscribe>
-                )}
+                  return (
+                    <Field data-invalid={errors.length > 0}>
+                      <FieldLabel htmlFor="override-end-date">Дата окончания</FieldLabel>
+                      <Input
+                        id="override-end-date"
+                        type="date"
+                        value={field.state.value}
+                        aria-invalid={errors.length > 0 || undefined}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.currentTarget.value)}
+                      />
+                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+                    </Field>
+                  );
+                }}
               </form.Field>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <form.Field name="startTime">
-                {(field) => (
-                  <form.Subscribe selector={(state) => state.values}>
-                    {(values) => {
-                      const error = getAvailabilityTimeFieldError("startTime", values);
+                {(field) => {
+                  const errors = getFieldErrorMessages(field);
 
-                      return (
-                        <Field data-invalid={Boolean(error)}>
-                          <FieldLabel htmlFor="override-start-time">Время начала</FieldLabel>
-                          <Input
-                            id="override-start-time"
-                            type="time"
-                            value={getTimeInputValue(field.state.value)}
-                            aria-invalid={Boolean(error) || undefined}
-                            onBlur={field.handleBlur}
-                            onChange={(event) =>
-                              field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
-                            }
-                          />
-                          {error ? <FieldError>{error}</FieldError> : null}
-                        </Field>
-                      );
-                    }}
-                  </form.Subscribe>
-                )}
+                  return (
+                    <Field data-invalid={errors.length > 0}>
+                      <FieldLabel htmlFor="override-start-time">Время начала</FieldLabel>
+                      <Input
+                        id="override-start-time"
+                        type="time"
+                        value={getTimeInputValue(field.state.value)}
+                        aria-invalid={errors.length > 0 || undefined}
+                        onBlur={field.handleBlur}
+                        onChange={(event) =>
+                          field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
+                        }
+                      />
+                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+                    </Field>
+                  );
+                }}
               </form.Field>
 
               <form.Field name="endTime">
-                {(field) => (
-                  <form.Subscribe selector={(state) => state.values}>
-                    {(values) => {
-                      const error = getAvailabilityTimeFieldError("endTime", values);
+                {(field) => {
+                  const errors = getFieldErrorMessages(field);
 
-                      return (
-                        <Field data-invalid={Boolean(error)}>
-                          <FieldLabel htmlFor="override-end-time">Время окончания</FieldLabel>
-                          <Input
-                            id="override-end-time"
-                            type="time"
-                            value={getTimeInputValue(field.state.value)}
-                            aria-invalid={Boolean(error) || undefined}
-                            onBlur={field.handleBlur}
-                            onChange={(event) =>
-                              field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
-                            }
-                          />
-                          {error ? <FieldError>{error}</FieldError> : null}
-                        </Field>
-                      );
-                    }}
-                  </form.Subscribe>
-                )}
+                  return (
+                    <Field data-invalid={errors.length > 0}>
+                      <FieldLabel htmlFor="override-end-time">Время окончания</FieldLabel>
+                      <Input
+                        id="override-end-time"
+                        type="time"
+                        value={getTimeInputValue(field.state.value)}
+                        aria-invalid={errors.length > 0 || undefined}
+                        onBlur={field.handleBlur}
+                        onChange={(event) =>
+                          field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
+                        }
+                      />
+                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+                    </Field>
+                  );
+                }}
               </form.Field>
             </div>
 
@@ -275,11 +247,10 @@ export function OverrideEntryFormDialog({
               selector={(state) => ({
                 canSubmit: state.canSubmit,
                 isSubmitting: state.isSubmitting,
-                hasLocalErrors: hasAvailabilityDateErrors(state.values) || hasAvailabilityTimeErrors(state.values),
               })}
             >
-              {({ canSubmit, isSubmitting, hasLocalErrors }) => (
-                <Button type="submit" disabled={!canSubmit || hasLocalErrors || isSubmitting || isSaving}>
+              {({ canSubmit, isSubmitting }) => (
+                <Button type="submit" disabled={!canSubmit || isSubmitting || isSaving}>
                   {entry ? "Сохранить" : "Добавить"}
                 </Button>
               )}

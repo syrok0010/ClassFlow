@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import type {
   TeacherAvailabilityEntryInput,
   TeacherAvailabilityTemplateEditorInput,
+  TeacherUpsertAvailabilityInput,
 } from "@/features/availability/lib/schemas";
 import type { AvailabilityTeacher, AvailabilityTemplateEntry } from "@/features/availability/lib/types";
 import {
@@ -20,7 +21,7 @@ export function useAvailabilityTemplateMutations({
 }: {
   teacher: AvailabilityTeacher;
   supportsErase: boolean;
-  upsertAction: (payload: { entries: TeacherAvailabilityEntryInput[] }) => Promise<{ error: string | null }>;
+  upsertAction: (payload: TeacherUpsertAvailabilityInput) => Promise<{ error: string | null }>;
 }) {
   const { isMutating, mutate } = useAvailabilityMutationRunner();
 

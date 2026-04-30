@@ -9,6 +9,10 @@ import { getActionErrorMessage } from "@/lib/action-error";
 import { prisma } from "@/lib/prisma";
 import { err, ok, type Result } from "@/lib/result";
 import {
+  type CreateTeacherAvailabilityOverrideInput,
+  type DeleteTeacherAvailabilityOverrideInput,
+  type UpdateTeacherAvailabilityOverrideInput,
+  type UpsertTeacherAvailabilityInput,
   createTeacherAvailabilityOverrideSchema,
   deleteTeacherAvailabilityOverrideSchema,
   updateTeacherAvailabilityOverrideSchema,
@@ -42,7 +46,7 @@ export async function getAdminAvailabilityWeekDataAction(
 }
 
 export async function upsertTeacherAvailabilityAction(
-  input: Parameters<typeof upsertTeacherAvailabilitySchema.parse>[0],
+  input: UpsertTeacherAvailabilityInput,
 ): Promise<Result<AvailabilityWeekData>> {
   await ensureAdminAccess();
 
@@ -86,7 +90,7 @@ export async function upsertTeacherAvailabilityAction(
 }
 
 export async function createTeacherAvailabilityOverrideAction(
-  input: Parameters<typeof createTeacherAvailabilityOverrideSchema.parse>[0],
+  input: CreateTeacherAvailabilityOverrideInput,
 ): Promise<Result<AvailabilityWeekData>> {
   await ensureAdminAccess();
 
@@ -110,7 +114,7 @@ export async function createTeacherAvailabilityOverrideAction(
 }
 
 export async function updateTeacherAvailabilityOverrideAction(
-  input: Parameters<typeof updateTeacherAvailabilityOverrideSchema.parse>[0],
+  input: UpdateTeacherAvailabilityOverrideInput,
 ): Promise<Result<AvailabilityWeekData>> {
   await ensureAdminAccess();
 
@@ -143,7 +147,7 @@ export async function updateTeacherAvailabilityOverrideAction(
 }
 
 export async function deleteTeacherAvailabilityOverrideAction(
-  input: Parameters<typeof deleteTeacherAvailabilityOverrideSchema.parse>[0],
+  input: DeleteTeacherAvailabilityOverrideInput,
 ): Promise<Result<AvailabilityWeekData>> {
   await ensureAdminAccess();
 

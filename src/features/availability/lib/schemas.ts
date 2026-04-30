@@ -1,21 +1,42 @@
-import { addMinutes, parse, parseISO } from "date-fns";
+import { addMinutes, format, isValid, parse, parseISO } from "date-fns";
 import { z } from "zod/v4";
+
+const ISO_DATE_ERROR = "Укажите дату в формате ГГГГ-ММ-ДД";
+const TIME_ERROR = "Укажите время в формате ЧЧ:ММ";
+const TIME_RANGE_ERROR = "Время окончания должно быть позже времени начала";
+const OVERRIDE_RANGE_ERROR = "Окончание исключения должно быть позже начала";
 
 const isoDateSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Укажите дату в формате ДД-ММ-ГГГГ");
+  .regex(/^\d{4}-\d{2}-\d{2}$/, ISO_DATE_ERROR)
+  .refine((value) => {
+    const parsed = parse(value, "yyyy-MM-dd", new Date());
+    return isValid(parsed) && format(parsed, "yyyy-MM-dd") === value;
+  }, ISO_DATE_ERROR);
+
+const startMinuteSchema = z
+  .number({ error: TIME_ERROR })
+  .int(TIME_ERROR)
+  .min(0, TIME_ERROR)
+  .max(1439, TIME_ERROR);
+
+const endMinuteSchema = z
+  .number({ error: TIME_ERROR })
+  .int(TIME_ERROR)
+  .min(0, TIME_ERROR)
+  .max(1440, TIME_ERROR);
 
 export const availabilityTypeSchema = z.enum(["PREFERRED", "AVAILABLE", "UNAVAILABLE"]);
 
 export const teacherAvailabilityEntrySchema = z
   .object({
     dayOfWeek: z.number().int().min(1).max(7),
-    startTime: z.number().int().min(0).max(1439),
-    endTime: z.number().int().min(0).max(1440),
+    startTime: startMinuteSchema,
+    endTime: endMinuteSchema,
     type: availabilityTypeSchema,
   })
   .refine((value) => value.startTime < value.endTime, {
-    message: "Время окончания должно быть позже времени начала",
+    message: TIME_RANGE_ERROR,
     path: ["endTime"],
   });
 
@@ -32,7 +53,7 @@ export const createTeacherAvailabilityOverrideSchema = z
     type: availabilityTypeSchema,
   })
   .refine((value) => value.startTime < value.endTime, {
-    message: "Окончание исключения должно быть позже начала",
+    message: OVERRIDE_RANGE_ERROR,
     path: ["endTime"],
   });
 
@@ -48,38 +69,38 @@ export const deleteTeacherAvailabilityOverrideSchema = z.object({
 export const teacherAvailabilityTemplateEditorSchema = z
   .object({
     dayOfWeek: z.number().int().min(1).max(7),
-    startTime: z.number().int().min(0).max(1439),
-    endTime: z.number().int().min(0).max(1440),
+    startTime: startMinuteSchema,
+    endTime: endMinuteSchema,
     type: z.enum(["PREFERRED", "AVAILABLE", "UNAVAILABLE", "ERASE"]),
   })
   .refine((value) => value.startTime < value.endTime, {
-    message: "Время окончания должно быть позже времени начала",
+    message: TIME_RANGE_ERROR,
     path: ["endTime"],
   });
 
 export const teacherAvailabilityOverrideEditorSchema = z
   .object({
     startDate: isoDateSchema,
-    startTime: z.number().int().min(0).max(1439),
+    startTime: startMinuteSchema,
     endDate: isoDateSchema,
-    endTime: z.number().int().min(0).max(1440),
+    endTime: endMinuteSchema,
     type: availabilityTypeSchema,
   })
   .refine(
     (value) => {
-      const start = addMinutes(parse(value.startDate, "yyyy-MM-dd", new Date()), value.startTime);
-      const end = addMinutes(parse(value.endDate, "yyyy-MM-dd", new Date()), value.endTime);
+      const start = addMinutes(parseISO(value.startDate), value.startTime);
+      const end = addMinutes(parseISO(value.endDate), value.endTime);
       return start < end;
     },
     {
-      message: "Окончание исключения должно быть позже начала",
-      path: ["endTime"],
+      message: OVERRIDE_RANGE_ERROR,
+      path: ["endDate"],
     },
   );
 
 export function mapOverrideEditorToActionInput(
   value: TeacherAvailabilityOverrideEditorInput,
-): Pick<CreateTeacherAvailabilityOverrideInput, "startTime" | "endTime" | "type"> {
+): TeacherCreateAvailabilityOverrideInput {
   return {
     startTime: addMinutes(parseISO(value.startDate), value.startTime),
     endTime: addMinutes(parseISO(value.endDate), value.endTime),
@@ -88,15 +109,32 @@ export function mapOverrideEditorToActionInput(
 }
 
 export type TeacherAvailabilityEntryInput = z.infer<typeof teacherAvailabilityEntrySchema>;
+export type UpsertTeacherAvailabilityInput = z.infer<typeof upsertTeacherAvailabilitySchema>;
 export type CreateTeacherAvailabilityOverrideInput = z.infer<
   typeof createTeacherAvailabilityOverrideSchema
 >;
 export type UpdateTeacherAvailabilityOverrideInput = z.infer<
   typeof updateTeacherAvailabilityOverrideSchema
 >;
+export type DeleteTeacherAvailabilityOverrideInput = z.infer<
+  typeof deleteTeacherAvailabilityOverrideSchema
+>;
 export type TeacherAvailabilityTemplateEditorInput = z.infer<
   typeof teacherAvailabilityTemplateEditorSchema
 >;
 export type TeacherAvailabilityOverrideEditorInput = z.infer<
   typeof teacherAvailabilityOverrideEditorSchema
+>;
+export type TeacherUpsertAvailabilityInput = Pick<UpsertTeacherAvailabilityInput, "entries">;
+export type TeacherCreateAvailabilityOverrideInput = Pick<
+  CreateTeacherAvailabilityOverrideInput,
+  "startTime" | "endTime" | "type"
+>;
+export type TeacherUpdateAvailabilityOverrideInput = Pick<
+  UpdateTeacherAvailabilityOverrideInput,
+  "overrideId" | "startTime" | "endTime" | "type"
+>;
+export type TeacherDeleteAvailabilityOverrideInput = Pick<
+  DeleteTeacherAvailabilityOverrideInput,
+  "overrideId"
 >;

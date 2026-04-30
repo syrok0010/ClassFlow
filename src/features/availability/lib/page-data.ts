@@ -1,6 +1,6 @@
 import { addDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
-import type { AvailabilityTeacher, AvailabilityWeekData } from "./types";
+import type { AvailabilityWeekData, TeacherAvailabilityPageData } from "./types";
 import { mapTeacherToAvailabilityTeacher, mapTeachersToAvailabilityTeachers } from "./mappers";
 
 export async function getAdminAvailabilityWeekData(
@@ -50,11 +50,7 @@ export async function getAdminAvailabilityWeekData(
 export async function getTeacherAvailabilityPageData(
   weekStart: Date,
   teacherId: string,
-): Promise<{
-  weekStart: Date;
-  weekEnd: Date;
-  teacher: AvailabilityTeacher;
-}> {
+): Promise<TeacherAvailabilityPageData> {
   const teacher = await prisma.teacher.findUnique({
     where: { id: teacherId },
     include: {

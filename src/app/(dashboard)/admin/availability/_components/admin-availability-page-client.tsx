@@ -15,6 +15,12 @@ import { TemplateEntryFormDialog } from "@/features/availability/components/temp
 import { AvailabilityWeekToolbar } from "@/features/availability/components/availability-week-toolbar";
 import { useAvailabilityOverrideMutations } from "@/features/availability/hooks/use-availability-override-mutations";
 import { useAvailabilityTemplateMutations } from "@/features/availability/hooks/use-availability-template-mutations";
+import type {
+  TeacherAvailabilityEntryInput,
+  TeacherAvailabilityTemplateEditorInput,
+  TeacherCreateAvailabilityOverrideInput,
+  TeacherUpdateAvailabilityOverrideInput,
+} from "@/features/availability/lib/schemas";
 import type { AvailabilityTeacher, AvailabilityWeekData } from "@/features/availability/lib/types";
 import { AvailabilityEditor } from "./availability-editor";
 import { DeleteOverrideDialog } from "./delete-override-dialog";
@@ -112,24 +118,27 @@ export function AdminAvailabilityPageClient({
   });
   const isMutating = templateMutations.isMutating || overrideMutations.isMutating;
 
-  async function handleTemplateSave(...args: Parameters<typeof templateMutations.handleTemplateSave>) {
-    const success = await templateMutations.handleTemplateSave(...args);
+  async function handleTemplateSave(
+    nextEntry: TeacherAvailabilityEntryInput | TeacherAvailabilityTemplateEditorInput,
+    previousId?: string,
+  ) {
+    const success = await templateMutations.handleTemplateSave(nextEntry, previousId);
     if (success) {
       closeTemplateDialog(false);
     }
     return success;
   }
 
-  async function handleOverrideCreate(...args: Parameters<typeof overrideMutations.handleOverrideCreate>) {
-    const success = await overrideMutations.handleOverrideCreate(...args);
+  async function handleOverrideCreate(payload: TeacherCreateAvailabilityOverrideInput) {
+    const success = await overrideMutations.handleOverrideCreate(payload);
     if (success) {
       closeOverrideDialog(false);
     }
     return success;
   }
 
-  async function handleOverrideUpdate(...args: Parameters<typeof overrideMutations.handleOverrideUpdate>) {
-    const success = await overrideMutations.handleOverrideUpdate(...args);
+  async function handleOverrideUpdate(payload: TeacherUpdateAvailabilityOverrideInput) {
+    const success = await overrideMutations.handleOverrideUpdate(payload);
     if (success) {
       closeOverrideDialog(false);
     }

@@ -29,10 +29,8 @@ import type { AvailabilityTemplateEntry } from "@/features/availability/lib/type
 import {
   AVAILABILITY_TYPE_LABELS,
   DAY_CONFIG,
-  getAvailabilityTimeFieldError,
   getMinutesFromTimeInput,
   getTimeInputValue,
-  hasAvailabilityTimeErrors,
 } from "@/features/availability/lib/utils";
 
 const DAY_LABELS_BY_VALUE = new Map(DAY_CONFIG.map((day) => [String(day.dayOfWeek), day.label]));
@@ -77,10 +75,6 @@ export function TemplateEntryFormDialog({
     onSubmit: async ({ value }) => {
       setSubmitError(null);
 
-      if (hasAvailabilityTimeErrors(value)) {
-        return;
-      }
-
       const success = await onSubmit(value, entry?.id);
 
       if (!success) {
@@ -110,7 +104,9 @@ export function TemplateEntryFormDialog({
             <DialogDescription>
               {teacherName}. Новый слот будет встроен в недельный шаблон с нормализацией
               пересечений.
-              {allowErase ? " Значение `Стереть` удаляет текущий интервал целиком." : ""}
+              {allowErase
+                ? " Значение `Стереть` удаляет текущий интервал целиком."
+                : ""}
             </DialogDescription>
           </DialogHeader>
 
@@ -155,57 +151,49 @@ export function TemplateEntryFormDialog({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <form.Field name="startTime">
-                {(field) => (
-                  <form.Subscribe selector={(state) => state.values}>
-                    {(values) => {
-                      const error = getAvailabilityTimeFieldError("startTime", values);
+                {(field) => {
+                  const errors = getFieldErrorMessages(field);
 
-                      return (
-                        <Field data-invalid={Boolean(error)}>
-                          <FieldLabel htmlFor="template-start-time">Начало</FieldLabel>
-                          <Input
-                            id="template-start-time"
-                            type="time"
-                            value={getTimeInputValue(field.state.value)}
-                            aria-invalid={Boolean(error) || undefined}
-                            onBlur={field.handleBlur}
-                            onChange={(event) =>
-                              field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
-                            }
-                          />
-                          {error ? <FieldError>{error}</FieldError> : null}
-                        </Field>
-                      );
-                    }}
-                  </form.Subscribe>
-                )}
+                  return (
+                    <Field data-invalid={errors.length > 0}>
+                      <FieldLabel htmlFor="template-start-time">Начало</FieldLabel>
+                      <Input
+                        id="template-start-time"
+                        type="time"
+                        value={getTimeInputValue(field.state.value)}
+                        aria-invalid={errors.length > 0 || undefined}
+                        onBlur={field.handleBlur}
+                        onChange={(event) =>
+                          field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
+                        }
+                      />
+                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+                    </Field>
+                  );
+                }}
               </form.Field>
 
               <form.Field name="endTime">
-                {(field) => (
-                  <form.Subscribe selector={(state) => state.values}>
-                    {(values) => {
-                      const error = getAvailabilityTimeFieldError("endTime", values);
+                {(field) => {
+                  const errors = getFieldErrorMessages(field);
 
-                      return (
-                        <Field data-invalid={Boolean(error)}>
-                          <FieldLabel htmlFor="template-end-time">Окончание</FieldLabel>
-                          <Input
-                            id="template-end-time"
-                            type="time"
-                            value={getTimeInputValue(field.state.value)}
-                            aria-invalid={Boolean(error) || undefined}
-                            onBlur={field.handleBlur}
-                            onChange={(event) =>
-                              field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
-                            }
-                          />
-                          {error ? <FieldError>{error}</FieldError> : null}
-                        </Field>
-                      );
-                    }}
-                  </form.Subscribe>
-                )}
+                  return (
+                    <Field data-invalid={errors.length > 0}>
+                      <FieldLabel htmlFor="template-end-time">Окончание</FieldLabel>
+                      <Input
+                        id="template-end-time"
+                        type="time"
+                        value={getTimeInputValue(field.state.value)}
+                        aria-invalid={errors.length > 0 || undefined}
+                        onBlur={field.handleBlur}
+                        onChange={(event) =>
+                          field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
+                        }
+                      />
+                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+                    </Field>
+                  );
+                }}
               </form.Field>
             </div>
 
@@ -262,11 +250,10 @@ export function TemplateEntryFormDialog({
               selector={(state) => ({
                 canSubmit: state.canSubmit,
                 isSubmitting: state.isSubmitting,
-                hasLocalErrors: hasAvailabilityTimeErrors(state.values),
               })}
             >
-              {({ canSubmit, isSubmitting, hasLocalErrors }) => (
-                <Button type="submit" disabled={!canSubmit || hasLocalErrors || isSubmitting || isSaving}>
+              {({ canSubmit, isSubmitting }) => (
+                <Button type="submit" disabled={!canSubmit || isSubmitting || isSaving}>
                   {entry ? "Сохранить" : "Добавить"}
                 </Button>
               )}
