@@ -1,18 +1,18 @@
 import { addMinutes, format, isValid, parse, parseISO } from "date-fns";
 import { z } from "zod/v4";
 
-const ISO_DATE_ERROR = "Укажите дату в формате ГГГГ-ММ-ДД";
+const DATE_ERROR = "Укажите дату в формате ДД/ММ/ГГГГ";
 const TIME_ERROR = "Укажите время в формате ЧЧ:ММ";
-const TIME_RANGE_ERROR = "Время окончания должно быть позже времени начала";
-const OVERRIDE_RANGE_ERROR = "Окончание исключения должно быть позже начала";
+const DATE_RANGE_ERROR = "Конечная дата должна быть позже начальной";
+const TIME_RANGE_ERROR = "Конечное время должно быть позже начального";
 
 const isoDateSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, ISO_DATE_ERROR)
+  .regex(/^\d{4}-\d{2}-\d{2}$/, DATE_ERROR)
   .refine((value) => {
     const parsed = parse(value, "yyyy-MM-dd", new Date());
     return isValid(parsed) && format(parsed, "yyyy-MM-dd") === value;
-  }, ISO_DATE_ERROR);
+  }, DATE_ERROR);
 
 const startMinuteSchema = z
   .number({ error: TIME_ERROR })
@@ -35,9 +35,14 @@ export const teacherAvailabilityEntrySchema = z
     endTime: endMinuteSchema,
     type: availabilityTypeSchema,
   })
-  .refine((value) => value.startTime < value.endTime, {
-    message: TIME_RANGE_ERROR,
-    path: ["endTime"],
+  .superRefine((value, context) => {
+    if (value.endTime <= value.startTime) {
+      context.addIssue({
+        code: "custom",
+        message: TIME_RANGE_ERROR,
+        path: ["endTime"],
+      });
+    }
   });
 
 export const upsertTeacherAvailabilitySchema = z.object({
@@ -53,7 +58,7 @@ export const createTeacherAvailabilityOverrideSchema = z
     type: availabilityTypeSchema,
   })
   .refine((value) => value.startTime < value.endTime, {
-    message: OVERRIDE_RANGE_ERROR,
+    message: DATE_RANGE_ERROR,
     path: ["endTime"],
   });
 
@@ -73,9 +78,14 @@ export const teacherAvailabilityTemplateEditorSchema = z
     endTime: endMinuteSchema,
     type: z.enum(["PREFERRED", "AVAILABLE", "UNAVAILABLE", "ERASE"]),
   })
-  .refine((value) => value.startTime < value.endTime, {
-    message: TIME_RANGE_ERROR,
-    path: ["endTime"],
+  .superRefine((value, context) => {
+    if (value.endTime <= value.startTime) {
+      context.addIssue({
+        code: "custom",
+        message: TIME_RANGE_ERROR,
+        path: ["endTime"],
+      });
+    }
   });
 
 export const teacherAvailabilityOverrideEditorSchema = z
@@ -86,17 +96,26 @@ export const teacherAvailabilityOverrideEditorSchema = z
     endTime: endMinuteSchema,
     type: availabilityTypeSchema,
   })
-  .refine(
-    (value) => {
-      const start = addMinutes(parseISO(value.startDate), value.startTime);
-      const end = addMinutes(parseISO(value.endDate), value.endTime);
-      return start < end;
-    },
-    {
-      message: OVERRIDE_RANGE_ERROR,
-      path: ["endDate"],
-    },
-  );
+  .superRefine((value, context) => {
+    const startDate = parseISO(value.startDate);
+    const endDate = parseISO(value.endDate);
+
+    if (endDate < startDate) {
+      context.addIssue({
+        code: "custom",
+        message: DATE_RANGE_ERROR,
+        path: ["endDate"],
+      });
+    }
+
+    if (value.endTime <= value.startTime) {
+      context.addIssue({
+        code: "custom",
+        message: TIME_RANGE_ERROR,
+        path: ["endTime"],
+      });
+    }
+  });
 
 export function mapOverrideEditorToActionInput(
   value: TeacherAvailabilityOverrideEditorInput,
