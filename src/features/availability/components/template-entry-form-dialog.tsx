@@ -20,48 +20,61 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getFieldErrorMessages } from "@/lib/form-errors";
+import type {
+  TeacherAvailabilityEntryInput,
+  TeacherAvailabilityTemplateEditorInput,
+} from "@/features/availability/lib/schemas";
+import { teacherAvailabilityTemplateEditorSchema } from "@/features/availability/lib/schemas";
+import type { AvailabilityTemplateEntry } from "@/features/availability/lib/types";
 import {
-  teacherAvailabilityEntrySchema,
-  type TeacherAvailabilityEntryInput,
-} from "../_lib/schemas";
-import type { AvailabilityTeacher, AvailabilityTemplateEntry } from "../_lib/types";
-import { AVAILABILITY_TYPE_LABELS, DAY_CONFIG, minutesToTime } from "../_lib/utils";
+  AVAILABILITY_TYPE_LABELS,
+  DAY_CONFIG,
+  getMinutesFromTimeInput,
+  getTimeInputValue,
+} from "@/features/availability/lib/utils";
 
-const DAY_LABELS_BY_VALUE = new Map(
-  DAY_CONFIG.map((day) => [String(day.dayOfWeek), day.label]),
-);
+const DAY_LABELS_BY_VALUE = new Map(DAY_CONFIG.map((day) => [String(day.dayOfWeek), day.label]));
 
-type TemplateEntryDialogProps = {
-  open: boolean;
-  teacher: AvailabilityTeacher;
-  entry: AvailabilityTemplateEntry | null;
-  isSaving: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSubmit: (entry: TeacherAvailabilityEntryInput, previousId?: string) => Promise<boolean>;
-};
-
-export function TemplateEntryDialog({
+export function TemplateEntryFormDialog({
   open,
-  teacher,
+  teacherName,
   entry,
+  initialValues,
+  allowErase,
   isSaving,
   onOpenChange,
   onSubmit,
-}: TemplateEntryDialogProps) {
+}: {
+  open: boolean;
+  teacherName: string;
+  entry: AvailabilityTemplateEntry | null;
+  initialValues?: Partial<
+    Pick<TeacherAvailabilityTemplateEditorInput, "dayOfWeek" | "startTime" | "endTime">
+  >;
+  allowErase: boolean;
+  isSaving: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (
+    entry: TeacherAvailabilityEntryInput | TeacherAvailabilityTemplateEditorInput,
+    previousId?: string,
+  ) => Promise<boolean>;
+}) {
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const defaultValues: TeacherAvailabilityTemplateEditorInput = {
+    dayOfWeek: entry?.dayOfWeek ?? initialValues?.dayOfWeek ?? 1,
+    startTime: entry?.startTime ?? initialValues?.startTime ?? 8 * 60,
+    endTime: entry?.endTime ?? initialValues?.endTime ?? 9 * 60,
+    type: entry?.type ?? "AVAILABLE",
+  };
   const form = useForm({
-    defaultValues: {
-      dayOfWeek: entry?.dayOfWeek ?? 1,
-      startTime: entry?.startTime ?? 8 * 60,
-      endTime: entry?.endTime ?? 9 * 60,
-      type: entry?.type ?? "AVAILABLE",
-    },
+    defaultValues,
     validators: {
-      onChange: teacherAvailabilityEntrySchema
+      onChange: teacherAvailabilityTemplateEditorSchema,
+      onSubmit: teacherAvailabilityTemplateEditorSchema,
     },
     onSubmit: async ({ value }) => {
       setSubmitError(null);
-      
+
       const success = await onSubmit(value, entry?.id);
 
       if (!success) {
@@ -69,6 +82,12 @@ export function TemplateEntryDialog({
       }
     },
   });
+  const typeLabels: Record<TeacherAvailabilityTemplateEditorInput["type"], string> = {
+    PREFERRED: AVAILABILITY_TYPE_LABELS.PREFERRED,
+    AVAILABLE: AVAILABILITY_TYPE_LABELS.AVAILABLE,
+    UNAVAILABLE: AVAILABILITY_TYPE_LABELS.UNAVAILABLE,
+    ERASE: "Стереть",
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -83,8 +102,11 @@ export function TemplateEntryDialog({
           <DialogHeader>
             <DialogTitle>{entry ? "Изменить интервал" : "Добавить интервал"}</DialogTitle>
             <DialogDescription>
-              {teacher.fullName}. Новый слот будет встроен в недельный шаблон с нормализацией
+              {teacherName}. Новый слот будет встроен в недельный шаблон с нормализацией
               пересечений.
+              {allowErase
+                ? " Значение `Стереть` удаляет текущий интервал целиком."
+                : ""}
             </DialogDescription>
           </DialogHeader>
 
@@ -131,16 +153,19 @@ export function TemplateEntryDialog({
               <form.Field name="startTime">
                 {(field) => {
                   const errors = getFieldErrorMessages(field);
+
                   return (
                     <Field data-invalid={errors.length > 0}>
                       <FieldLabel htmlFor="template-start-time">Начало</FieldLabel>
                       <Input
                         id="template-start-time"
                         type="time"
-                        value={minutesToTime(field.state.value as number)}
+                        value={getTimeInputValue(field.state.value)}
                         aria-invalid={errors.length > 0 || undefined}
                         onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
+                        onChange={(event) =>
+                          field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
+                        }
                       />
                       {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>
@@ -151,16 +176,19 @@ export function TemplateEntryDialog({
               <form.Field name="endTime">
                 {(field) => {
                   const errors = getFieldErrorMessages(field);
+
                   return (
                     <Field data-invalid={errors.length > 0}>
                       <FieldLabel htmlFor="template-end-time">Окончание</FieldLabel>
                       <Input
                         id="template-end-time"
                         type="time"
-                        value={minutesToTime(field.state.value as number)}
+                        value={getTimeInputValue(field.state.value)}
                         aria-invalid={errors.length > 0 || undefined}
                         onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.valueAsNumber / 1000 / 60)}
+                        onChange={(event) =>
+                          field.handleChange(getMinutesFromTimeInput(event.currentTarget.valueAsNumber))
+                        }
                       />
                       {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>
@@ -178,7 +206,7 @@ export function TemplateEntryDialog({
                     <Select
                       value={field.state.value}
                       onValueChange={(value) => {
-                        field.handleChange(value as TeacherAvailabilityEntryInput["type"]);
+                        field.handleChange(value as TeacherAvailabilityTemplateEditorInput["type"]);
                         field.handleBlur();
                       }}
                     >
@@ -187,17 +215,21 @@ export function TemplateEntryDialog({
                         className="w-full"
                         aria-invalid={errors.length > 0 || undefined}
                       >
-                        <SelectValue>
-                          {AVAILABILITY_TYPE_LABELS[field.state.value]}
-                        </SelectValue>
+                        <SelectValue>{typeLabels[field.state.value]}</SelectValue>
                       </SelectTrigger>
                       <SelectContent align="start">
                         <SelectGroup>
-                          {Object.entries(AVAILABILITY_TYPE_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
+                          {Object.entries(typeLabels)
+                            .filter(([value]) => allowErase || value !== "ERASE")
+                            .map(([value, label]) => (
+                              <SelectItem
+                                key={value}
+                                value={value}
+                                disabled={value === "ERASE" && (!allowErase || !entry)}
+                              >
+                                {label}
+                              </SelectItem>
+                            ))}
                         </SelectGroup>
                       </SelectContent>
                     </Select>
