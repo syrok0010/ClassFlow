@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { addDays, set, startOfWeek } from "date-fns";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { hashPassword } from "better-auth/crypto";
@@ -156,10 +157,23 @@ async function seedAuthAndUsers() {
   return {
     teacherId: teacher.id,
     teacherUserId: teacherUser.id,
+    studentPortalId: studentPortalProfile.id,
   };
 }
 
-async function seedGroupsPageFixtures(teacherId: string) {
+function getCurrentWeekDateTime(dayOfWeek: number, minutesFromMidnight: number) {
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const date = addDays(weekStart, dayOfWeek - 1);
+
+  return set(date, {
+    hours: Math.floor(minutesFromMidnight / 60),
+    minutes: minutesFromMidnight % 60,
+    seconds: 0,
+    milliseconds: 0,
+  });
+}
+
+async function seedGroupsPageFixtures(teacherId: string, studentPortalId: string) {
   const english = await prisma.subject.create({
     data: {
       name: "Английский язык",
@@ -299,6 +313,7 @@ async function seedGroupsPageFixtures(teacherId: string) {
 
   await prisma.studentGroups.createMany({
     data: [
+      { studentId: studentPortalId, groupId: class10A.id },
       { studentId: students[0].id, groupId: class10A.id },
       { studentId: students[1].id, groupId: class10A.id },
       { studentId: students[2].id, groupId: class10A.id },
@@ -372,6 +387,55 @@ async function seedGroupsPageFixtures(teacherId: string) {
     ],
   });
 
+  const englishTemplate = await prisma.weeklyScheduleTemplate.create({
+    data: {
+      dayOfWeek: 1,
+      startTime: 9 * 60,
+      endTime: 9 * 60 + 45,
+      groupId: class10A.id,
+      roomId: room101.id,
+      teacherId,
+      subjectId: english.id,
+    },
+  });
+
+  const classroomHourTemplate = await prisma.weeklyScheduleTemplate.create({
+    data: {
+      dayOfWeek: 2,
+      startTime: 10 * 60,
+      endTime: 10 * 60 + 30,
+      groupId: class10A.id,
+      roomId: room102.id,
+      teacherId,
+      subjectId: classroomHour.id,
+    },
+  });
+
+  await prisma.scheduleEntry.createMany({
+    data: [
+      {
+        templateId: englishTemplate.id,
+        date: getCurrentWeekDateTime(1, 0),
+        startTime: getCurrentWeekDateTime(1, 9 * 60),
+        endTime: getCurrentWeekDateTime(1, 9 * 60 + 45),
+        groupId: class10A.id,
+        roomId: room101.id,
+        teacherId,
+        subjectId: english.id,
+      },
+      {
+        templateId: classroomHourTemplate.id,
+        date: getCurrentWeekDateTime(2, 0),
+        startTime: getCurrentWeekDateTime(2, 10 * 60),
+        endTime: getCurrentWeekDateTime(2, 10 * 60 + 30),
+        groupId: class10A.id,
+        roomId: room102.id,
+        teacherId,
+        subjectId: classroomHour.id,
+      },
+    ],
+  });
+
   return {
     english,
     robotics: roboticsSubject,
@@ -383,7 +447,7 @@ async function seedGroupsPageFixtures(teacherId: string) {
 async function main() {
   await clearData();
   const authFixtures = await seedAuthAndUsers();
-  await seedGroupsPageFixtures(authFixtures.teacherId);
+  await seedGroupsPageFixtures(authFixtures.teacherId, authFixtures.studentPortalId);
 }
 
 main()
