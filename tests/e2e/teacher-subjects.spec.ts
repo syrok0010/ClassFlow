@@ -27,27 +27,22 @@ test.describe("Admin teacher subjects", () => {
     ).toBeVisible();
     await expect(page.getByText("Иванов Иван Иванович", { exact: true })).toBeVisible();
     await expect(page.getByText(/teacher1@classflow\.local/)).toBeVisible();
-    await expect(page.getByText(/Всего предметов:\s*2/)).toBeVisible();
+    await expect(page.getByText(/Всего предметов:\s*1/)).toBeVisible();
     await expect(page.getByText(/Основные:\s*1/)).toBeVisible();
-    await expect(page.getByText(/Режимные:\s*1/)).toBeVisible();
-    await expect(page.getByText("Английский язык")).toBeVisible();
-    await expect(page.getByText("Классный час")).toBeVisible();
+    await expect(page.getByText("Математика")).toBeVisible();
     await expect(page.getByText("Основной")).toBeVisible();
-    await expect(page.getByText("Режимный")).toBeVisible();
   });
 
   test("filters competencies by search and subject type", async ({ page }) => {
     const searchInput = page.getByPlaceholder("Поиск по названию предмета...");
 
-    await searchInput.fill("Англий");
+    await searchInput.fill("Матем");
     await expect(page).toHaveURL(/search=/);
-    await expect(page.getByText("Английский язык")).toBeVisible();
-    await expect(page.getByText("Классный час")).not.toBeVisible();
+    await expect(page.getByText("Математика")).toBeVisible();
 
     await searchInput.fill("");
-    await page.getByRole("radio", { name: "Режимные" }).click();
-    await expect(page.getByText("Классный час")).toBeVisible();
-    await expect(page.getByText("Английский язык")).not.toBeVisible();
+    await page.getByRole("radio", { name: "Доп. обязательные" }).click();
+    await expect(page.getByText("Математика")).not.toBeVisible();
   });
 
   test("creates competency with inline row", async ({ page }) => {
@@ -55,28 +50,38 @@ test.describe("Admin teacher subjects", () => {
 
     const subjectInput = page.getByPlaceholder("Выберите предмет");
     await expect(subjectInput).toBeVisible();
-    await subjectInput.fill("Медиастудия");
-    await page.locator('[data-slot="combobox-content"]').getByText("Медиастудия").click();
+    await subjectInput.fill("Биология");
+    await page.locator('[data-slot="combobox-content"]').getByText("Биология").click();
 
     await page.locator("#inline-create-min-grade").fill("7");
     await page.locator("#inline-create-max-grade").fill("9");
     await page.getByRole("button", { name: "Сохранить" }).click();
 
     await expect(page.getByText("Компетенция добавлена")).toBeVisible();
-    await expect(subjectRow(page, "Медиастудия")).toBeVisible();
-    await expect(page.getByText(/Всего предметов:\s*3/)).toBeVisible();
+    await expect(subjectRow(page, "Биология")).toBeVisible();
+    await expect(page.getByText(/Всего предметов:\s*2/)).toBeVisible();
+
+    await subjectRow(page, "Биология").getByRole("button", { name: "Удалить компетенцию" }).click();
+    await page.getByRole("button", { name: "Удалить" }).click();
+    await expect(subjectRow(page, "Биология")).toHaveCount(0);
   });
 
   test("updates class range inline", async ({ page }) => {
-    const englishRow = subjectRow(page, "Английский язык");
+    const mathRow = subjectRow(page, "Математика");
 
-    await englishRow.getByRole("button", { name: "5" }).click();
-    const minGradeInput = englishRow.locator("input").first();
+    await mathRow.getByRole("button", { name: "3" }).click();
+    const minGradeInput = mathRow.locator("input").first();
     await expect(minGradeInput).toBeVisible();
-    await minGradeInput.fill("4");
+    await minGradeInput.fill("2");
     await minGradeInput.press("Enter");
 
     await expect(page.getByText("Диапазон классов обновлен")).toBeVisible();
-    await expect(subjectRow(page, "Английский язык").getByRole("button", { name: "4" })).toBeVisible();
+    await expect(subjectRow(page, "Математика").getByRole("button", { name: "2" })).toBeVisible();
+
+    await subjectRow(page, "Математика").getByRole("button", { name: "2" }).click();
+    const restoreInput = subjectRow(page, "Математика").locator("input").first();
+    await restoreInput.fill("3");
+    await restoreInput.press("Enter");
+    await expect(subjectRow(page, "Математика").getByRole("button", { name: "3" })).toBeVisible();
   });
 });

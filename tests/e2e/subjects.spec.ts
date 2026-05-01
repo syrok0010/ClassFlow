@@ -12,16 +12,18 @@ test.describe("Subjects smoke", () => {
     await expect(page.getByPlaceholder("Поиск по названию...")).toBeVisible();
 
     await expect(page.getByText("Английский язык")).toBeVisible();
-    await expect(page.getByText("Робототехника")).toBeVisible();
-    await expect(page.getByText("Медиастудия")).toBeVisible();
-    await expect(page.getByText("Классный час")).toBeVisible();
+    await expect(page.getByText("Математика")).toBeVisible();
+    await expect(page.getByText("Журналистика")).toBeVisible();
+    await expect(page.getByText("Обед")).toBeVisible();
   });
 
   test("filters subjects by search query", async ({ page }) => {
-    await page.getByPlaceholder("Поиск по названию...").fill("Робот");
+    await page.goto("/admin/subjects?search=Журнал");
 
-    await expect(page.getByText("Робототехника")).toBeVisible();
-    await expect(page.getByText("Медиастудия")).not.toBeVisible();
+    await expect(page).toHaveURL(/search=/);
+    await expect(page.getByPlaceholder("Поиск по названию...")).toHaveValue("Журнал");
+    await expect(page.getByText("Журналистика")).toBeVisible();
+    await expect(page.getByText("Математика")).not.toBeVisible();
     await expect(page.getByText("Английский язык")).not.toBeVisible();
   });
 });

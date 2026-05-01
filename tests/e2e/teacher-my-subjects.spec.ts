@@ -23,9 +23,8 @@ test.describe("Teacher my subjects", () => {
     await expect(
       page.getByText("Завуч использует этот список при составлении расписания и поиске замен.")
     ).toBeVisible();
-    await expect(page.getByText("Английский язык")).toBeVisible();
-    await expect(page.getByText("Классный час")).toBeVisible();
-    await expect(page.getByText(/Всего предметов:\s*2/)).toBeVisible();
+    await expect(page.getByText("Математика")).toBeVisible();
+    await expect(page.getByText(/Всего предметов:\s*1/)).toBeVisible();
   });
 
   test("creates competency with inline row", async ({ page }) => {
@@ -33,43 +32,43 @@ test.describe("Teacher my subjects", () => {
 
     const subjectInput = page.getByPlaceholder("Выберите предмет");
     await expect(subjectInput).toBeVisible();
-    await subjectInput.fill("Медиастудия");
-    await page.locator('[data-slot="combobox-content"]').getByText("Медиастудия").click();
+    await subjectInput.fill("Биология");
+    await page.locator('[data-slot="combobox-content"]').getByText("Биология").click();
 
     await page.locator("#inline-create-min-grade").fill("7");
     await page.locator("#inline-create-max-grade").fill("9");
     await page.getByRole("button", { name: "Сохранить" }).click();
 
     await expect(page.getByText("Компетенция добавлена")).toBeVisible();
-    await expect(subjectRow(page, "Медиастудия")).toBeVisible();
-    await expect(page.getByText(/Всего предметов:\s*3/)).toBeVisible();
+    await expect(subjectRow(page, "Биология")).toBeVisible();
+    await expect(page.getByText(/Всего предметов:\s*2/)).toBeVisible();
 
-    await subjectRow(page, "Медиастудия").getByRole("button", { name: "Удалить компетенцию" }).click();
+    await subjectRow(page, "Биология").getByRole("button", { name: "Удалить компетенцию" }).click();
     await page.getByRole("button", { name: "Удалить" }).click();
-    await expect(subjectRow(page, "Медиастудия")).toHaveCount(0);
+    await expect(subjectRow(page, "Биология")).toHaveCount(0);
   });
 
   test("updates class range inline", async ({ page }) => {
-    const englishRow = subjectRow(page, "Английский язык");
+    const mathRow = subjectRow(page, "Математика");
 
-    await englishRow.getByRole("button", { name: "5" }).click();
-    const minGradeInput = englishRow.locator("input").first();
+    await mathRow.getByRole("button", { name: "3" }).click();
+    const minGradeInput = mathRow.locator("input").first();
     await expect(minGradeInput).toBeVisible();
-    await minGradeInput.fill("4");
+    await minGradeInput.fill("2");
     await minGradeInput.press("Enter");
 
     await expect(page.getByText("Диапазон классов обновлен")).toBeVisible();
-    await expect(subjectRow(page, "Английский язык").getByRole("button", { name: "4" })).toBeVisible();
+    await expect(subjectRow(page, "Математика").getByRole("button", { name: "2" })).toBeVisible();
 
-    await subjectRow(page, "Английский язык").getByRole("button", { name: "4" }).click();
-    const restoreInput = subjectRow(page, "Английский язык").locator("input").first();
-    await restoreInput.fill("5");
+    await subjectRow(page, "Математика").getByRole("button", { name: "2" }).click();
+    const restoreInput = subjectRow(page, "Математика").locator("input").first();
+    await restoreInput.fill("3");
     await restoreInput.press("Enter");
-    await expect(subjectRow(page, "Английский язык").getByRole("button", { name: "5" })).toBeVisible();
+    await expect(subjectRow(page, "Математика").getByRole("button", { name: "3" })).toBeVisible();
   });
 
   test("deletes competency with confirmation dialog", async ({ page }) => {
-    const row = subjectRow(page, "Классный час");
+    const row = subjectRow(page, "Математика");
     await expect(row).toBeVisible();
 
     await row.getByRole("button", { name: "Удалить компетенцию" }).click();
@@ -79,24 +78,24 @@ test.describe("Teacher my subjects", () => {
     await expect(confirmDialog).not.toBeVisible();
 
     await expect(page.getByText("Компетенция удалена")).toBeVisible();
-    await expect(subjectRow(page, "Классный час")).toHaveCount(0);
+    await expect(subjectRow(page, "Математика")).toHaveCount(0);
 
     await page.getByRole("button", { name: "Добавить предмет" }).click();
     const subjectInput = page.getByPlaceholder("Выберите предмет");
-    await subjectInput.fill("Классный час");
-    await page.locator('[data-slot="combobox-content"]').getByText("Классный час").click();
-    await page.locator("#inline-create-min-grade").fill("0");
-    await page.locator("#inline-create-max-grade").fill("11");
+    await subjectInput.fill("Математика");
+    await page.locator('[data-slot="combobox-content"]').getByText("Математика").click();
+    await page.locator("#inline-create-min-grade").fill("3");
+    await page.locator("#inline-create-max-grade").fill("4");
     await page.getByRole("button", { name: "Сохранить" }).click();
-    await expect(subjectRow(page, "Классный час")).toBeVisible();
+    await expect(subjectRow(page, "Математика")).toBeVisible();
   });
 
   test("existing row does not allow editing subject field", async ({ page }) => {
-    const englishRow = subjectRow(page, "Английский язык");
-    await expect(englishRow).toBeVisible();
+    const mathRow = subjectRow(page, "Математика");
+    await expect(mathRow).toBeVisible();
 
-    await expect(englishRow.getByPlaceholder("Выберите предмет")).toHaveCount(0);
-    await englishRow.getByRole("button", { name: "5" }).click();
-    await expect(englishRow.getByPlaceholder("Выберите предмет")).toHaveCount(0);
+    await expect(mathRow.getByPlaceholder("Выберите предмет")).toHaveCount(0);
+    await mathRow.getByRole("button", { name: "3" }).click();
+    await expect(mathRow.getByPlaceholder("Выберите предмет")).toHaveCount(0);
   });
 });

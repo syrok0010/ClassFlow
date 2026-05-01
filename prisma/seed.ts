@@ -1,24 +1,12 @@
 import "dotenv/config";
+import { pathToFileURL } from "node:url";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma/client";
-import { hashPassword } from "better-auth/crypto";
+import { PrismaClient, type PrismaClient as PrismaClientType } from "@/generated/prisma/client";
+import { clearSeedData, createCredentialAccount } from "./seed-utils";
 
 const connectionString = `${process.env.DATABASE_URL}`;
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
-
-async function createCredentialAccount(userId: string, password: string) {
-  const hashedPassword = await hashPassword(password);
-
-  await prisma.account.create({
-    data: {
-      userId,
-      accountId: userId,
-      providerId: "credential",
-      password: hashedPassword,
-    },
-  });
-}
 
 function toMinutes(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
@@ -31,27 +19,9 @@ function dateAtMinutes(baseDate: Date, minutesFromMidnight: number) {
   return date;
 }
 
-async function main() {
+export async function seedBaseData(prisma: PrismaClientType) {
   console.log("Clearing existing data...");
-  await prisma.scheduleEntry.deleteMany();
-  await prisma.weeklyScheduleTemplate.deleteMany();
-  await prisma.teacherAvailabilityOverride.deleteMany();
-  await prisma.teacherAvailability.deleteMany();
-  await prisma.teacherSubject.deleteMany();
-  await prisma.groupSubjectRequirement.deleteMany();
-  await prisma.roomSubject.deleteMany();
-  await prisma.room.deleteMany();
-  await prisma.building.deleteMany();
-  await prisma.studentGroups.deleteMany();
-  await prisma.group.deleteMany();
-  await prisma.subject.deleteMany();
-  await prisma.studentParents.deleteMany();
-  await prisma.student.deleteMany();
-  await prisma.parent.deleteMany();
-  await prisma.teacher.deleteMany();
-  await prisma.account.deleteMany();
-  await prisma.verification.deleteMany();
-  await prisma.user.deleteMany();
+  await clearSeedData(prisma);
 
   console.log("Creating mock data...");
 
@@ -65,7 +35,7 @@ async function main() {
       patronymicName: "Владимирович",
     },
   });
-  await createCredentialAccount(admin.id, "admin1234");
+  await createCredentialAccount(prisma, admin.id, "admin1234");
 
   const subjectSeed = [
     { name: "Математика", type: "ACADEMIC" },
@@ -174,6 +144,7 @@ async function main() {
   ) => {
     const user = await prisma.user.create({
       data: {
+        id: key === "C3_MATH" ? "e2e-teacher-user" : undefined,
         email: `teacher${teacherCounter}@classflow.local`,
         role: "USER",
         status: "ACTIVE",
@@ -184,7 +155,7 @@ async function main() {
     });
 
     if (withCredential) {
-      await createCredentialAccount(user.id, "teacher1234");
+      await createCredentialAccount(prisma, user.id, "teacher1234");
     }
 
     teacherCounter += 1;
@@ -193,7 +164,7 @@ async function main() {
     return teacher.id;
   };
 
-  await createTeacher("C3_MATH", "Иван", "Иванов", "Андреевич", true);
+  await createTeacher("C3_MATH", "Иван", "Иванов", "Иванович", true);
   await createTeacher("C3_RUS", "Ольга", "Смирнова", "Павловна", true);
   await createTeacher("C3_LIT", "Марина", "Козлова", "Игоревна");
   await createTeacher("C3_CALLIG", "Наталья", "Тихонова", "Сергеевна");
@@ -325,7 +296,7 @@ async function main() {
     });
 
     if (withCredential) {
-      await createCredentialAccount(user.id, "student1234");
+      await createCredentialAccount(prisma, user.id, "student1234");
     }
 
     const student = await prisma.student.create({ data: { userId: user.id } });
@@ -395,7 +366,7 @@ async function main() {
       patronymicName: "Сергеевна",
     },
   });
-  await createCredentialAccount(parent1User.id, "parent1234");
+  await createCredentialAccount(prisma, parent1User.id, "parent1234");
   const parent1 = await prisma.parent.create({ data: { userId: parent1User.id } });
 
   const parent2User = await prisma.user.create({
@@ -908,11 +879,13 @@ async function main() {
   console.log("Database seeded successfully!");
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  seedBaseData(prisma)
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
