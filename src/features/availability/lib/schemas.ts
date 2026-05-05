@@ -28,28 +28,6 @@ const endMinuteSchema = z
 
 export const availabilityTypeSchema = z.enum(["PREFERRED", "AVAILABLE", "UNAVAILABLE"]);
 
-export const teacherAvailabilityEntrySchema = z
-  .object({
-    dayOfWeek: z.number().int().min(1).max(7),
-    startTime: startMinuteSchema,
-    endTime: endMinuteSchema,
-    type: availabilityTypeSchema,
-  })
-  .superRefine((value, context) => {
-    if (value.endTime <= value.startTime) {
-      context.addIssue({
-        code: "custom",
-        message: TIME_RANGE_ERROR,
-        path: ["endTime"],
-      });
-    }
-  });
-
-export const upsertTeacherAvailabilitySchema = z.object({
-  teacherId: z.string().min(1, "Не выбран преподаватель"),
-  entries: z.array(teacherAvailabilityEntrySchema),
-});
-
 export const createTeacherAvailabilityOverrideSchema = z
   .object({
     teacherId: z.string().min(1, "Не выбран преподаватель"),
@@ -117,6 +95,11 @@ export const teacherAvailabilityOverrideEditorSchema = z
     }
   });
 
+export const upsertTeacherAvailabilitySchema = z.object({
+    teacherId: z.string().min(1, "Не выбран преподаватель"),
+    entries: z.array(teacherAvailabilityTemplateEditorSchema),
+});
+
 export function mapOverrideEditorToActionInput(
   value: TeacherAvailabilityOverrideEditorInput,
   teacherId: string,
@@ -129,7 +112,6 @@ export function mapOverrideEditorToActionInput(
   };
 }
 
-export type TeacherAvailabilityEntryInput = z.infer<typeof teacherAvailabilityEntrySchema>;
 export type UpsertTeacherAvailabilityInput = z.infer<typeof upsertTeacherAvailabilitySchema>;
 export type CreateTeacherAvailabilityOverrideInput = z.infer<
   typeof createTeacherAvailabilityOverrideSchema

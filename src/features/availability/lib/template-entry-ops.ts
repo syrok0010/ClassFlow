@@ -1,5 +1,4 @@
 import type {
-  TeacherAvailabilityEntryInput,
   TeacherAvailabilityTemplateEditorInput,
 } from "./schemas";
 import { normalizeTemplateEntries } from "./utils";
@@ -7,7 +6,7 @@ import type { AvailabilityTemplateEntry } from "./types";
 
 export function toTeacherAvailabilityEntryInput(
   entry: Pick<AvailabilityTemplateEntry, "dayOfWeek" | "startTime" | "endTime" | "type">,
-): TeacherAvailabilityEntryInput {
+): TeacherAvailabilityTemplateEditorInput {
   return {
     dayOfWeek: entry.dayOfWeek,
     startTime: entry.startTime,
@@ -18,19 +17,19 @@ export function toTeacherAvailabilityEntryInput(
 
 export function toTeacherAvailabilityEntryInputs(
   entries: Array<Pick<AvailabilityTemplateEntry, "dayOfWeek" | "startTime" | "endTime" | "type">>,
-): TeacherAvailabilityEntryInput[] {
+): TeacherAvailabilityTemplateEditorInput[] {
   return entries.map(toTeacherAvailabilityEntryInput);
 }
 
 export function buildEntriesAfterTemplateSave(
   entries: AvailabilityTemplateEntry[],
   nextEntry:
-    | TeacherAvailabilityEntryInput
+    | TeacherAvailabilityTemplateEditorInput
     | Omit<TeacherAvailabilityTemplateEditorInput, "type"> & {
-        type: TeacherAvailabilityEntryInput["type"];
+        type: TeacherAvailabilityTemplateEditorInput["type"];
       },
   previousId?: string,
-): TeacherAvailabilityEntryInput[] {
+): TeacherAvailabilityTemplateEditorInput[] {
   return normalizeTemplateEntries(
     [
       ...entries
@@ -48,6 +47,6 @@ export function buildEntriesAfterTemplateSave(
 export function buildEntriesAfterTemplateDelete(
   entries: AvailabilityTemplateEntry[],
   entryId: string,
-): TeacherAvailabilityEntryInput[] {
+): TeacherAvailabilityTemplateEditorInput[] {
   return toTeacherAvailabilityEntryInputs(entries.filter((entry) => entry.id !== entryId));
 }

@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import { getFieldErrorMessages } from "@/lib/form-errors";
 import type {
-  TeacherAvailabilityEntryInput,
   TeacherAvailabilityTemplateEditorInput,
 } from "@/features/availability/lib/schemas";
 import { teacherAvailabilityTemplateEditorSchema } from "@/features/availability/lib/schemas";
@@ -53,7 +52,7 @@ export function TemplateEntryFormDialog({
   isSaving: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (
-    entry: TeacherAvailabilityEntryInput | TeacherAvailabilityTemplateEditorInput,
+    entry: TeacherAvailabilityTemplateEditorInput,
     previousId?: string,
   ) => Promise<boolean>;
 }) {

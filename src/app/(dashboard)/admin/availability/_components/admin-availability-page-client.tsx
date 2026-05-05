@@ -17,7 +17,6 @@ import { useAvailabilityOverrideMutations } from "@/features/availability/hooks/
 import { useAvailabilityTemplateMutations } from "@/features/availability/hooks/use-availability-template-mutations";
 import type {
   CreateTeacherAvailabilityOverrideInput,
-  TeacherAvailabilityEntryInput,
   TeacherAvailabilityTemplateEditorInput,
   UpdateTeacherAvailabilityOverrideInput,
 } from "@/features/availability/lib/schemas";
@@ -83,7 +82,7 @@ export function AdminAvailabilityPageClient({
   const isMutating = templateMutations.isMutating || overrideMutations.isMutating;
 
   async function handleTemplateSave(
-    nextEntry: TeacherAvailabilityEntryInput | TeacherAvailabilityTemplateEditorInput,
+    nextEntry: TeacherAvailabilityTemplateEditorInput,
     previousId?: string,
   ) {
     const success = await templateMutations.handleTemplateSave(nextEntry, previousId);

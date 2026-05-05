@@ -2,7 +2,6 @@
 
 import { useCallback } from "react";
 import type {
-  TeacherAvailabilityEntryInput,
   TeacherAvailabilityTemplateEditorInput,
   UpsertTeacherAvailabilityInput,
 } from "@/features/availability/lib/schemas";
@@ -24,7 +23,7 @@ export function useAvailabilityTemplateMutations({
 
   const handleTemplateSave = useCallback(
     async (
-      nextEntry: TeacherAvailabilityEntryInput | TeacherAvailabilityTemplateEditorInput,
+      nextEntry: TeacherAvailabilityTemplateEditorInput,
       previousId?: string,
     ) => {
       const nextEntries = buildEntriesAfterTemplateSave(

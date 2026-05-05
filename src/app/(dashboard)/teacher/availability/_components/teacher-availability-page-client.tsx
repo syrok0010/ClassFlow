@@ -3,7 +3,6 @@
 import { useState } from "react";
 import type {
   CreateTeacherAvailabilityOverrideInput,
-  TeacherAvailabilityEntryInput,
   TeacherAvailabilityTemplateEditorInput,
   UpdateTeacherAvailabilityOverrideInput,
 } from "@/features/availability/lib/schemas";
@@ -100,7 +99,7 @@ export function TeacherAvailabilityPageClient({
   }
 
   async function handleTemplateSave(
-    nextEntry: TeacherAvailabilityEntryInput | TeacherAvailabilityTemplateEditorInput,
+    nextEntry: TeacherAvailabilityTemplateEditorInput,
     previousId?: string,
   ) {
     const success = await templateMutations.handleTemplateSave(nextEntry, previousId);

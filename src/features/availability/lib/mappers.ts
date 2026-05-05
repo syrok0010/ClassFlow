@@ -31,7 +31,7 @@ export function mapTeacherToAvailabilityTeacher(
   return {
     teacherId: teacher.id,
     userId: teacher.user.id,
-    fullName: getUserFullName(teacher.user) || teacher.user.email || "Р‘РµР· РёРјРµРЅРё",
+    fullName: getUserFullName(teacher.user) || teacher.user.email || "Без имени",
     email: teacher.user.email,
     templateEntries: teacher.teacherAvailabilities.map((entry) => ({
       id: entry.id,
