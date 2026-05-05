@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { parseISO, startOfWeek } from "date-fns";
 import { auth } from "@/lib/auth";
 import { TeacherSubjectsPageError } from "@/features/teacher-subjects/components/teacher-subjects-page-error";
-import { getTeacherAvailabilityAction } from "./_actions/teacher-availability-actions";
+import { getTeacherAvailabilityAction } from "@/features/availability/actions/availability-actions";
 import { TeacherAvailabilityPageClient } from "./_components/teacher-availability-page-client";
 
 export const dynamic = "force-dynamic";

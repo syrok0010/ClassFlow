@@ -40,7 +40,6 @@ export function TemplateEntryFormDialog({
   teacherName,
   entry,
   initialValues,
-  allowErase,
   isSaving,
   onOpenChange,
   onSubmit,
@@ -51,7 +50,6 @@ export function TemplateEntryFormDialog({
   initialValues?: Partial<
     Pick<TeacherAvailabilityTemplateEditorInput, "dayOfWeek" | "startTime" | "endTime">
   >;
-  allowErase: boolean;
   isSaving: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (
@@ -86,7 +84,6 @@ export function TemplateEntryFormDialog({
     PREFERRED: AVAILABILITY_TYPE_LABELS.PREFERRED,
     AVAILABLE: AVAILABILITY_TYPE_LABELS.AVAILABLE,
     UNAVAILABLE: AVAILABILITY_TYPE_LABELS.UNAVAILABLE,
-    ERASE: "Стереть",
   };
 
   return (
@@ -104,9 +101,6 @@ export function TemplateEntryFormDialog({
             <DialogDescription>
               {teacherName}. Новый слот будет встроен в недельный шаблон с нормализацией
               пересечений.
-              {allowErase
-                ? " Значение `Стереть` удаляет текущий интервал целиком."
-                : ""}
             </DialogDescription>
           </DialogHeader>
 
@@ -219,17 +213,11 @@ export function TemplateEntryFormDialog({
                       </SelectTrigger>
                       <SelectContent align="start">
                         <SelectGroup>
-                          {Object.entries(typeLabels)
-                            .filter(([value]) => allowErase || value !== "ERASE")
-                            .map(([value, label]) => (
-                              <SelectItem
-                                key={value}
-                                value={value}
-                                disabled={value === "ERASE" && (!allowErase || !entry)}
-                              >
-                                {label}
-                              </SelectItem>
-                            ))}
+                          {Object.entries(typeLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
                         </SelectGroup>
                       </SelectContent>
                     </Select>

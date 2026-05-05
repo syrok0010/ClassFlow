@@ -24,9 +24,9 @@ import { getFieldErrorMessages } from "@/lib/form-errors";
 import {
   mapOverrideEditorToActionInput,
   teacherAvailabilityOverrideEditorSchema,
+  type CreateTeacherAvailabilityOverrideInput,
   type TeacherAvailabilityOverrideEditorInput,
-  type TeacherCreateAvailabilityOverrideInput,
-  type TeacherUpdateAvailabilityOverrideInput,
+  type UpdateTeacherAvailabilityOverrideInput,
 } from "@/features/availability/lib/schemas";
 import type { AvailabilityOverrideEntry } from "@/features/availability/lib/types";
 import {
@@ -37,6 +37,7 @@ import {
 
 export function OverrideEntryFormDialog({
   open,
+  teacherId,
   teacherName,
   entry,
   initialValues,
@@ -46,13 +47,14 @@ export function OverrideEntryFormDialog({
   onUpdate,
 }: {
   open: boolean;
+  teacherId: string;
   teacherName: string;
   entry: AvailabilityOverrideEntry | null;
   initialValues?: { date?: Date; startTime?: number; endTime?: number };
   isSaving: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (payload: TeacherCreateAvailabilityOverrideInput) => Promise<boolean>;
-  onUpdate: (payload: TeacherUpdateAvailabilityOverrideInput) => Promise<boolean>;
+  onCreate: (payload: CreateTeacherAvailabilityOverrideInput) => Promise<boolean>;
+  onUpdate: (payload: UpdateTeacherAvailabilityOverrideInput) => Promise<boolean>;
 }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const initialDate = entry?.startTime ?? initialValues?.date ?? new Date();
@@ -78,7 +80,7 @@ export function OverrideEntryFormDialog({
     onSubmit: async ({ value }) => {
       setSubmitError(null);
 
-      const payload = mapOverrideEditorToActionInput(value);
+      const payload = mapOverrideEditorToActionInput(value, teacherId);
       const success = entry
         ? await onUpdate({ ...payload, overrideId: entry.id })
         : await onCreate(payload);

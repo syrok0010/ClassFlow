@@ -76,7 +76,7 @@ export const teacherAvailabilityTemplateEditorSchema = z
     dayOfWeek: z.number().int().min(1).max(7),
     startTime: startMinuteSchema,
     endTime: endMinuteSchema,
-    type: z.enum(["PREFERRED", "AVAILABLE", "UNAVAILABLE", "ERASE"]),
+    type: availabilityTypeSchema,
   })
   .superRefine((value, context) => {
     if (value.endTime <= value.startTime) {
@@ -119,8 +119,10 @@ export const teacherAvailabilityOverrideEditorSchema = z
 
 export function mapOverrideEditorToActionInput(
   value: TeacherAvailabilityOverrideEditorInput,
-): TeacherCreateAvailabilityOverrideInput {
+  teacherId: string,
+): CreateTeacherAvailabilityOverrideInput {
   return {
+    teacherId,
     startTime: addMinutes(parseISO(value.startDate), value.startTime),
     endTime: addMinutes(parseISO(value.endDate), value.endTime),
     type: value.type,
@@ -143,17 +145,4 @@ export type TeacherAvailabilityTemplateEditorInput = z.infer<
 >;
 export type TeacherAvailabilityOverrideEditorInput = z.infer<
   typeof teacherAvailabilityOverrideEditorSchema
->;
-export type TeacherUpsertAvailabilityInput = Pick<UpsertTeacherAvailabilityInput, "entries">;
-export type TeacherCreateAvailabilityOverrideInput = Pick<
-  CreateTeacherAvailabilityOverrideInput,
-  "startTime" | "endTime" | "type"
->;
-export type TeacherUpdateAvailabilityOverrideInput = Pick<
-  UpdateTeacherAvailabilityOverrideInput,
-  "overrideId" | "startTime" | "endTime" | "type"
->;
-export type TeacherDeleteAvailabilityOverrideInput = Pick<
-  DeleteTeacherAvailabilityOverrideInput,
-  "overrideId"
 >;

@@ -51,14 +51,3 @@ export function buildEntriesAfterTemplateDelete(
 ): TeacherAvailabilityEntryInput[] {
   return toTeacherAvailabilityEntryInputs(entries.filter((entry) => entry.id !== entryId));
 }
-
-export function buildEntriesAfterTemplateErase(
-  entries: AvailabilityTemplateEntry[],
-  previousId?: string,
-): TeacherAvailabilityEntryInput[] {
-  if (!previousId) {
-    return toTeacherAvailabilityEntryInputs(entries);
-  }
-
-  return buildEntriesAfterTemplateDelete(entries, previousId);
-}

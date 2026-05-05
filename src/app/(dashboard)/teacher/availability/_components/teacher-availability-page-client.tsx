@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import type {
+  CreateTeacherAvailabilityOverrideInput,
   TeacherAvailabilityEntryInput,
   TeacherAvailabilityTemplateEditorInput,
-  TeacherCreateAvailabilityOverrideInput,
-  TeacherUpdateAvailabilityOverrideInput,
+  UpdateTeacherAvailabilityOverrideInput,
 } from "@/features/availability/lib/schemas";
 import type {
   AvailabilityOverrideEntry,
@@ -15,13 +15,13 @@ import type {
 import { useAvailabilityOverrideMutations } from "@/features/availability/hooks/use-availability-override-mutations";
 import { useAvailabilityTemplateMutations } from "@/features/availability/hooks/use-availability-template-mutations";
 import { AvailabilityWeekToolbar } from "@/features/availability/components/availability-week-toolbar";
-import { useTeacherAvailabilityWeekUrlState } from "../_hooks/use-teacher-availability-week-url-state";
 import {
   createTeacherAvailabilityOverrideAction,
   deleteTeacherAvailabilityOverrideAction,
   updateTeacherAvailabilityOverrideAction,
   upsertTeacherAvailabilityAction,
-} from "../_actions/teacher-availability-actions";
+} from "@/features/availability/actions/availability-actions";
+import { useTeacherAvailabilityWeekUrlState } from "../_hooks/use-teacher-availability-week-url-state";
 import {
   TeacherAvailabilityTemplateEditor,
   type TemplateDialogState,
@@ -42,10 +42,10 @@ export function TeacherAvailabilityPageClient({
   const { isWeekLoading, shiftWeek } = useTeacherAvailabilityWeekUrlState(weekStart);
   const templateMutations = useAvailabilityTemplateMutations({
     teacher,
-    supportsErase: true,
     upsertAction: upsertTeacherAvailabilityAction,
   });
   const overrideMutations = useAvailabilityOverrideMutations({
+    teacherId: teacher.teacherId,
     createAction: createTeacherAvailabilityOverrideAction,
     updateAction: updateTeacherAvailabilityOverrideAction,
     deleteAction: deleteTeacherAvailabilityOverrideAction,
@@ -110,7 +110,7 @@ export function TeacherAvailabilityPageClient({
     return success;
   }
 
-  async function handleOverrideCreate(payload: TeacherCreateAvailabilityOverrideInput) {
+  async function handleOverrideCreate(payload: CreateTeacherAvailabilityOverrideInput) {
     const success = await overrideMutations.handleOverrideCreate(payload);
     if (success) {
       closeOverrideDialog(false);
@@ -118,7 +118,7 @@ export function TeacherAvailabilityPageClient({
     return success;
   }
 
-  async function handleOverrideUpdate(payload: TeacherUpdateAvailabilityOverrideInput) {
+  async function handleOverrideUpdate(payload: UpdateTeacherAvailabilityOverrideInput) {
     const success = await overrideMutations.handleOverrideUpdate(payload);
     if (success) {
       closeOverrideDialog(false);

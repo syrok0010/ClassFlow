@@ -63,12 +63,8 @@ export function TeacherAvailabilityOverridesPanel({
   onRequestDelete: (entry: AvailabilityOverrideEntry | null) => void;
   onDialogChange: (open: boolean) => void;
   onDeleteDialogChange: (open: boolean) => void;
-  onCreate: (
-    payload: Pick<CreateTeacherAvailabilityOverrideInput, "startTime" | "endTime" | "type">,
-  ) => Promise<boolean>;
-  onUpdate: (
-    payload: Pick<UpdateTeacherAvailabilityOverrideInput, "overrideId" | "startTime" | "endTime" | "type">,
-  ) => Promise<boolean>;
+  onCreate: (payload: CreateTeacherAvailabilityOverrideInput) => Promise<boolean>;
+  onUpdate: (payload: UpdateTeacherAvailabilityOverrideInput) => Promise<boolean>;
   onDelete: () => void;
 }) {
   return (
@@ -110,6 +106,7 @@ export function TeacherAvailabilityOverridesPanel({
 
       <OverrideEntryFormDialog
         open={dialog.open}
+        teacherId={teacher.teacherId}
         teacherName={teacher.fullName}
         entry={dialog.entry}
         initialValues={{

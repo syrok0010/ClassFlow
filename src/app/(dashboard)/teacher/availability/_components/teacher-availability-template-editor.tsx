@@ -82,7 +82,6 @@ export function TeacherAvailabilityTemplateEditor({
           startTime: dialog.draftStartTime,
           endTime: dialog.draftEndTime,
         }}
-        allowErase
         isSaving={isSaving}
         onOpenChange={onDialogChange}
         onSubmit={onSubmit}

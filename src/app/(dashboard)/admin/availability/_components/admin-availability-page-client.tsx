@@ -16,12 +16,18 @@ import { AvailabilityWeekToolbar } from "@/features/availability/components/avai
 import { useAvailabilityOverrideMutations } from "@/features/availability/hooks/use-availability-override-mutations";
 import { useAvailabilityTemplateMutations } from "@/features/availability/hooks/use-availability-template-mutations";
 import type {
+  CreateTeacherAvailabilityOverrideInput,
   TeacherAvailabilityEntryInput,
   TeacherAvailabilityTemplateEditorInput,
-  TeacherCreateAvailabilityOverrideInput,
-  TeacherUpdateAvailabilityOverrideInput,
+  UpdateTeacherAvailabilityOverrideInput,
 } from "@/features/availability/lib/schemas";
 import type { AvailabilityTeacher, AvailabilityWeekData } from "@/features/availability/lib/types";
+import {
+  createTeacherAvailabilityOverrideAction,
+  deleteTeacherAvailabilityOverrideAction,
+  updateTeacherAvailabilityOverrideAction,
+  upsertTeacherAvailabilityAction,
+} from "@/features/availability/actions/availability-actions";
 import { AvailabilityEditor } from "./availability-editor";
 import { DeleteOverrideDialog } from "./delete-override-dialog";
 import { MultiTeacherMatrix } from "./multi-teacher-matrix";
@@ -29,12 +35,6 @@ import { SingleTeacherMatrix } from "./single-teacher-matrix";
 import { TeacherSelectorPanel } from "./teacher-selector-panel";
 import { useAvailabilityViewState } from "../_hooks/use-availability-view-state";
 import { useAvailabilityWeekUrlState } from "../_hooks/use-availability-week-url-state";
-import {
-  createTeacherAvailabilityOverrideAction,
-  deleteTeacherAvailabilityOverrideAction,
-  updateTeacherAvailabilityOverrideAction,
-  upsertTeacherAvailabilityAction,
-} from "../_actions/availability-actions";
 
 const EMPTY_TEACHER: AvailabilityTeacher = {
   teacherId: "",
@@ -72,49 +72,13 @@ export function AdminAvailabilityPageClient({
   const selectedTeacher = selectedTeachers.length === 1 ? selectedTeachers[0] : null;
   const templateMutations = useAvailabilityTemplateMutations({
     teacher: selectedTeacher ?? EMPTY_TEACHER,
-    supportsErase: false,
-    upsertAction: async (payload) => {
-      if (!selectedTeacher) {
-        return { error: "Не выбран преподаватель" };
-      }
-
-      return upsertTeacherAvailabilityAction({
-        teacherId: selectedTeacher.teacherId,
-        entries: payload.entries,
-      });
-    },
+    upsertAction: upsertTeacherAvailabilityAction,
   });
   const overrideMutations = useAvailabilityOverrideMutations({
-    createAction: async (payload) => {
-      if (!selectedTeacher) {
-        return { error: "Не выбран преподаватель" };
-      }
-
-      return createTeacherAvailabilityOverrideAction({
-        teacherId: selectedTeacher.teacherId,
-        ...payload,
-      });
-    },
-    updateAction: async (payload) => {
-      if (!selectedTeacher) {
-        return { error: "Не выбран преподаватель" };
-      }
-
-      return updateTeacherAvailabilityOverrideAction({
-        teacherId: selectedTeacher.teacherId,
-        ...payload,
-      });
-    },
-    deleteAction: async (payload) => {
-      if (!selectedTeacher) {
-        return { error: "Не выбран преподаватель" };
-      }
-
-      return deleteTeacherAvailabilityOverrideAction({
-        teacherId: selectedTeacher.teacherId,
-        ...payload,
-      });
-    },
+    teacherId: selectedTeacher?.teacherId ?? "",
+    createAction: createTeacherAvailabilityOverrideAction,
+    updateAction: updateTeacherAvailabilityOverrideAction,
+    deleteAction: deleteTeacherAvailabilityOverrideAction,
   });
   const isMutating = templateMutations.isMutating || overrideMutations.isMutating;
 
@@ -129,7 +93,7 @@ export function AdminAvailabilityPageClient({
     return success;
   }
 
-  async function handleOverrideCreate(payload: TeacherCreateAvailabilityOverrideInput) {
+  async function handleOverrideCreate(payload: CreateTeacherAvailabilityOverrideInput) {
     const success = await overrideMutations.handleOverrideCreate(payload);
     if (success) {
       closeOverrideDialog(false);
@@ -137,7 +101,7 @@ export function AdminAvailabilityPageClient({
     return success;
   }
 
-  async function handleOverrideUpdate(payload: TeacherUpdateAvailabilityOverrideInput) {
+  async function handleOverrideUpdate(payload: UpdateTeacherAvailabilityOverrideInput) {
     const success = await overrideMutations.handleOverrideUpdate(payload);
     if (success) {
       closeOverrideDialog(false);
@@ -224,7 +188,6 @@ export function AdminAvailabilityPageClient({
             open={templateDialog.open}
             teacherName={selectedTeacher.fullName}
             entry={templateDialog.entry}
-            allowErase={false}
             isSaving={isMutating}
             onOpenChange={closeTemplateDialog}
             onSubmit={handleTemplateSave}
@@ -233,6 +196,7 @@ export function AdminAvailabilityPageClient({
           <OverrideEntryFormDialog
             key={`override-${format(weekStart, "yyyy-MM-dd")}-${overrideDialog.entry?.id ?? "new"}-${overrideDialog.open ? "open" : "closed"}`}
             open={overrideDialog.open}
+            teacherId={selectedTeacher.teacherId}
             teacherName={selectedTeacher.fullName}
             entry={overrideDialog.entry}
             isSaving={isMutating}

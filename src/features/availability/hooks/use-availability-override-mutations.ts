@@ -2,32 +2,34 @@
 
 import { useCallback } from "react";
 import type {
-  TeacherCreateAvailabilityOverrideInput,
-  TeacherDeleteAvailabilityOverrideInput,
-  TeacherUpdateAvailabilityOverrideInput,
+  CreateTeacherAvailabilityOverrideInput,
+  DeleteTeacherAvailabilityOverrideInput,
+  UpdateTeacherAvailabilityOverrideInput,
 } from "@/features/availability/lib/schemas";
 import type { AvailabilityOverrideEntry } from "@/features/availability/lib/types";
 import { useAvailabilityMutationRunner } from "./use-availability-mutation-runner";
 
 export function useAvailabilityOverrideMutations({
+  teacherId,
   createAction,
   updateAction,
   deleteAction,
 }: {
-  createAction: (payload: TeacherCreateAvailabilityOverrideInput) => Promise<{ error: string | null }>;
-  updateAction: (payload: TeacherUpdateAvailabilityOverrideInput) => Promise<{ error: string | null }>;
-  deleteAction: (payload: TeacherDeleteAvailabilityOverrideInput) => Promise<{ error: string | null }>;
+  teacherId: string;
+  createAction: (payload: CreateTeacherAvailabilityOverrideInput) => Promise<{ error: string | null }>;
+  updateAction: (payload: UpdateTeacherAvailabilityOverrideInput) => Promise<{ error: string | null }>;
+  deleteAction: (payload: DeleteTeacherAvailabilityOverrideInput) => Promise<{ error: string | null }>;
 }) {
   const { isMutating, mutate } = useAvailabilityMutationRunner();
 
   const handleOverrideCreate = useCallback(
-    async (payload: TeacherCreateAvailabilityOverrideInput) =>
+    async (payload: CreateTeacherAvailabilityOverrideInput) =>
       mutate(() => createAction(payload), "Исключение добавлено"),
     [createAction, mutate],
   );
 
   const handleOverrideUpdate = useCallback(
-    async (payload: TeacherUpdateAvailabilityOverrideInput) =>
+    async (payload: UpdateTeacherAvailabilityOverrideInput) =>
       mutate(() => updateAction(payload), "Исключение обновлено"),
     [mutate, updateAction],
   );
@@ -39,11 +41,11 @@ export function useAvailabilityOverrideMutations({
       }
 
       return mutate(
-        () => deleteAction({ overrideId: overrideToDelete.id }),
+        () => deleteAction({ teacherId, overrideId: overrideToDelete.id }),
         "Исключение удалено",
       );
     },
-    [deleteAction, mutate],
+    [deleteAction, mutate, teacherId],
   );
 
   return {
