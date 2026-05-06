@@ -48,20 +48,12 @@ export function getWeekRangeLabel(weekStart: Date): string {
   const start = weekStart;
   const end = addDays(start, 6);
   const endLabel = format(end, "d MMMM", { locale: ru });
-  const startLabel = format(
-    start,
-    isSameMonth(start, end)
-      ? "d"
-      : "d MMMM",
-    { locale: ru }
-  );
-
+  const startLabel = format(start, isSameMonth(start, end) ? "d" : "d MMMM", { locale: ru });
   return `${startLabel} - ${endLabel}`;
 }
 
 export function getDayDateLabel(weekStart: Date, dayOfWeek: number): string {
-  const date = addDays(weekStart, dayOfWeek - 1);
-  return format(date, "d MMM", { locale: ru });
+  return format(addDays(weekStart, dayOfWeek - 1), "d MMM", { locale: ru });
 }
 
 export function formatTimeRange(startTimeMinutes: number, endTimeMinutes: number): string {
@@ -71,7 +63,6 @@ export function formatTimeRange(startTimeMinutes: number, endTimeMinutes: number
 export function formatDateRange(start: Date, end: Date): string {
   const startLabel = format(start, "d MMM", { locale: ru });
   const endLabel = format(end, "d MMM", { locale: ru });
-
   return startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`;
 }
 
@@ -81,13 +72,19 @@ export function minutesToTime(value: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+export function getTimeInputValue(value: number): string {
+  return Number.isFinite(value) ? minutesToTime(value) : "";
+}
+
+export function getMinutesFromTimeInput(valueAsNumber: number): number {
+  return Number.isFinite(valueAsNumber) ? valueAsNumber / 60_000 : Number.NaN;
+}
+
 export function buildSlotLabels(): string[] {
   const labels: string[] = [];
-
   for (let minutes = DAY_START_MINUTES; minutes < DAY_END_MINUTES; minutes += SLOT_MINUTES) {
     labels.push(minutesToTime(minutes));
   }
-
   return labels;
 }
 
@@ -107,11 +104,7 @@ export function getTeacherOverrideEntriesForWeek(
   const weekEnd = addDays(weekStart, 7);
 
   return teacher.overrides
-    .filter((entry) => {
-      const start = entry.startTime;
-      const end = entry.endTime;
-      return start < weekEnd && end > weekStart;
-    })
+    .filter((entry) => entry.startTime < weekEnd && entry.endTime > weekStart)
     .sort((left, right) => left.startTime.getTime() - right.startTime.getTime());
 }
 
@@ -162,10 +155,10 @@ export function normalizeTemplateEntries(
 
       const previous = normalized.at(-1);
       if (
-        previous
-        && previous.dayOfWeek === day.dayOfWeek
-        && previous.type === active.type
-        && previous.endTime === segmentStart
+        previous &&
+        previous.dayOfWeek === day.dayOfWeek &&
+        previous.type === active.type &&
+        previous.endTime === segmentStart
       ) {
         previous.endTime = segmentEnd;
         continue;
@@ -193,11 +186,13 @@ type OverrideMinuteRange = AvailabilityOverrideEntry & MinuteRange;
 export type AvailabilityTimelineSegment = MinuteRange & {
   type: AvailabilityType;
   isOverride: boolean;
+  sourceId: string;
 };
 
 export type TeacherMinuteState = {
   availability: AvailabilityType | null;
   isOverride: boolean;
+  sourceId: string | null;
 };
 
 export type TeacherAvailabilityRef = {
@@ -215,15 +210,10 @@ const DAY_RANGE_MINUTES = DAY_END_MINUTES - DAY_START_MINUTES;
 function clampMinuteRange(startMinute: number, endMinute: number): MinuteRange | null {
   const clampedStart = Math.max(startMinute, DAY_START_MINUTES);
   const clampedEnd = Math.min(endMinute, DAY_END_MINUTES);
-
   if (clampedStart >= clampedEnd) {
     return null;
   }
-
-  return {
-    startMinute: clampedStart,
-    endMinute: clampedEnd,
-  };
+  return { startMinute: clampedStart, endMinute: clampedEnd };
 }
 
 function getMinuteOffsetFromDayStart(value: Date, dayStart: Date): number {
@@ -243,17 +233,12 @@ function getTeacherDayOverrides(
   const dayEnd = addDays(dayStart, 1);
 
   return teacher.overrides
-    .filter((entry) => {
-      const start = entry.startTime;
-      const end = entry.endTime;
-      return start < dayEnd && end > dayStart;
-    })
+    .filter((entry) => entry.startTime < dayEnd && entry.endTime > dayStart)
     .map((entry) => {
       const range = clampMinuteRange(
         getMinuteOffsetFromDayStart(entry.startTime, dayStart),
         getMinuteOffsetFromDayStart(entry.endTime, dayStart),
       );
-
       return range ? { ...entry, ...range } : null;
     })
     .filter((entry): entry is OverrideMinuteRange => Boolean(entry))
@@ -287,7 +272,6 @@ export function getTeacherDayAvailabilitySegments(
   for (let pointIndex = 0; pointIndex < points.length - 1; pointIndex += 1) {
     const startMinute = points[pointIndex];
     const endMinute = points[pointIndex + 1];
-
     if (startMinute >= endMinute) {
       continue;
     }
@@ -305,14 +289,16 @@ export function getTeacherDayAvailabilitySegments(
       endMinute,
       type: activeOverride?.type ?? activeTemplate?.type ?? "AVAILABLE",
       isOverride: Boolean(activeOverride),
+      sourceId: activeOverride?.id ?? activeTemplate?.id ?? "",
     };
 
     const previousSegment = segments.at(-1);
     if (
-      previousSegment
-      && previousSegment.endMinute === nextSegment.startMinute
-      && previousSegment.type === nextSegment.type
-      && previousSegment.isOverride === nextSegment.isOverride
+      previousSegment &&
+      previousSegment.endMinute === nextSegment.startMinute &&
+      previousSegment.type === nextSegment.type &&
+      previousSegment.isOverride === nextSegment.isOverride &&
+      previousSegment.sourceId === nextSegment.sourceId
     ) {
       previousSegment.endMinute = nextSegment.endMinute;
       continue;
@@ -335,6 +321,7 @@ export function getTeacherMinuteState(
   return {
     availability: availabilitySegment?.type ?? null,
     isOverride: availabilitySegment?.isOverride ?? false,
+    sourceId: availabilitySegment?.sourceId ?? null,
   };
 }
 
@@ -393,7 +380,6 @@ export function buildAvailabilityCountSegments(
   for (let pointIndex = 0; pointIndex < points.length - 1; pointIndex += 1) {
     const startMinute = points[pointIndex];
     const endMinute = points[pointIndex + 1];
-
     if (startMinute >= endMinute) {
       continue;
     }
@@ -408,10 +394,10 @@ export function buildAvailabilityCountSegments(
 
     const previousSegment = countSegments.at(-1);
     if (
-      previousSegment
-      && previousSegment.endMinute === nextSegment.startMinute
-      && previousSegment.available === nextSegment.available
-      && previousSegment.unavailable === nextSegment.unavailable
+      previousSegment &&
+      previousSegment.endMinute === nextSegment.startMinute &&
+      previousSegment.available === nextSegment.available &&
+      previousSegment.unavailable === nextSegment.unavailable
     ) {
       previousSegment.endMinute = nextSegment.endMinute;
       continue;

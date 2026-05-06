@@ -1,19 +1,17 @@
+"use client";
+
 import type { ReactNode } from "react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   DAY_END_MINUTES,
   DAY_START_MINUTES,
-  SLOT_MINUTES,
   SLOT_COUNT,
-  minutesToTime,
+  SLOT_MINUTES,
+  buildSlotLabels,
   minuteToTimelinePercent,
-} from "../_lib/utils";
-import { SLOT_LABELS } from "./availability-view-helpers";
+  minutesToTime,
+} from "@/features/availability/lib/utils";
 
 type AvailabilityTimelineRowProps = {
   dayLabel: string;
@@ -29,30 +27,31 @@ type AvailabilityTimelineCanvasProps = {
   className?: string;
 };
 
+const SLOT_LABELS = buildSlotLabels();
+
 export function AvailabilityTimelineScale() {
   const scaleLabels = [...SLOT_LABELS, minutesToTime(DAY_END_MINUTES)];
 
   return (
     <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
-      <div/>
+      <div />
       <div className="relative h-10 overflow-visible text-xs text-muted-foreground">
-        {scaleLabels.map((label, index) =>
-          (
-            <div
-              key={label}
-              className={cn(
-                "absolute bottom-0 origin-top-left whitespace-nowrap leading-none -rotate-45",
-                index === 0
-                  ? "translate-x-0"
-                  : index === scaleLabels.length - 1
-                    ? "-translate-x-full"
-                    : "-translate-x-1/2",
-              )}
-              style={{left: `${minuteToTimelinePercent(DAY_START_MINUTES + index * SLOT_MINUTES)}%`}}
-            >
-              {label}
-            </div>
-          ))}
+        {scaleLabels.map((label, index) => (
+          <div
+            key={label}
+            className={cn(
+              "absolute bottom-0 origin-top-left whitespace-nowrap leading-none -rotate-45",
+              index === 0
+                ? "translate-x-0"
+                : index === scaleLabels.length - 1
+                  ? "-translate-x-full"
+                  : "-translate-x-1/2",
+            )}
+            style={{ left: `${minuteToTimelinePercent(DAY_START_MINUTES + index * SLOT_MINUTES)}%` }}
+          >
+            {label}
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -24,10 +24,16 @@ export type AvailabilityTeacher = {
   overrides: AvailabilityOverrideEntry[];
 };
 
-export type AdminAvailabilityWeekData = {
+export type AvailabilityWeekData = {
   weekStart: Date;
   weekEnd: Date;
   teachers: AvailabilityTeacher[];
+};
+
+export type TeacherAvailabilityPageData = {
+  weekStart: Date;
+  weekEnd: Date;
+  teacher: AvailabilityTeacher;
 };
 
 export type DayConfig = {

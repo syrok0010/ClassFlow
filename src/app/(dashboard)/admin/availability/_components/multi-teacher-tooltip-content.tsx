@@ -1,4 +1,4 @@
-import type { SlotBreakdown } from "../_lib/types";
+import type { SlotBreakdown } from "@/features/availability/lib/types";
 
 type MultiTeacherTooltipContentProps = {
   dayLabel: string;
