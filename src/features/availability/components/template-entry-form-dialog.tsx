@@ -57,14 +57,13 @@ export function TemplateEntryFormDialog({
   ) => Promise<boolean>;
 }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const defaultValues: TeacherAvailabilityTemplateEditorInput = {
-    dayOfWeek: entry?.dayOfWeek ?? initialValues?.dayOfWeek ?? 1,
-    startTime: entry?.startTime ?? initialValues?.startTime ?? 8 * 60,
-    endTime: entry?.endTime ?? initialValues?.endTime ?? 9 * 60,
-    type: entry?.type ?? "AVAILABLE",
-  };
   const form = useForm({
-    defaultValues,
+    defaultValues: {
+      dayOfWeek: entry?.dayOfWeek ?? initialValues?.dayOfWeek ?? 1,
+      startTime: entry?.startTime ?? initialValues?.startTime ?? 8 * 60,
+      endTime: entry?.endTime ?? initialValues?.endTime ?? 9 * 60,
+      type: entry?.type ?? "AVAILABLE",
+    } satisfies TeacherAvailabilityTemplateEditorInput,
     validators: {
       onChange: teacherAvailabilityTemplateEditorSchema,
       onSubmit: teacherAvailabilityTemplateEditorSchema,
@@ -79,11 +78,6 @@ export function TemplateEntryFormDialog({
       }
     },
   });
-  const typeLabels: Record<TeacherAvailabilityTemplateEditorInput["type"], string> = {
-    PREFERRED: AVAILABILITY_TYPE_LABELS.PREFERRED,
-    AVAILABLE: AVAILABILITY_TYPE_LABELS.AVAILABLE,
-    UNAVAILABLE: AVAILABILITY_TYPE_LABELS.UNAVAILABLE,
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -208,11 +202,11 @@ export function TemplateEntryFormDialog({
                         className="w-full"
                         aria-invalid={errors.length > 0 || undefined}
                       >
-                        <SelectValue>{typeLabels[field.state.value]}</SelectValue>
+                        <SelectValue>{AVAILABILITY_TYPE_LABELS[field.state.value]}</SelectValue>
                       </SelectTrigger>
                       <SelectContent align="start">
                         <SelectGroup>
-                          {Object.entries(typeLabels).map(([value, label]) => (
+                          {Object.entries(AVAILABILITY_TYPE_LABELS).map(([value, label]) => (
                             <SelectItem key={value} value={value}>
                               {label}
                             </SelectItem>

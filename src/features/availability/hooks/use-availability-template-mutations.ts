@@ -6,11 +6,8 @@ import type {
   UpsertTeacherAvailabilityInput,
 } from "@/features/availability/lib/schemas";
 import type { AvailabilityTeacher, AvailabilityTemplateEntry } from "@/features/availability/lib/types";
-import {
-  buildEntriesAfterTemplateDelete,
-  buildEntriesAfterTemplateSave,
-} from "@/features/availability/lib/template-entry-ops";
 import { useAvailabilityMutationRunner } from "./use-availability-mutation-runner";
+import {normalizeTemplateEntries} from "@/features/availability/lib/utils";
 
 export function useAvailabilityTemplateMutations({
   teacher,
@@ -26,16 +23,16 @@ export function useAvailabilityTemplateMutations({
       nextEntry: TeacherAvailabilityTemplateEditorInput,
       previousId?: string,
     ) => {
-      const nextEntries = buildEntriesAfterTemplateSave(
-        teacher.templateEntries,
-        {
-          dayOfWeek: nextEntry.dayOfWeek,
-          startTime: nextEntry.startTime,
-          endTime: nextEntry.endTime,
-          type: nextEntry.type,
-        },
-        previousId,
-      );
+      const nextEntries = normalizeTemplateEntries(
+            [
+                ...teacher.templateEntries.filter((entry) => entry.id !== previousId),
+                nextEntry,
+            ].sort((left, right) =>
+                left.dayOfWeek !== right.dayOfWeek
+                    ? left.dayOfWeek - right.dayOfWeek
+                    : left.startTime - right.startTime,
+            ),
+        );
 
       return mutate(
         () => upsertAction({ teacherId: teacher.teacherId, entries: nextEntries }),
@@ -51,7 +48,9 @@ export function useAvailabilityTemplateMutations({
         () =>
           upsertAction({
             teacherId: teacher.teacherId,
-            entries: buildEntriesAfterTemplateDelete(teacher.templateEntries, entry.id),
+            entries: teacher.templateEntries
+              .filter((templateEntry) => templateEntry.id !== entry.id),
+
           }),
         "Интервал удален",
       ),
