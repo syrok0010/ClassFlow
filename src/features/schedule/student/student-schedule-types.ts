@@ -1,7 +1,4 @@
-import type {
-  BaseScheduleEvent,
-  ScheduleViewMode,
-} from "@/features/schedule";
+import type { BaseScheduleEvent, ScheduleViewMode } from "@/features/schedule/lib/types";
 import type { GroupType, SubjectType } from "@/generated/prisma/enums";
 
 export interface StudentScheduleEvent extends BaseScheduleEvent {

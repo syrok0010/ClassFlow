@@ -1,6 +1,6 @@
-import { parseScheduleDate, parseScheduleView } from "@/features/schedule";
+import { parseScheduleDate, parseScheduleView } from "@/features/schedule/lib/query-params";
+import { StudentScheduleView } from "@/features/schedule/student/student-schedule-view";
 
-import { StudentScheduleView } from "./_components/student-schedule-view";
 import { getStudentSchedulePageData } from "./_lib/get-student-schedule-page-data";
 
 export const dynamic = "force-dynamic";
