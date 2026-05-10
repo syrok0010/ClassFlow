@@ -2,10 +2,11 @@
 
 import { BookOpen } from "lucide-react";
 
-import { DEFAULT_SCHEDULE_VIEW, ReadonlyScheduleBrowser } from "@/features/schedule";
+import { ReadonlyScheduleBrowser } from "@/features/schedule/components/readonly-schedule-browser";
+import { DEFAULT_SCHEDULE_VIEW } from "@/features/schedule/lib/query-params";
 
-import type { StudentSchedulePageData } from "../_lib/student-schedule-types";
 import { StudentScheduleEventCard } from "./student-schedule-event-card";
+import type { StudentSchedulePageData } from "./student-schedule-types";
 
 type StudentScheduleViewProps = StudentSchedulePageData;
 

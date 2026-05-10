@@ -1,5 +1,7 @@
 "use client";
 
+import { differenceInMinutes } from "date-fns";
+
 import {
   Tooltip,
   TooltipContent,
@@ -9,8 +11,7 @@ import {
 import { SUBJECT_CARD_TONES, SUBJECT_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-import type { StudentScheduleEvent } from "../_lib/student-schedule-types";
-import {differenceInMinutes} from "date-fns";
+import type { StudentScheduleEvent } from "./student-schedule-types";
 
 interface StudentScheduleEventCardProps {
   event: StudentScheduleEvent;
@@ -71,7 +72,7 @@ function StudentScheduleEventInlineCard({
   return (
     <div
       className={cn(
-        "flex h-full w-full flex-col overflow-hidden border rounded-lg px-1 text-left shadow-sm",
+        "flex h-full w-full flex-col overflow-hidden rounded-lg border px-1 text-left shadow-sm",
         SUBJECT_CARD_TONES[event.subjectType],
         layout === "title-only" ? "justify-center py-0" : "justify-start py-0.5"
       )}
@@ -112,7 +113,7 @@ function StudentScheduleEventTooltipCard({
   return (
     <div
       className={cn(
-        "flex min-h-full flex-col gap-2 px-3 py-2 border rounded-lg",
+        "flex min-h-full flex-col gap-2 rounded-lg border px-3 py-2",
         SUBJECT_CARD_TONES[event.subjectType]
       )}
     >
