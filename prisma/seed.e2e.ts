@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 import { hashPassword } from "better-auth/crypto";
+import { startOfWeek } from "date-fns";
 
 const databaseUrl = process.env.DATABASE_URL_E2E;
 
@@ -46,21 +47,9 @@ async function createCredentialAccount(userId: string, password: string) {
   });
 }
 
-function getCurrentWeekMonday() {
-  const today = new Date();
-  const monday = new Date(today);
-
-  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-  monday.setHours(0, 0, 0, 0);
-
-  return monday;
-}
-
-function dateAtTime(baseDate: Date, hours: number, minutes: number) {
+function dateAtMinutes(baseDate: Date, minutesFromMidnight: number) {
   const date = new Date(baseDate);
-
-  date.setHours(hours, minutes, 0, 0);
-
+  date.setHours(Math.floor(minutesFromMidnight / 60), minutesFromMidnight % 60, 0, 0);
   return date;
 }
 
@@ -194,12 +183,12 @@ async function seedAuthAndUsers() {
     })),
   });
 
-  const scheduleDate = getCurrentWeekMonday();
+  const scheduleDate = startOfWeek(new Date(), { weekStartsOn: 1 });
   await prisma.scheduleEntry.create({
     data: {
       date: scheduleDate,
-      startTime: dateAtTime(scheduleDate, 9, 0),
-      endTime: dateAtTime(scheduleDate, 9, 45),
+      startTime: dateAtMinutes(scheduleDate, 9 * 60),
+      endTime: dateAtMinutes(scheduleDate, 9 * 60 + 45),
       groupId: parentScheduleGroup.id,
       roomId: parentScheduleRoom.id,
       teacherId: teacher.id,

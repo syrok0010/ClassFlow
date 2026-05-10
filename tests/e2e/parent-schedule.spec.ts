@@ -11,9 +11,8 @@ test.describe("Parent schedule", () => {
 
     await expect(page).toHaveURL(/\/parent\/schedule\?.*studentId=/);
     await expect(page.getByRole("heading", { name: "Расписание детей" })).toBeVisible();
-    await expect(page.getByRole("radio", { name: "Волкова Дарья Игоревна" })).toBeVisible();
-    await expect(page.getByRole("radio", { name: "Петров Иван · 5 А · 1" })).toBeVisible();
-    await expect(page.getByRole("radio", { name: "Петров Иван · 5 А · 2" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "Волкова Дарья Игоревна · 5 А" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "Петров Иван · 5 А" })).toHaveCount(2);
     await expect(page.getByTestId("student-schedule-card").first()).toContainText("Математика");
   });
 
@@ -39,12 +38,11 @@ test.describe("Parent schedule", () => {
     await loginAsParent(page);
     await page.goto("/parent/schedule");
 
-    await page.getByRole("radio", { name: "Петров Иван · 5 А · 1" }).click();
+    const duplicateChildren = page.getByRole("radio", { name: "Петров Иван · 5 А" });
 
-    await expect(page.getByRole("radio", { name: "Петров Иван · 5 А · 1" })).toHaveAttribute(
-      "aria-checked",
-      "true"
-    );
+    await duplicateChildren.first().click();
+
+    await expect(duplicateChildren.first()).toHaveAttribute("aria-checked", "true");
     await expect(page).toHaveURL(/\/parent\/schedule\?.*studentId=/);
   });
 });

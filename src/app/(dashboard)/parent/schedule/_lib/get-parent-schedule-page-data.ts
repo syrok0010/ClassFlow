@@ -29,14 +29,25 @@ export interface ParentSchedulePageData {
   events: StudentScheduleEvent[];
 }
 
-interface ParentScheduleChildSeed {
-  id: string;
-  fullName: string;
-  className: string | null;
-}
-
 const CHILD_WITHOUT_NAME_LABEL = "Ученик без имени";
 const CHILD_WITHOUT_CLASS_LABEL = "Без класса";
+const collator = new Intl.Collator("ru");
+
+function compareStudents(left: ParentScheduleChild, right: ParentScheduleChild) {
+  const nameComparison = collator.compare(left.fullName, right.fullName);
+
+  if (nameComparison !== 0) {
+    return nameComparison;
+  }
+
+  const classComparison = collator.compare(left.className ?? "", right.className ?? "");
+
+  if (classComparison !== 0) {
+    return classComparison;
+  }
+
+  return collator.compare(left.id, right.id);
+}
 
 export async function getParentSchedulePageData({
   anchorDate,
@@ -80,19 +91,23 @@ export async function getParentSchedulePageData({
     },
   });
 
-  const children = buildChildLabels(
-    studentParents.map((row) => {
+
+  const children = studentParents
+    .map((row) => {
       const classNames = row.student.studentGroups
         .map((membership) => membership.group.name)
-        .sort((left, right) => left.localeCompare(right, "ru"));
+        .sort((first, second) => collator.compare(first, second));
+      const fullName = getUserFullName(row.student.user) || CHILD_WITHOUT_NAME_LABEL;
+      const className = classNames[0] ?? null;
 
       return {
         id: row.student.id,
-        fullName: getUserFullName(row.student.user) || CHILD_WITHOUT_NAME_LABEL,
-        className: classNames[0] ?? null,
+        fullName,
+        className,
+        label: buildChildLabel(fullName, className),
       };
     })
-  );
+    .sort(compareStudents);
 
   if (children.length === 0) {
     return {
@@ -124,61 +139,6 @@ export async function getParentSchedulePageData({
   };
 }
 
-function buildChildLabels(children: ParentScheduleChildSeed[]): ParentScheduleChild[] {
-  const collator = new Intl.Collator("ru");
-  const sortedChildren = [...children].sort((left, right) => {
-    const nameComparison = collator.compare(left.fullName, right.fullName);
-
-    if (nameComparison !== 0) {
-      return nameComparison;
-    }
-
-    const classComparison = collator.compare(left.className ?? "", right.className ?? "");
-
-    if (classComparison !== 0) {
-      return classComparison;
-    }
-
-    return collator.compare(left.id, right.id);
-  });
-
-  const fullNameCounts = countValues(sortedChildren.map((child) => child.fullName));
-  const baseLabels = sortedChildren.map((child) => {
-    if ((fullNameCounts.get(child.fullName) ?? 0) === 1) {
-      return child.fullName;
-    }
-
-    return `${child.fullName} · ${child.className ?? CHILD_WITHOUT_CLASS_LABEL}`;
-  });
-  const baseLabelCounts = countValues(baseLabels);
-  const nextIndexByBaseLabel = new Map<string, number>();
-
-  return sortedChildren.map((child, index) => {
-    const baseLabel = baseLabels[index];
-
-    if ((baseLabelCounts.get(baseLabel) ?? 0) === 1) {
-      return {
-        ...child,
-        label: baseLabel,
-      };
-    }
-
-    const nextIndex = nextIndexByBaseLabel.get(baseLabel) ?? 1;
-    nextIndexByBaseLabel.set(baseLabel, nextIndex + 1);
-
-    return {
-      ...child,
-      label: `${baseLabel} · ${nextIndex}`,
-    };
-  });
-}
-
-function countValues(values: string[]): Map<string, number> {
-  const counts = new Map<string, number>();
-
-  for (const value of values) {
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  }
-
-  return counts;
+function buildChildLabel(fullName: string, className: string | null): string {
+  return `${fullName} · ${className ?? CHILD_WITHOUT_CLASS_LABEL}`;
 }
