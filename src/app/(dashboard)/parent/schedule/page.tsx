@@ -37,10 +37,7 @@ export default async function ParentSchedulePage({ searchParams }: ParentSchedul
 
   if (pageData.selectedStudentId &&
       (requestedStudentId !== pageData.selectedStudentId || hasInvalidView || hasInvalidDate)) {
-    redirect(`/parent/schedule?
-      studentId=${pageData.selectedStudentId}
-      &
-      date=${format(anchorDate, "yyyy-MM-dd")}`);
+    redirect(`/parent/schedule?studentId=${pageData.selectedStudentId}&date=${format(anchorDate, "yyyy-MM-dd")}`);
   }
 
   return (
