@@ -2,7 +2,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 import { hashPassword } from "better-auth/crypto";
-import { startOfWeek } from "date-fns";
+import { set, startOfWeek } from "date-fns";
 
 const databaseUrl = process.env.DATABASE_URL_E2E;
 
@@ -45,12 +45,6 @@ async function createCredentialAccount(userId: string, password: string) {
       password: await hashPassword(password),
     },
   });
-}
-
-function dateAtMinutes(baseDate: Date, minutesFromMidnight: number) {
-  const date = new Date(baseDate);
-  date.setHours(Math.floor(minutesFromMidnight / 60), minutesFromMidnight % 60, 0, 0);
-  return date;
 }
 
 async function seedAuthAndUsers() {
@@ -187,8 +181,8 @@ async function seedAuthAndUsers() {
   await prisma.scheduleEntry.create({
     data: {
       date: scheduleDate,
-      startTime: dateAtMinutes(scheduleDate, 9 * 60),
-      endTime: dateAtMinutes(scheduleDate, 9 * 60 + 45),
+      startTime: set(scheduleDate, {hours: 9, minutes: 0, seconds: 0, milliseconds: 0}),
+      endTime: set(scheduleDate, {hours: 9, minutes: 45, seconds: 0, milliseconds: 0}),
       groupId: parentScheduleGroup.id,
       roomId: parentScheduleRoom.id,
       teacherId: teacher.id,
