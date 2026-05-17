@@ -8,7 +8,7 @@ test.describe("Rooms smoke", () => {
 
   test("renders rooms workspace with seeded buildings and rooms", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Здания", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Все здания: 3 кабинетов" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Все здания: 4 кабинетов" })).toBeVisible();
     await expect(page.getByPlaceholder("Поиск кабинета...")).toBeVisible();
     await expect(page.getByPlaceholder(">= мест")).toBeVisible();
 

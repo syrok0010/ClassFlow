@@ -2,6 +2,8 @@ import { parseScheduleDate, parseScheduleView } from "@/features/schedule";
 
 import { TeacherScheduleView } from "./_components/teacher-schedule-view";
 import { getTeacherSchedulePageData } from "./_lib/get-teacher-schedule-page-data";
+import {format} from "date-fns";
+import {redirect} from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,19 @@ export default async function TeacherSchedulePage(props: {
     anchorDate,
     viewMode,
   });
+
+  const hasInvalidView =
+      searchParams.view !== undefined &&
+      searchParams.view !== "day" &&
+      searchParams.view !== "week";
+
+  const hasInvalidDate =
+      searchParams.date !== undefined &&
+      (typeof searchParams.date !== "string" ||
+          format(anchorDate, "yyyy-MM-dd") !== searchParams.date);
+
+  if (hasInvalidDate || hasInvalidView)
+    redirect(`/teacher/schedule?date=${format(anchorDate, "yyyy-MM-dd")}`);
 
   return (
     <div className="flex flex-col gap-4">

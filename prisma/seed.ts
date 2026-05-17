@@ -410,10 +410,15 @@ async function main() {
   });
   const parent2 = await prisma.parent.create({ data: { userId: parent2User.id } });
 
+  const parent1Class3ChildId = allStudents[0];
+  const parent1Class6ChildId = allStudents[class3Students.length];
+  const parent2ChildId = allStudents[1];
+
   await prisma.studentParents.createMany({
     data: [
-      { parentId: parent1.id, studentId: allStudents[0] },
-      { parentId: parent2.id, studentId: allStudents[1] },
+      { parentId: parent1.id, studentId: parent1Class3ChildId },
+      { parentId: parent1.id, studentId: parent1Class6ChildId },
+      { parentId: parent2.id, studentId: parent2ChildId },
     ],
   });
 
