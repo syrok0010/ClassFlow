@@ -1,12 +1,18 @@
 import type { BaseScheduleEvent } from "@/features/schedule";
-import type { GroupType, SubjectType } from "@/generated/prisma/enums";
+import type { GroupType, ScheduleDeliveryMode, SubjectType } from "@/generated/prisma/enums";
 
 export interface AdminScheduleEvent extends BaseScheduleEvent {
+  id: string;
   templateId: string;
-  groupId: string;
-  dayOfWeek: number;
-  startMinutes: number;
-  endMinutes: number;
+  projectionClassId: string;
+  deliveryMode: ScheduleDeliveryMode;
+  deliveryGroupId: string | null;
+  deliveryGroupType: GroupType | null;
+  openClassIds: string[];
+  coveredClassIds: string[];
+  dayOfWeek: number | null;
+  startMinutes: number | null;
+  endMinutes: number | null;
   detached: boolean;
   subjectId: string;
   teacherId: string | null;
@@ -32,8 +38,9 @@ export interface AdminScheduleClassRow {
 export interface AdminSchedulePageData {
   events: AdminScheduleEvent[];
   classRows: AdminScheduleClassRow[];
-  subjectOptions: { id: string; name: string }[];
-  groupOptions: { id: string; name: string; type: GroupType }[];
+  subjectOptions: { id: string; name: string; type: SubjectType }[];
+  directGroupOptions: { id: string; name: string; type: GroupType; subjectId: string | null }[];
+  electiveGroupOptions: { id: string; name: string; subjectId: string | null }[];
   roomOptions: { id: string; name: string }[];
   teacherOptions: { id: string; name: string }[];
   lessonDurationByGroupSubject: Record<string, number>;

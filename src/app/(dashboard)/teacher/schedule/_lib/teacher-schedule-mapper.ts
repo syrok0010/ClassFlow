@@ -11,17 +11,29 @@ import {getMinutesSinceStartOfDay} from "@/features/schedule/lib/date-utils";
 
 export const teacherScheduleEntryInclude = {
   subject: { select: { id: true, name: true, type: true } },
-  group: { select: { id: true, name: true, type: true } },
+  deliveryGroup: { select: { id: true, name: true, type: true } },
+  coveredClasses: {
+    select: {
+      classGroupId: true,
+      schoolClass: { select: { id: true, name: true, type: true } },
+    },
+  },
   room: { select: { id: true, name: true } },
   template: {
     select: {
       id: true,
-      groupId: true,
+      deliveryMode: true,
+      deliveryGroupId: true,
       roomId: true,
       teacherId: true,
       subjectId: true,
       startTime: true,
       endTime: true,
+      coveredClasses: {
+        select: {
+          classGroupId: true,
+        },
+      },
     },
   },
 } satisfies Prisma.ScheduleEntryInclude;
@@ -37,6 +49,9 @@ export function mapScheduleEntryToTeacherScheduleEvent(
 ): TeacherScheduleEvent {
   const roomName = entry.room?.name ?? MISSING_ROOM_LABEL;
   const status = resolveTeacherScheduleEventStatus(entry);
+  const coveredClassNames = entry.coveredClasses.map((item) => item.schoolClass.name).sort((left, right) => left.localeCompare(right, "ru"));
+  const groupName = entry.deliveryGroup?.name ?? coveredClassNames.join(" + ");
+  const groupType = entry.deliveryGroup?.type ?? "CLASS";
 
   return {
     id: entry.id,
@@ -45,11 +60,11 @@ export function mapScheduleEntryToTeacherScheduleEvent(
     subjectName: entry.subject.name,
     subjectType: entry.subject.type,
     subjectTypeLabel: SUBJECT_LABELS[entry.subject.type],
-    groupName: entry.group.name,
-    groupType: entry.group.type,
+    groupName,
+    groupType,
     roomName,
     timeLabel: `${format(entry.startTime, "HH:mm")}-${format(entry.endTime, "HH:mm")}`,
-    metaLine: `${entry.group.name} • ${roomName}`,
+    metaLine: `${groupName} • ${roomName}`,
     status,
     statusLabel: TEACHER_STATUS_LABELS[status],
   };
@@ -68,8 +83,11 @@ function resolveTeacherScheduleEventStatus(
 
   if (
     entry.template.subjectId !== entry.subjectId ||
-    entry.template.groupId !== entry.groupId ||
+    entry.template.deliveryMode !== entry.deliveryMode ||
+    entry.template.deliveryGroupId !== entry.deliveryGroupId ||
     entry.template.roomId !== entry.roomId ||
+    serializeCoveredClassIds(entry.template.coveredClasses.map((item) => item.classGroupId))
+      !== serializeCoveredClassIds(entry.coveredClasses.map((item) => item.classGroupId)) ||
     getMinutesSinceStartOfDay(entry.startTime) !== entry.template.startTime ||
     getMinutesSinceStartOfDay(entry.endTime) !== entry.template.endTime
   ) {
@@ -84,4 +102,8 @@ const TEACHER_STATUS_LABELS: Record<TeacherScheduleEventStatus, string> = {
   substitution: "Замена",
   updated: "Изменено",
   ad_hoc: "Разовое событие"
+}
+
+function serializeCoveredClassIds(classIds: string[]) {
+  return [...classIds].sort().join("|");
 }

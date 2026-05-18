@@ -22,7 +22,20 @@ export function detectAdminScheduleConflicts(events: AdminScheduleEvent[]) {
       const left = events[i];
       const right = events[j];
 
+      if (left.templateId === right.templateId) {
+        continue;
+      }
+
       if (left.dayOfWeek !== right.dayOfWeek) {
+        continue;
+      }
+
+      if (
+        left.startMinutes === null
+        || left.endMinutes === null
+        || right.startMinutes === null
+        || right.endMinutes === null
+      ) {
         continue;
       }
 
@@ -31,7 +44,12 @@ export function detectAdminScheduleConflicts(events: AdminScheduleEvent[]) {
         continue;
       }
 
-      if (left.classId === right.classId && left.groupId === right.groupId) {
+      if (
+        left.deliveryMode === "DIRECT_GROUP"
+        && right.deliveryMode === "DIRECT_GROUP"
+        && left.deliveryGroupId
+        && left.deliveryGroupId === right.deliveryGroupId
+      ) {
         const conflict: EventConflict = {
           severity: "hard",
           fields: ["time", "group"],
@@ -68,7 +86,9 @@ export function detectAdminScheduleConflicts(events: AdminScheduleEvent[]) {
     if (!event.teacherId) {
       continue;
     }
-    const key = `${event.groupId}:${event.subjectId}`;
+    const key = event.deliveryGroupId
+      ? `${event.deliveryGroupId}:${event.subjectId}`
+      : `${[...event.coveredClassIds].sort().join(",")}:${event.subjectId}`;
     if (!preferredByGroupSubject.has(key)) {
       preferredByGroupSubject.set(key, event.teacherId);
       continue;

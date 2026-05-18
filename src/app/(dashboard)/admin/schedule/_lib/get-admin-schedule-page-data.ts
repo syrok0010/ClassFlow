@@ -4,7 +4,7 @@ import { requireAdminContext } from "@/lib/server-action-auth";
 
 import {
   adminScheduleTemplateInclude,
-  mapWeeklyTemplateToAdminScheduleEvent,
+  mapWeeklyTemplateToAdminScheduleEvents,
 } from "./admin-schedule-mapper";
 import type { AdminSchedulePageData } from "./admin-schedule-types";
 import { getUserFullName } from "@/lib/auth-access";
@@ -33,7 +33,8 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
       events: [],
       classRows: [],
       subjectOptions: [],
-      groupOptions: [],
+      directGroupOptions: [],
+      electiveGroupOptions: [],
       roomOptions: [],
       teacherOptions: [],
       lessonDurationByGroupSubject: {},
@@ -46,16 +47,34 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
     where: {
       OR: [
         {
-          groupId: {
+          deliveryGroupId: {
             in: classIds,
           },
         },
         {
-          group: {
+          deliveryGroup: {
             parentId: {
               in: classIds,
             },
             type: "SUBJECT_SUBGROUP",
+          },
+        },
+        {
+          openClasses: {
+            some: {
+              classGroupId: {
+                in: classIds,
+              },
+            },
+          },
+        },
+        {
+          coveredClasses: {
+            some: {
+              classGroupId: {
+                in: classIds,
+              },
+            },
           },
         },
       ],
@@ -71,7 +90,7 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
 
   const [subjects, groups, rooms, teachers, requirements] = await Promise.all([
     prisma.subject.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, type: true },
       orderBy: { name: "asc" },
     }),
     prisma.group.findMany({
@@ -82,7 +101,7 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
           { type: "ELECTIVE_GROUP" },
         ],
       },
-      select: { id: true, name: true, type: true },
+      select: { id: true, name: true, type: true, subjectId: true },
       orderBy: [{ type: "asc" }, { name: "asc" }],
     }),
     prisma.room.findMany({
@@ -130,10 +149,17 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
   );
 
   return {
-    events: templates.map((entry) => mapWeeklyTemplateToAdminScheduleEvent(entry)),
+    events: templates.flatMap((entry) => mapWeeklyTemplateToAdminScheduleEvents(entry)),
     classRows,
     subjectOptions: subjects,
-    groupOptions: groups,
+    directGroupOptions: groups.filter((group) => group.type === "CLASS" || group.type === "SUBJECT_SUBGROUP"),
+    electiveGroupOptions: groups
+      .filter((group) => group.type === "ELECTIVE_GROUP")
+      .map((group) => ({
+        id: group.id,
+        name: group.name,
+        subjectId: group.subjectId,
+      })),
     roomOptions: rooms,
     teacherOptions: teachers.map((teacher) => ({
       id: teacher.id,

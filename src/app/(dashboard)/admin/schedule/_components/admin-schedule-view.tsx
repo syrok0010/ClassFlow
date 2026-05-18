@@ -40,7 +40,8 @@ export function AdminScheduleView({
   events,
   classRows,
   subjectOptions,
-  groupOptions,
+  directGroupOptions,
+  electiveGroupOptions,
   roomOptions,
   teacherOptions,
   lessonDurationByGroupSubject,
@@ -148,28 +149,32 @@ export function AdminScheduleView({
   const handleEdit = (event: AdminScheduleEvent) => {
     setEditingDraft({
       templateId: event.templateId,
-      detached: event.detached,
-      dayOfWeek: event.detached ? null : event.dayOfWeek,
-      startMinutes: event.detached ? null : event.startMinutes,
-      endMinutes: event.detached ? null : event.endMinutes,
+      dayOfWeek: event.dayOfWeek,
+      startMinutes: event.startMinutes,
+      endMinutes: event.endMinutes,
       subjectId: event.subjectId,
-      groupId: event.groupId,
+      deliveryMode: event.deliveryMode,
+      deliveryGroupId: event.deliveryGroupId,
       roomId: event.roomId,
       teacherId: event.teacherId,
+      openClassIds: event.openClassIds,
+      coveredClassIds: event.coveredClassIds,
     });
     setIsEditorOpen(true);
   };
 
   const handleCreate = () => {
     setEditingDraft({
-      detached: true,
       dayOfWeek: null,
       startMinutes: null,
       endMinutes: null,
-      subjectId: subjectOptions[0]?.id ?? "",
-      groupId: groupOptions[0]?.id ?? "",
+      subjectId: subjectOptions.find((subject) => subject.type !== "ELECTIVE_OPTIONAL")?.id ?? "",
+      deliveryMode: "DIRECT_GROUP",
+      deliveryGroupId: directGroupOptions[0]?.id ?? null,
       roomId: null,
       teacherId: null,
+      openClassIds: [],
+      coveredClassIds: [],
     });
     setIsEditorOpen(true);
   };
@@ -189,11 +194,13 @@ export function AdminScheduleView({
     if (overId === PARKING_DROP_ID) {
       await createOrUpdateAdminScheduleTemplateAction({
         templateId: activeEvent.templateId,
-        detached: true,
         dayOfWeek: null,
         startMinutes: null,
         endMinutes: null,
-        groupId: activeEvent.groupId,
+        deliveryMode: activeEvent.deliveryMode,
+        deliveryGroupId: activeEvent.deliveryGroupId,
+        openClassIds: activeEvent.openClassIds,
+        coveredClassIds: activeEvent.coveredClassIds,
         subjectId: activeEvent.subjectId,
         roomId: activeEvent.roomId,
         teacherId: activeEvent.teacherId,
@@ -216,19 +223,35 @@ export function AdminScheduleView({
     };
     const dayOfWeek = dayMap[dayKey];
     const startMinutes = Number(startMinutesRaw);
-    const duration = Math.max(1, activeEvent.endMinutes - activeEvent.startMinutes);
+    const duration =
+      activeEvent.startMinutes !== null && activeEvent.endMinutes !== null
+        ? Math.max(1, activeEvent.endMinutes - activeEvent.startMinutes)
+        : 45;
 
     if (!dayOfWeek || Number.isNaN(startMinutes) || !rowId) {
       return;
     }
 
+    if (activeEvent.deliveryMode === "DIRECT_GROUP"
+      && activeEvent.deliveryGroupType === "SUBJECT_SUBGROUP"
+      && rowId !== activeEvent.projectionClassId) {
+      return;
+    }
+
+    const nextDeliveryGroupId = activeEvent.deliveryMode === "DIRECT_GROUP"
+      && activeEvent.deliveryGroupType === "CLASS"
+      ? rowId
+      : activeEvent.deliveryGroupId;
+
     await createOrUpdateAdminScheduleTemplateAction({
       templateId: activeEvent.templateId,
-      detached: false,
       dayOfWeek,
       startMinutes,
       endMinutes: startMinutes + duration,
-      groupId: rowId,
+      deliveryMode: activeEvent.deliveryMode,
+      deliveryGroupId: nextDeliveryGroupId,
+      openClassIds: activeEvent.openClassIds,
+      coveredClassIds: activeEvent.coveredClassIds,
       subjectId: activeEvent.subjectId,
       roomId: activeEvent.roomId,
       teacherId: activeEvent.teacherId,
@@ -317,7 +340,9 @@ export function AdminScheduleView({
         description="Измените поля карточки и сохраните"
         draft={editingDraft}
         subjectOptions={subjectOptions}
-        groupOptions={groupOptions}
+        classOptions={classOptions}
+        directGroupOptions={directGroupOptions}
+        electiveGroupOptions={electiveGroupOptions}
         roomOptions={roomOptions}
         teacherOptions={teacherOptions}
         lessonDurationByGroupSubject={lessonDurationByGroupSubject}

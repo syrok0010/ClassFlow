@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 
+import type { GroupType, ScheduleDeliveryMode, SubjectType } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,28 +25,37 @@ import {
 } from "@/components/ui/select";
 import { getFieldErrorMessages } from "@/lib/form-errors";
 
-type Option = { id: string; name: string };
-type GroupOption = { id: string; name: string; type: string };
+import { ScheduleMultiSelect, type FilterOption } from "./schedule-multi-select";
+
+type SubjectOption = { id: string; name: string; type: SubjectType };
+type DirectGroupOption = { id: string; name: string; type: GroupType; subjectId: string | null };
+type ElectiveGroupOption = { id: string; name: string; subjectId: string | null };
 
 type ScheduleEditorFormValue = {
   dayOfWeek: number | null;
   startMinutes: number | null;
+  endMinutes: number | null;
   subjectId: string;
-  groupId: string;
+  deliveryMode: ScheduleDeliveryMode;
+  deliveryGroupId: string | null;
   roomId: string | null;
   teacherId: string | null;
+  openClassIds: string[];
+  coveredClassIds: string[];
 };
 
 export type ScheduleEditorDraft = {
   templateId?: string;
-  detached: boolean;
   dayOfWeek: number | null;
   startMinutes: number | null;
   endMinutes: number | null;
   subjectId: string;
-  groupId: string;
+  deliveryMode: ScheduleDeliveryMode;
+  deliveryGroupId: string | null;
   roomId: string | null;
   teacherId: string | null;
+  openClassIds: string[];
+  coveredClassIds: string[];
 };
 
 interface ScheduleEventEditorDialogProps {
@@ -53,10 +63,12 @@ interface ScheduleEventEditorDialogProps {
   title: string;
   description: string;
   draft: ScheduleEditorDraft | null;
-  subjectOptions: Option[];
-  groupOptions: GroupOption[];
-  roomOptions: Option[];
-  teacherOptions: Option[];
+  subjectOptions: SubjectOption[];
+  classOptions: FilterOption[];
+  directGroupOptions: DirectGroupOption[];
+  electiveGroupOptions: ElectiveGroupOption[];
+  roomOptions: { id: string; name: string }[];
+  teacherOptions: { id: string; name: string }[];
   lessonDurationByGroupSubject: Record<string, number>;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: ScheduleEditorDraft) => Promise<void>;
@@ -70,6 +82,12 @@ const DAY_OPTIONS = [
   { value: "5", label: "Пятница" },
 ];
 
+const DELIVERY_MODE_OPTIONS: Array<{ value: ScheduleDeliveryMode; label: string }> = [
+  { value: "DIRECT_GROUP", label: "Группа" },
+  { value: "ELECTIVE_GROUP", label: "Доп по выбору" },
+  { value: "SHARED_CLASSES", label: "Общий слот классов" },
+];
+
 const NONE_VALUE = "none";
 
 export function ScheduleEventEditorDialog({
@@ -78,7 +96,9 @@ export function ScheduleEventEditorDialog({
   description,
   draft,
   subjectOptions,
-  groupOptions,
+  classOptions,
+  directGroupOptions,
+  electiveGroupOptions,
   roomOptions,
   teacherOptions,
   lessonDurationByGroupSubject,
@@ -87,40 +107,32 @@ export function ScheduleEventEditorDialog({
 }: ScheduleEventEditorDialogProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const initialValues = useMemo(
+    () => buildDefaultValues(draft, subjectOptions, classOptions, directGroupOptions, electiveGroupOptions),
+    [draft, subjectOptions, classOptions, directGroupOptions, electiveGroupOptions],
+  );
+
   const form = useForm({
-    defaultValues: {
-      dayOfWeek: draft?.dayOfWeek ?? null,
-      startMinutes: draft?.startMinutes ?? null,
-      subjectId: draft?.subjectId ?? subjectOptions[0]?.id ?? "",
-      groupId: draft?.groupId ?? groupOptions[0]?.id ?? "",
-      roomId: draft?.roomId ?? null,
-      teacherId: draft?.teacherId ?? null,
-    } satisfies ScheduleEditorFormValue,
+    defaultValues: initialValues satisfies ScheduleEditorFormValue,
     onSubmit: async ({ value }) => {
-      if (!draft) {
+      const validationError = validateScheduleEditorValue(value);
+      if (validationError) {
+        setSubmitError(validationError);
         return;
       }
-
-      const duration = getLessonDurationMinutes(lessonDurationByGroupSubject, value.groupId, value.subjectId);
-      if (duration === null) {
-        setSubmitError("Для выбранных класса и предмета не задана длительность урока");
-        return;
-      }
-
-      const detached = value.dayOfWeek === null || value.startMinutes === null;
-      const startMinutes = value.startMinutes;
-      const endMinutes = detached || startMinutes === null ? null : Math.min(24 * 60, startMinutes + duration);
 
       await onSave({
-        templateId: draft.templateId,
-        detached,
-        dayOfWeek: detached ? null : value.dayOfWeek,
-        startMinutes: detached ? null : startMinutes,
-        endMinutes,
+        templateId: draft?.templateId,
+        dayOfWeek: value.dayOfWeek,
+        startMinutes: value.startMinutes,
+        endMinutes: value.endMinutes,
         subjectId: value.subjectId,
-        groupId: value.groupId,
+        deliveryMode: value.deliveryMode,
+        deliveryGroupId: value.deliveryGroupId,
         roomId: value.roomId,
         teacherId: value.teacherId,
+        openClassIds: value.openClassIds,
+        coveredClassIds: value.coveredClassIds,
       });
 
       onOpenChange(false);
@@ -133,35 +145,36 @@ export function ScheduleEventEditorDialog({
     }
 
     setSubmitError(null);
-    form.reset({
-      dayOfWeek: draft?.dayOfWeek ?? null,
-      startMinutes: draft?.startMinutes ?? null,
-      subjectId: draft?.subjectId ?? subjectOptions[0]?.id ?? "",
-      groupId: draft?.groupId ?? groupOptions[0]?.id ?? "",
-      roomId: draft?.roomId ?? null,
-      teacherId: draft?.teacherId ?? null,
-    });
-  }, [
-    draft,
-    form,
-    groupOptions,
-    open,
-    roomOptions,
-    subjectOptions,
-    teacherOptions,
-  ]);
+    form.reset(initialValues);
+  }, [form, initialValues, open]);
 
-  const selectedGroupId = form.state.values.groupId;
+  const deliveryMode = form.state.values.deliveryMode;
   const selectedSubjectId = form.state.values.subjectId;
-  const selectedStartMinutes = form.state.values.startMinutes;
-  const lessonDuration = useMemo(
-    () => getLessonDurationMinutes(lessonDurationByGroupSubject, selectedGroupId, selectedSubjectId),
-    [lessonDurationByGroupSubject, selectedGroupId, selectedSubjectId],
+  const selectedDeliveryGroupId = form.state.values.deliveryGroupId;
+  const selectedCoveredClassIds = form.state.values.coveredClassIds;
+
+  const filteredSubjectOptions = useMemo(
+    () => getSubjectOptionsForMode(subjectOptions, deliveryMode),
+    [subjectOptions, deliveryMode],
   );
-  const computedEndMinutes =
-    selectedStartMinutes !== null && lessonDuration !== null
-      ? Math.min(24 * 60, selectedStartMinutes + lessonDuration)
-      : null;
+
+  const durationHint = useMemo(
+    () =>
+      getDurationHint({
+        deliveryMode,
+        subjectId: selectedSubjectId,
+        deliveryGroupId: selectedDeliveryGroupId,
+        coveredClassIds: selectedCoveredClassIds,
+        lessonDurationByGroupSubject,
+      }),
+    [
+      deliveryMode,
+      selectedSubjectId,
+      selectedDeliveryGroupId,
+      selectedCoveredClassIds,
+      lessonDurationByGroupSubject,
+    ],
+  );
 
   if (!draft) {
     return null;
@@ -169,7 +182,7 @@ export function ScheduleEventEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-2xl">
         <form
           className="flex flex-col gap-6"
           onSubmit={(event) => {
@@ -184,6 +197,57 @@ export function ScheduleEventEditorDialog({
           </DialogHeader>
 
           <FieldGroup>
+            <form.Field name="deliveryMode">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor="schedule-editor-mode">Тип карточки</FieldLabel>
+                  <Select
+                    value={field.state.value}
+                    onValueChange={(value) => {
+                      const nextMode = (value ?? field.state.value) as ScheduleDeliveryMode;
+                      field.handleChange(nextMode);
+                      field.handleBlur();
+
+                      if (nextMode === "DIRECT_GROUP") {
+                        form.setFieldValue("deliveryGroupId", directGroupOptions[0]?.id ?? null);
+                        form.setFieldValue("openClassIds", []);
+                        form.setFieldValue("coveredClassIds", []);
+                        const nextSubject = getSubjectOptionsForMode(subjectOptions, nextMode)[0]?.id ?? "";
+                        form.setFieldValue("subjectId", nextSubject);
+                      } else if (nextMode === "ELECTIVE_GROUP") {
+                        const nextGroup = electiveGroupOptions[0] ?? null;
+                        form.setFieldValue("deliveryGroupId", nextGroup?.id ?? null);
+                        form.setFieldValue("openClassIds", classOptions[0] ? [classOptions[0].id] : []);
+                        form.setFieldValue("coveredClassIds", []);
+                        form.setFieldValue("subjectId", nextGroup?.subjectId ?? "");
+                      } else {
+                        form.setFieldValue("deliveryGroupId", null);
+                        form.setFieldValue("openClassIds", []);
+                        form.setFieldValue("coveredClassIds", classOptions.slice(0, 2).map((item) => item.id));
+                        const nextSubject = getSubjectOptionsForMode(subjectOptions, nextMode)[0]?.id ?? "";
+                        form.setFieldValue("subjectId", nextSubject);
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="schedule-editor-mode" className="w-full">
+                      <SelectValue>
+                        {DELIVERY_MODE_OPTIONS.find((option) => option.value === field.state.value)?.label}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectGroup>
+                        {DELIVERY_MODE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+            </form.Field>
+
             <form.Field name="dayOfWeek">
               {(field) => {
                 const errors = getFieldErrorMessages(field);
@@ -205,13 +269,13 @@ export function ScheduleEventEditorDialog({
                       >
                         <SelectValue>
                           {field.state.value === null
-                            ? "Без дня (временная зона)"
+                            ? "Без дня (временная область)"
                             : DAY_OPTIONS.find((option) => Number(option.value) === field.state.value)?.label}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent align="start">
                         <SelectGroup>
-                          <SelectItem value={NONE_VALUE}>Без дня (временная зона)</SelectItem>
+                          <SelectItem value={NONE_VALUE}>Без дня (временная область)</SelectItem>
                           {DAY_OPTIONS.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
@@ -228,69 +292,68 @@ export function ScheduleEventEditorDialog({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <form.Field name="startMinutes">
-                {(field) => {
-                  const errors = getFieldErrorMessages(field);
-                  return (
-                    <Field data-invalid={errors.length > 0}>
-                      <FieldLabel htmlFor="schedule-editor-start-time">Время начала</FieldLabel>
-                      <Input
-                        id="schedule-editor-start-time"
-                        type="time"
-                        value={minutesToTime(field.state.value)}
-                        aria-invalid={errors.length > 0 || undefined}
-                        onBlur={field.handleBlur}
-                        onChange={(event) => {
-                          const nextMinutes = Number.isNaN(event.target.valueAsNumber)
-                            ? null
-                            : event.target.valueAsNumber / 1000 / 60;
-                          field.handleChange(nextMinutes);
-                        }}
-                      />
-                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                    </Field>
-                  );
-                }}
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor="schedule-editor-start-time">Время начала</FieldLabel>
+                    <Input
+                      id="schedule-editor-start-time"
+                      type="time"
+                      value={minutesToTime(field.state.value)}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => {
+                        const nextMinutes = Number.isNaN(event.target.valueAsNumber)
+                          ? null
+                          : event.target.valueAsNumber / 1000 / 60;
+                        field.handleChange(nextMinutes);
+                      }}
+                    />
+                  </Field>
+                )}
               </form.Field>
 
-              <Field>
-                <FieldLabel htmlFor="schedule-editor-end-time">Время окончания</FieldLabel>
-                <Input
-                  id="schedule-editor-end-time"
-                  type="time"
-                  value={minutesToTime(computedEndMinutes)}
-                  disabled
-                />
-                <FieldDescription>
-                  Рассчитывается автоматически по длительности предмета для выбранного класса.
-                </FieldDescription>
-              </Field>
+              <form.Field name="endMinutes">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor="schedule-editor-end-time">Время окончания</FieldLabel>
+                    <Input
+                      id="schedule-editor-end-time"
+                      type="time"
+                      value={minutesToTime(field.state.value)}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => {
+                        const nextMinutes = Number.isNaN(event.target.valueAsNumber)
+                          ? null
+                          : event.target.valueAsNumber / 1000 / 60;
+                        field.handleChange(nextMinutes);
+                      }}
+                    />
+                  </Field>
+                )}
+              </form.Field>
             </div>
 
-            <form.Field name="subjectId">
-              {(field) => {
-                const errors = getFieldErrorMessages(field);
-                return (
-                  <Field data-invalid={errors.length > 0}>
-                    <FieldLabel htmlFor="schedule-editor-subject">Предмет</FieldLabel>
+            {deliveryMode === "DIRECT_GROUP" ? (
+              <form.Field name="deliveryGroupId">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor="schedule-editor-direct-group">Группа</FieldLabel>
                     <Select
-                      value={field.state.value}
+                      value={field.state.value ?? NONE_VALUE}
                       onValueChange={(value) => {
-                        field.handleChange(value ?? field.state.value);
+                        field.handleChange(value === NONE_VALUE ? null : value);
                         field.handleBlur();
                       }}
                     >
-                      <SelectTrigger
-                        id="schedule-editor-subject"
-                        className="w-full"
-                        aria-invalid={errors.length > 0 || undefined}
-                      >
+                      <SelectTrigger id="schedule-editor-direct-group" className="w-full">
                         <SelectValue>
-                          {subjectOptions.find((option) => option.id === field.state.value)?.name ?? "Предмет"}
+                          {field.state.value
+                            ? directGroupOptions.find((option) => option.id === field.state.value)?.name ?? "Группа"
+                            : "Группа"}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent align="start">
                         <SelectGroup>
-                          {subjectOptions.map((option) => (
+                          {directGroupOptions.map((option) => (
                             <SelectItem key={option.id} value={option.id}>
                               {option.name}
                             </SelectItem>
@@ -298,140 +361,198 @@ export function ScheduleEventEditorDialog({
                         </SelectGroup>
                       </SelectContent>
                     </Select>
-                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                   </Field>
-                );
-              }}
-            </form.Field>
+                )}
+              </form.Field>
+            ) : null}
 
-            <form.Field name="groupId">
-              {(field) => {
-                const errors = getFieldErrorMessages(field);
-                return (
-                  <Field data-invalid={errors.length > 0}>
-                    <FieldLabel htmlFor="schedule-editor-group">Класс/подгруппа/кружок</FieldLabel>
-                    <Select
-                      value={field.state.value}
-                      onValueChange={(value) => {
-                        field.handleChange(value ?? field.state.value);
+            {deliveryMode === "ELECTIVE_GROUP" ? (
+              <>
+                <form.Field name="deliveryGroupId">
+                  {(field) => (
+                    <Field>
+                      <FieldLabel htmlFor="schedule-editor-elective-group">Группа по выбору</FieldLabel>
+                      <Select
+                        value={field.state.value ?? NONE_VALUE}
+                        onValueChange={(value) => {
+                          const nextId = value === NONE_VALUE ? null : value;
+                          field.handleChange(nextId);
+                          field.handleBlur();
+                          const nextGroup = electiveGroupOptions.find((option) => option.id === nextId);
+                          form.setFieldValue("subjectId", nextGroup?.subjectId ?? "");
+                        }}
+                      >
+                        <SelectTrigger id="schedule-editor-elective-group" className="w-full">
+                          <SelectValue>
+                            {field.state.value
+                              ? electiveGroupOptions.find((option) => option.id === field.state.value)?.name ?? "Группа по выбору"
+                              : "Группа по выбору"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          <SelectGroup>
+                            {electiveGroupOptions.map((option) => (
+                              <SelectItem key={option.id} value={option.id}>
+                                {option.name}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  )}
+                </form.Field>
+
+                <form.Field name="openClassIds">
+                  {(field) => (
+                    <Field>
+                      <FieldLabel>Открыт для классов</FieldLabel>
+                      <ScheduleMultiSelect
+                        title="Классы"
+                        options={classOptions}
+                        selectedIds={field.state.value}
+                        onChange={(next) => {
+                          field.handleChange(next);
+                          field.handleBlur();
+                        }}
+                      />
+                    </Field>
+                  )}
+                </form.Field>
+              </>
+            ) : null}
+
+            {deliveryMode === "SHARED_CLASSES" ? (
+              <form.Field name="coveredClassIds">
+                {(field) => (
+                  <Field>
+                    <FieldLabel>Покрываемые классы</FieldLabel>
+                    <ScheduleMultiSelect
+                      title="Классы"
+                      options={classOptions}
+                      selectedIds={field.state.value}
+                      onChange={(next) => {
+                        field.handleChange(next);
                         field.handleBlur();
                       }}
-                    >
-                      <SelectTrigger
-                        id="schedule-editor-group"
-                        className="w-full"
-                        aria-invalid={errors.length > 0 || undefined}
-                      >
-                        <SelectValue>
-                          {groupOptions.find((option) => option.id === field.state.value)?.name
-                            ?? "Класс/подгруппа/кружок"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        <SelectGroup>
-                          {groupOptions.map((option) => (
-                            <SelectItem key={option.id} value={option.id}>
-                              {option.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+                    />
                   </Field>
-                );
-              }}
+                )}
+              </form.Field>
+            ) : null}
+
+            <form.Field name="subjectId">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor="schedule-editor-subject">Предмет</FieldLabel>
+                  <Select
+                    value={field.state.value || NONE_VALUE}
+                    onValueChange={(value) => {
+                      field.handleChange(value && value !== NONE_VALUE ? value : "");
+                      field.handleBlur();
+                    }}
+                    disabled={deliveryMode === "ELECTIVE_GROUP"}
+                  >
+                    <SelectTrigger id="schedule-editor-subject" className="w-full">
+                      <SelectValue>
+                        {field.state.value
+                          ? filteredSubjectOptions.find((option) => option.id === field.state.value)?.name ?? "Предмет"
+                          : "Предмет"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectGroup>
+                        {filteredSubjectOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  {deliveryMode === "ELECTIVE_GROUP" ? (
+                    <FieldDescription>Предмет берется из выбранной группы по выбору.</FieldDescription>
+                  ) : null}
+                </Field>
+              )}
             </form.Field>
 
             <Field>
-              <FieldLabel htmlFor="schedule-editor-duration">Длительность урока</FieldLabel>
+              <FieldLabel htmlFor="schedule-editor-duration">Подсказка по длительности</FieldLabel>
               <Input
                 id="schedule-editor-duration"
-                value={lessonDuration !== null ? `${lessonDuration} мин` : "Не задана"}
+                value={formatDurationHint(durationHint)}
                 disabled
               />
+              <FieldDescription>
+                Для режима и общих слотов время окончания можно задать вручную даже без совпадающего требования.
+              </FieldDescription>
             </Field>
 
             <form.Field name="roomId">
-              {(field) => {
-                const errors = getFieldErrorMessages(field);
-                return (
-                  <Field data-invalid={errors.length > 0}>
-                    <FieldLabel htmlFor="schedule-editor-room">Кабинет</FieldLabel>
-                    <Select
-                      value={field.state.value ?? NONE_VALUE}
-                      onValueChange={(value) => {
-                        field.handleChange(value === NONE_VALUE ? null : value);
-                        field.handleBlur();
-                      }}
-                    >
-                      <SelectTrigger
-                        id="schedule-editor-room"
-                        className="w-full"
-                        aria-invalid={errors.length > 0 || undefined}
-                      >
-                        <SelectValue>
-                          {field.state.value
-                            ? roomOptions.find((option) => option.id === field.state.value)?.name ?? "Кабинет"
-                            : "Без кабинета"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        <SelectGroup>
-                          <SelectItem value={NONE_VALUE}>Без кабинета</SelectItem>
-                          {roomOptions.map((option) => (
-                            <SelectItem key={option.id} value={option.id}>
-                              {option.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                  </Field>
-                );
-              }}
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor="schedule-editor-room">Кабинет</FieldLabel>
+                  <Select
+                    value={field.state.value ?? NONE_VALUE}
+                    onValueChange={(value) => {
+                      field.handleChange(value === NONE_VALUE ? null : value);
+                      field.handleBlur();
+                    }}
+                  >
+                    <SelectTrigger id="schedule-editor-room" className="w-full">
+                      <SelectValue>
+                        {field.state.value
+                          ? roomOptions.find((option) => option.id === field.state.value)?.name ?? "Кабинет"
+                          : "Без кабинета"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectGroup>
+                        <SelectItem value={NONE_VALUE}>Без кабинета</SelectItem>
+                        {roomOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
             </form.Field>
 
             <form.Field name="teacherId">
-              {(field) => {
-                const errors = getFieldErrorMessages(field);
-                return (
-                  <Field data-invalid={errors.length > 0}>
-                    <FieldLabel htmlFor="schedule-editor-teacher">Учитель</FieldLabel>
-                    <Select
-                      value={field.state.value ?? NONE_VALUE}
-                      onValueChange={(value) => {
-                        field.handleChange(value === NONE_VALUE ? null : value);
-                        field.handleBlur();
-                      }}
-                    >
-                      <SelectTrigger
-                        id="schedule-editor-teacher"
-                        className="w-full"
-                        aria-invalid={errors.length > 0 || undefined}
-                      >
-                        <SelectValue>
-                          {field.state.value
-                            ? teacherOptions.find((option) => option.id === field.state.value)?.name ?? "Учитель"
-                            : "Без учителя"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        <SelectGroup>
-                          <SelectItem value={NONE_VALUE}>Без учителя</SelectItem>
-                          {teacherOptions.map((option) => (
-                            <SelectItem key={option.id} value={option.id}>
-                              {option.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                  </Field>
-                );
-              }}
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor="schedule-editor-teacher">Учитель</FieldLabel>
+                  <Select
+                    value={field.state.value ?? NONE_VALUE}
+                    onValueChange={(value) => {
+                      field.handleChange(value === NONE_VALUE ? null : value);
+                      field.handleBlur();
+                    }}
+                  >
+                    <SelectTrigger id="schedule-editor-teacher" className="w-full">
+                      <SelectValue>
+                        {field.state.value
+                          ? teacherOptions.find((option) => option.id === field.state.value)?.name ?? "Учитель"
+                          : "Без учителя"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectGroup>
+                        <SelectItem value={NONE_VALUE}>Без учителя</SelectItem>
+                        {teacherOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
             </form.Field>
 
             {submitError ? <FieldError>{submitError}</FieldError> : null}
@@ -441,21 +562,9 @@ export function ScheduleEventEditorDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)} type="button">
               Отмена
             </Button>
-            <form.Subscribe
-              selector={(state) => ({
-                canSubmit: state.canSubmit,
-                isSubmitting: state.isSubmitting,
-              })}
-            >
-              {({ canSubmit, isSubmitting }) => (
-                <Button
-                  type="submit"
-                  disabled={!canSubmit || isSubmitting || (!form.state.values.dayOfWeek ? false : lessonDuration === null)}
-                >
-                  Сохранить
-                </Button>
-              )}
-            </form.Subscribe>
+            <Button type="submit">
+              Сохранить
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -463,13 +572,168 @@ export function ScheduleEventEditorDialog({
   );
 }
 
-function getLessonDurationMinutes(
-  lessonDurationByGroupSubject: Record<string, number>,
-  groupId: string,
-  subjectId: string,
+function buildDefaultValues(
+  draft: ScheduleEditorDraft | null,
+  subjectOptions: SubjectOption[],
+  classOptions: FilterOption[],
+  directGroupOptions: DirectGroupOption[],
+  electiveGroupOptions: ElectiveGroupOption[],
+): ScheduleEditorFormValue {
+  const directSubjectOptions = getSubjectOptionsForMode(subjectOptions, "DIRECT_GROUP");
+  const sharedSubjectOptions = getSubjectOptionsForMode(subjectOptions, "SHARED_CLASSES");
+  const mode = draft?.deliveryMode ?? "DIRECT_GROUP";
+
+  if (mode === "ELECTIVE_GROUP") {
+    const fallbackElectiveGroup = electiveGroupOptions[0] ?? null;
+    return {
+      dayOfWeek: draft?.dayOfWeek ?? null,
+      startMinutes: draft?.startMinutes ?? null,
+      endMinutes: draft?.endMinutes ?? null,
+      deliveryMode: mode,
+      deliveryGroupId: draft?.deliveryGroupId ?? fallbackElectiveGroup?.id ?? null,
+      subjectId: draft?.subjectId || fallbackElectiveGroup?.subjectId || "",
+      roomId: draft?.roomId ?? null,
+      teacherId: draft?.teacherId ?? null,
+      openClassIds: draft?.openClassIds.length ? draft.openClassIds : (classOptions[0] ? [classOptions[0].id] : []),
+      coveredClassIds: [],
+    };
+  }
+
+  if (mode === "SHARED_CLASSES") {
+    return {
+      dayOfWeek: draft?.dayOfWeek ?? null,
+      startMinutes: draft?.startMinutes ?? null,
+      endMinutes: draft?.endMinutes ?? null,
+      deliveryMode: mode,
+      deliveryGroupId: null,
+      subjectId: draft?.subjectId || sharedSubjectOptions[0]?.id || "",
+      roomId: draft?.roomId ?? null,
+      teacherId: draft?.teacherId ?? null,
+      openClassIds: [],
+      coveredClassIds: draft?.coveredClassIds.length ? draft.coveredClassIds : classOptions.slice(0, 2).map((item) => item.id),
+    };
+  }
+
+  return {
+    dayOfWeek: draft?.dayOfWeek ?? null,
+    startMinutes: draft?.startMinutes ?? null,
+    endMinutes: draft?.endMinutes ?? null,
+    deliveryMode: "DIRECT_GROUP",
+    deliveryGroupId: draft?.deliveryGroupId ?? directGroupOptions[0]?.id ?? null,
+    subjectId: draft?.subjectId || directSubjectOptions[0]?.id || "",
+    roomId: draft?.roomId ?? null,
+    teacherId: draft?.teacherId ?? null,
+    openClassIds: [],
+    coveredClassIds: [],
+  };
+}
+
+function getSubjectOptionsForMode(
+  subjectOptions: SubjectOption[],
+  deliveryMode: ScheduleDeliveryMode,
 ) {
-  const key = `${groupId}:${subjectId}`;
-  return lessonDurationByGroupSubject[key] ?? null;
+  if (deliveryMode === "ELECTIVE_GROUP") {
+    return subjectOptions.filter((option) => option.type === "ELECTIVE_OPTIONAL");
+  }
+
+  if (deliveryMode === "SHARED_CLASSES") {
+    return subjectOptions.filter((option) => option.type === "ELECTIVE_REQUIRED" || option.type === "REGIME");
+  }
+
+  return subjectOptions.filter((option) => option.type !== "ELECTIVE_OPTIONAL");
+}
+
+function getDurationHint({
+  deliveryMode,
+  subjectId,
+  deliveryGroupId,
+  coveredClassIds,
+  lessonDurationByGroupSubject,
+}: {
+  deliveryMode: ScheduleDeliveryMode;
+  subjectId: string;
+  deliveryGroupId: string | null;
+  coveredClassIds: string[];
+  lessonDurationByGroupSubject: Record<string, number>;
+}) {
+  if (!subjectId) {
+    return { kind: "none" as const, minutes: null };
+  }
+
+  if (deliveryMode === "SHARED_CLASSES") {
+    const durations = Array.from(
+      new Set(
+        coveredClassIds
+          .map((classId) => lessonDurationByGroupSubject[`${classId}:${subjectId}`])
+          .filter((duration): duration is number => typeof duration === "number"),
+      ),
+    );
+
+    if (durations.length === 0) {
+      return { kind: "none" as const, minutes: null };
+    }
+
+    if (durations.length > 1) {
+      return { kind: "mismatch" as const, minutes: null };
+    }
+
+    return { kind: "single" as const, minutes: durations[0] };
+  }
+
+  if (!deliveryGroupId) {
+    return { kind: "none" as const, minutes: null };
+  }
+
+  const duration = lessonDurationByGroupSubject[`${deliveryGroupId}:${subjectId}`] ?? null;
+  if (duration === null) {
+    return { kind: "none" as const, minutes: null };
+  }
+
+  return { kind: "single" as const, minutes: duration };
+}
+
+function formatDurationHint(durationHint: { kind: "none" | "single" | "mismatch"; minutes: number | null }) {
+  if (durationHint.kind === "single" && durationHint.minutes !== null) {
+    return `${durationHint.minutes} мин`;
+  }
+
+  if (durationHint.kind === "mismatch") {
+    return "Требования классов отличаются";
+  }
+
+  return "Не задана";
+}
+
+function validateScheduleEditorValue(value: ScheduleEditorFormValue) {
+  const detached = value.dayOfWeek === null || value.startMinutes === null || value.endMinutes === null;
+
+  if (!detached && value.endMinutes !== null && value.startMinutes !== null && value.endMinutes <= value.startMinutes) {
+    return "Время окончания должно быть позже времени начала";
+  }
+
+  if (value.deliveryMode === "DIRECT_GROUP" && !value.deliveryGroupId) {
+    return "Выберите группу";
+  }
+
+  if (value.deliveryMode === "ELECTIVE_GROUP") {
+    if (!value.deliveryGroupId) {
+      return "Выберите группу по выбору";
+    }
+
+    if (value.openClassIds.length === 0) {
+      return "Укажите хотя бы один открытый класс";
+    }
+  }
+
+  if (value.deliveryMode === "SHARED_CLASSES" && value.coveredClassIds.length < 2) {
+    return "Укажите минимум два покрываемых класса";
+  }
+
+  if (!value.subjectId) {
+    return "Выберите предмет";
+  }
+
+  return null;
 }
 
 function minutesToTime(totalMinutes: number | null) {

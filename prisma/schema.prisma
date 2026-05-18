@@ -134,6 +134,18 @@ enum GroupType {
   ELECTIVE_GROUP
 }
 
+enum ScheduleDeliveryMode {
+  DIRECT_GROUP
+  ELECTIVE_GROUP
+  SHARED_CLASSES
+}
+
+enum AttendanceLoadMode {
+  DELIVERY_GROUP_SIZE
+  FULL_CLASS_SIZE
+  AFTERSCHOOL_COEFFICIENT
+}
+
 model Group {
   id        String    @id @default(cuid())
   name      String
@@ -147,8 +159,11 @@ model Group {
   subject                  Subject?                  @relation(fields: [subjectId], references: [id])
   studentGroups            StudentGroups[]
   groupSubjectRequirements GroupSubjectRequirement[]
-  weeklyScheduleTemplates  WeeklyScheduleTemplate[]
-  scheduleEntries          ScheduleEntry[]
+  deliveredWeeklyScheduleTemplates WeeklyScheduleTemplate[] @relation("WeeklyTemplateDeliveryGroup")
+  deliveredScheduleEntries         ScheduleEntry[]          @relation("ScheduleEntryDeliveryGroup")
+  weeklyTemplateOpenClasses        WeeklyTemplateOpenClass[]
+  weeklyTemplateCoveredClasses     WeeklyTemplateCoveredClass[]
+  scheduleEntryCoveredClasses      ScheduleEntryCoveredClass[]
 }
 
 model Building {
@@ -192,6 +207,7 @@ model Subject {
   id   String      @id @default(cuid())
   name String
   type SubjectType @default(ACADEMIC)
+  defaultAttendanceLoadMode AttendanceLoadMode @default(DELIVERY_GROUP_SIZE)
 
   roomSubjects             RoomSubject[]
   teacherSubjects          TeacherSubject[]
@@ -244,25 +260,42 @@ model TeacherAvailabilityOverride {
   @@index([teacherId, startTime])
 }
 
+model ScheduleSettings {
+  id String @id
+
+  afterschoolAttendanceCoefficient Decimal @db.Decimal(4, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model WeeklyScheduleTemplate {
   id        String @id @default(cuid())
-  dayOfWeek Int
-  startTime Int
-  endTime   Int
+  dayOfWeek Int?
+  startTime Int?
+  endTime   Int?
 
-  groupId   String
+  subjectId String
   roomId    String?
   teacherId String?
-  subjectId String
 
-  group   Group    @relation(fields: [groupId], references: [id])
-  room    Room?    @relation(fields: [roomId], references: [id])
-  teacher Teacher? @relation(fields: [teacherId], references: [id])
-  subject Subject  @relation(fields: [subjectId], references: [id])
+  deliveryMode ScheduleDeliveryMode
+  deliveryGroupId String?
+  attendanceLoadModeOverride AttendanceLoadMode?
+
+  deliveryGroup Group?   @relation("WeeklyTemplateDeliveryGroup", fields: [deliveryGroupId], references: [id])
+  room          Room?    @relation(fields: [roomId], references: [id])
+  teacher       Teacher? @relation(fields: [teacherId], references: [id])
+  subject       Subject  @relation(fields: [subjectId], references: [id])
+  openClasses    WeeklyTemplateOpenClass[]
+  coveredClasses WeeklyTemplateCoveredClass[]
 
   scheduleEntries ScheduleEntry[]
 
-  @@index([groupId, dayOfWeek, startTime])
+  @@index([dayOfWeek, startTime])
+  @@index([deliveryGroupId, dayOfWeek, startTime])
+  @@index([teacherId, dayOfWeek, startTime])
+  @@index([roomId, dayOfWeek, startTime])
 }
 
 model ScheduleEntry {
@@ -272,20 +305,58 @@ model ScheduleEntry {
   startTime  DateTime
   endTime    DateTime
 
-  groupId   String
+  subjectId String
   roomId    String?
   teacherId String?
-  subjectId String
 
-  template WeeklyScheduleTemplate? @relation(fields: [templateId], references: [id])
-  group    Group                   @relation(fields: [groupId], references: [id])
-  room     Room?                   @relation(fields: [roomId], references: [id])
-  teacher  Teacher?                @relation(fields: [teacherId], references: [id])
-  subject  Subject                 @relation(fields: [subjectId], references: [id])
+  deliveryMode ScheduleDeliveryMode
+  deliveryGroupId String?
+  attendanceLoadMode AttendanceLoadMode
 
-  @@index([groupId, startTime])
+  template      WeeklyScheduleTemplate? @relation(fields: [templateId], references: [id])
+  deliveryGroup Group?                  @relation("ScheduleEntryDeliveryGroup", fields: [deliveryGroupId], references: [id])
+  room          Room?                   @relation(fields: [roomId], references: [id])
+  teacher       Teacher?                @relation(fields: [teacherId], references: [id])
+  subject       Subject                 @relation(fields: [subjectId], references: [id])
+  coveredClasses ScheduleEntryCoveredClass[]
+
+  @@index([date, startTime])
+  @@index([deliveryGroupId, startTime])
   @@index([teacherId, startTime])
   @@index([roomId, startTime])
+}
+
+model WeeklyTemplateOpenClass {
+  templateId   String
+  classGroupId String
+
+  template    WeeklyScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  schoolClass Group                  @relation(fields: [classGroupId], references: [id])
+
+  @@id([templateId, classGroupId])
+  @@index([classGroupId])
+}
+
+model WeeklyTemplateCoveredClass {
+  templateId   String
+  classGroupId String
+
+  template    WeeklyScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  schoolClass Group                  @relation(fields: [classGroupId], references: [id])
+
+  @@id([templateId, classGroupId])
+  @@index([classGroupId])
+}
+
+model ScheduleEntryCoveredClass {
+  entryId      String
+  classGroupId String
+
+  entry       ScheduleEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  schoolClass Group         @relation(fields: [classGroupId], references: [id])
+
+  @@id([entryId, classGroupId])
+  @@index([classGroupId, entryId])
 }
 
 model GroupSubjectRequirement {
