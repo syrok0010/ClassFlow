@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdminContext } from "@/lib/server-action-auth";
 
 import {
   adminScheduleTemplateMutationSchema,
+  createAdminScheduleTemplateMutationSchema,
   type AdminScheduleTemplateMutationInput,
 } from "../_lib/schedule-mutations-schema";
 
@@ -20,127 +22,63 @@ export async function createOrUpdateAdminScheduleTemplateAction(input: AdminSche
     return { error: parsed.error.issues[0]?.message ?? "Некорректные данные" };
   }
 
-  const payload = parsed.data;
+  const payload = {
+    ...parsed.data,
+    openClassIds: Array.from(new Set(parsed.data.openClassIds)),
+    coveredClassIds: Array.from(new Set(parsed.data.coveredClassIds)),
+  };
   const isDetached =
     payload.dayOfWeek === null
     || payload.startMinutes === null
     || payload.endMinutes === null;
-
-  if (!isDetached && (payload.dayOfWeek === null || payload.startMinutes === null || payload.endMinutes === null)) {
-    return { error: "Для карточки в расписании нужны день и время" };
-  }
-
-  if (
-    !isDetached &&
-    payload.startMinutes !== null &&
-    payload.endMinutes !== null &&
-    payload.endMinutes <= payload.startMinutes
-  ) {
-    return { error: "Время окончания должно быть позже времени начала" };
-  }
 
   const subject = await prisma.subject.findUnique({
     where: { id: payload.subjectId },
     select: { id: true, type: true },
   });
 
-  if (!subject) {
-    return { error: "Предмет не найден" };
-  }
-
   const deliveryGroup = payload.deliveryGroupId
     ? await prisma.group.findUnique({
         where: { id: payload.deliveryGroupId },
-        select: { id: true, type: true, subjectId: true },
-      })
+	        select: { id: true, type: true, subjectId: true },
+	      })
     : null;
 
-  const openClassIds = Array.from(new Set(payload.openClassIds));
-  const coveredClassIds = Array.from(new Set(payload.coveredClassIds));
-  const linkedClassIds = Array.from(new Set([...openClassIds, ...coveredClassIds]));
+  const linkedClassIds = Array.from(new Set([...payload.openClassIds, ...payload.coveredClassIds]));
   const linkedClasses = linkedClassIds.length > 0
     ? await prisma.group.findMany({
-        where: { id: { in: linkedClassIds } },
+	        where: { id: { in: linkedClassIds } },
         select: { id: true, type: true },
-      })
+	      })
     : [];
 
-  if (linkedClassIds.length !== linkedClasses.length || linkedClasses.some((group) => group.type !== "CLASS")) {
-    return { error: "Связанные строки должны быть целыми классами" };
+  const contextualValidation = createAdminScheduleTemplateMutationSchema({
+    subjectsById: subject
+      ? {
+          [subject.id]: {
+            type: subject.type,
+          },
+        }
+      : {},
+    groupsById: deliveryGroup
+      ? {
+          [deliveryGroup.id]: {
+            type: deliveryGroup.type,
+            subjectId: deliveryGroup.subjectId,
+          },
+        }
+      : {},
+    classIds: linkedClasses.filter((group) => group.type === "CLASS").map((group) => group.id),
+  }).safeParse(payload);
+
+  if (!contextualValidation.success) {
+    return { error: contextualValidation.error.issues[0]?.message ?? "Некорректные данные" };
   }
 
-  if (payload.deliveryMode === "DIRECT_GROUP") {
-    if (!deliveryGroup || (deliveryGroup.type !== "CLASS" && deliveryGroup.type !== "SUBJECT_SUBGROUP")) {
-      return { error: "Для карточки этого типа нужна группа класса или подгруппы" };
-    }
+  const openClassesCreate = payload.openClassIds.map((classGroupId) => ({ classGroupId }));
+  const coveredClassesCreate = payload.coveredClassIds.map((classGroupId) => ({ classGroupId }));
 
-    if (openClassIds.length > 0 || coveredClassIds.length > 0) {
-      return { error: "Для прямой карточки нельзя задавать открытые или покрываемые классы" };
-    }
-
-    if (subject.type === "ELECTIVE_OPTIONAL") {
-      return { error: "Доп по выбору должен создаваться через группу по выбору" };
-    }
-  }
-
-  if (payload.deliveryMode === "ELECTIVE_GROUP") {
-    if (!deliveryGroup || deliveryGroup.type !== "ELECTIVE_GROUP") {
-      return { error: "Для допа по выбору нужна группа по выбору" };
-    }
-
-    if (openClassIds.length === 0) {
-      return { error: "Укажите хотя бы один класс, для которого открыт доп по выбору" };
-    }
-
-    if (coveredClassIds.length > 0) {
-      return { error: "Для допа по выбору нельзя задавать покрываемые классы" };
-    }
-
-    if (subject.type !== "ELECTIVE_OPTIONAL") {
-      return { error: "Группа по выбору может использоваться только с предметом типа 'доп по выбору'" };
-    }
-
-    if (deliveryGroup.subjectId && deliveryGroup.subjectId !== subject.id) {
-      return { error: "Предмет карточки должен совпадать с предметом группы по выбору" };
-    }
-  }
-
-  if (payload.deliveryMode === "SHARED_CLASSES") {
-    if (deliveryGroup) {
-      return { error: "Для общего занятия нельзя задавать группу доставки" };
-    }
-
-    if (openClassIds.length > 0) {
-      return { error: "Для общего занятия нельзя задавать открытые классы" };
-    }
-
-    if (coveredClassIds.length < 2) {
-      return { error: "Общее занятие должно покрывать минимум два класса" };
-    }
-
-    if (subject.type !== "ELECTIVE_REQUIRED" && subject.type !== "REGIME") {
-      return { error: "Общими могут быть только обязательные допы и режимные предметы" };
-    }
-  }
-
-  const data: {
-    dayOfWeek: number | null;
-    startTime: number | null;
-    endTime: number | null;
-    subjectId: string;
-    roomId: string | null;
-    teacherId: string | null;
-    deliveryMode: AdminScheduleTemplateMutationInput["deliveryMode"];
-    deliveryGroupId: string | null;
-    openClasses: {
-      deleteMany: Record<string, never>;
-      create?: Array<{ classGroupId: string }>;
-    };
-    coveredClasses: {
-      deleteMany: Record<string, never>;
-      create?: Array<{ classGroupId: string }>;
-    };
-  } = {
+  const sharedData = {
     dayOfWeek: isDetached ? null : payload.dayOfWeek,
     startTime: isDetached ? null : payload.startMinutes,
     endTime: isDetached ? null : payload.endMinutes,
@@ -149,29 +87,33 @@ export async function createOrUpdateAdminScheduleTemplateAction(input: AdminSche
     teacherId: payload.teacherId,
     deliveryMode: payload.deliveryMode,
     deliveryGroupId: payload.deliveryMode === "SHARED_CLASSES" ? null : payload.deliveryGroupId,
-    openClasses: {
-      deleteMany: {},
-    },
-    coveredClasses: {
-      deleteMany: {},
-    },
   };
 
-  if (openClassIds.length > 0) {
-    data.openClasses.create = openClassIds.map((classGroupId) => ({ classGroupId }));
-  }
-
-  if (coveredClassIds.length > 0) {
-    data.coveredClasses.create = coveredClassIds.map((classGroupId) => ({ classGroupId }));
-  }
-
   if (payload.templateId) {
+    const updateData = {
+      ...sharedData,
+      openClasses: {
+        deleteMany: {},
+        ...(openClassesCreate.length > 0 ? { create: openClassesCreate } : {}),
+      },
+      coveredClasses: {
+        deleteMany: {},
+        ...(coveredClassesCreate.length > 0 ? { create: coveredClassesCreate } : {}),
+      },
+    } satisfies Prisma.WeeklyScheduleTemplateUncheckedUpdateInput;
+
     await prisma.weeklyScheduleTemplate.update({
       where: { id: payload.templateId },
-      data,
+      data: updateData,
     });
   } else {
-    await prisma.weeklyScheduleTemplate.create({ data });
+    const createData = {
+      ...sharedData,
+      ...(openClassesCreate.length > 0 ? { openClasses: { create: openClassesCreate } } : {}),
+      ...(coveredClassesCreate.length > 0 ? { coveredClasses: { create: coveredClassesCreate } } : {}),
+    } satisfies Prisma.WeeklyScheduleTemplateUncheckedCreateInput;
+
+    await prisma.weeklyScheduleTemplate.create({ data: createData });
   }
 
   revalidatePath(SCHEDULE_PATH);

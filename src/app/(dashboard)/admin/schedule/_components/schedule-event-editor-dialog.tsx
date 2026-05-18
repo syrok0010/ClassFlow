@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useForm } from "@tanstack/react-form";
 
 import type { GroupType, ScheduleDeliveryMode, SubjectType } from "@/generated/prisma/enums";
@@ -25,24 +25,17 @@ import {
 } from "@/components/ui/select";
 import { getFieldErrorMessages } from "@/lib/form-errors";
 
+import {
+  createAdminScheduleTemplateMutationSchema,
+  type AdminScheduleTemplateMutationInput,
+} from "../_lib/schedule-mutations-schema";
 import { ScheduleMultiSelect, type FilterOption } from "./schedule-multi-select";
 
 type SubjectOption = { id: string; name: string; type: SubjectType };
 type DirectGroupOption = { id: string; name: string; type: GroupType; subjectId: string | null };
 type ElectiveGroupOption = { id: string; name: string; subjectId: string | null };
 
-type ScheduleEditorFormValue = {
-  dayOfWeek: number | null;
-  startMinutes: number | null;
-  endMinutes: number | null;
-  subjectId: string;
-  deliveryMode: ScheduleDeliveryMode;
-  deliveryGroupId: string | null;
-  roomId: string | null;
-  teacherId: string | null;
-  openClassIds: string[];
-  coveredClassIds: string[];
-};
+type ScheduleEditorFormValue = AdminScheduleTemplateMutationInput;
 
 export type ScheduleEditorDraft = {
   templateId?: string;
@@ -75,7 +68,6 @@ interface ScheduleEventEditorDialogProps {
 }
 
 interface ScheduleEventEditorDialogContentProps extends Omit<ScheduleEventEditorDialogProps, "draft"> {
-  draft: ScheduleEditorDraft;
   initialValues: ScheduleEditorFormValue;
 }
 
@@ -127,7 +119,6 @@ export function ScheduleEventEditorDialog({
           open={open}
           title={title}
           description={description}
-          draft={draft}
           initialValues={initialValues}
           subjectOptions={subjectOptions}
           classOptions={classOptions}
@@ -147,7 +138,6 @@ export function ScheduleEventEditorDialog({
 function ScheduleEventEditorDialogContent({
   title,
   description,
-  draft,
   initialValues,
   subjectOptions,
   classOptions,
@@ -159,19 +149,47 @@ function ScheduleEventEditorDialogContent({
   onOpenChange,
   onSave,
 }: ScheduleEventEditorDialogContentProps) {
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const validationSchema = useMemo(
+    () =>
+      createAdminScheduleTemplateMutationSchema({
+        subjectsById: Object.fromEntries(
+          subjectOptions.map((subject) => [subject.id, { type: subject.type }]),
+        ),
+        groupsById: {
+          ...Object.fromEntries(
+            directGroupOptions.map((group) => [
+              group.id,
+              {
+                type: group.type,
+                subjectId: group.subjectId,
+              },
+            ]),
+          ),
+          ...Object.fromEntries(
+            electiveGroupOptions.map((group) => [
+              group.id,
+              {
+                type: "ELECTIVE_GROUP" as const,
+                subjectId: group.subjectId,
+              },
+            ]),
+          ),
+        },
+        classIds: classOptions.map((option) => option.id),
+      }),
+    [classOptions, directGroupOptions, electiveGroupOptions, subjectOptions],
+  );
 
   const form = useForm({
     defaultValues: initialValues satisfies ScheduleEditorFormValue,
+    validators: {
+      onChange: validationSchema,
+      onBlur: validationSchema,
+      onSubmit: validationSchema,
+    },
     onSubmit: async ({ value }) => {
-      const validationError = validateScheduleEditorValue(value);
-      if (validationError) {
-        setSubmitError(validationError);
-        return;
-      }
-
       await onSave({
-        templateId: draft.templateId,
+        templateId: value.templateId,
         dayOfWeek: value.dayOfWeek,
         startMinutes: value.startMinutes,
         endMinutes: value.endMinutes,
@@ -222,7 +240,6 @@ function ScheduleEventEditorDialogContent({
         className="flex flex-col gap-6"
         onSubmit={(event) => {
           event.preventDefault();
-          setSubmitError(null);
           void form.handleSubmit();
         }}
       >
@@ -327,8 +344,11 @@ function ScheduleEventEditorDialogContent({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <form.Field name="startMinutes">
-                {(field) => (
-                  <Field>
+                {(field) => {
+                  const errors = getFieldErrorMessages(field);
+
+                  return (
+                  <Field data-invalid={errors.length > 0}>
                     <FieldLabel htmlFor="schedule-editor-start-time">Время начала</FieldLabel>
                     <Input
                       id="schedule-editor-start-time"
@@ -341,14 +361,20 @@ function ScheduleEventEditorDialogContent({
                           : event.target.valueAsNumber / 1000 / 60;
                         field.handleChange(nextMinutes);
                       }}
+                      aria-invalid={errors.length > 0 || undefined}
                     />
+                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                   </Field>
-                )}
+                  );
+                }}
               </form.Field>
 
               <form.Field name="endMinutes">
-                {(field) => (
-                  <Field>
+                {(field) => {
+                  const errors = getFieldErrorMessages(field);
+
+                  return (
+                  <Field data-invalid={errors.length > 0}>
                     <FieldLabel htmlFor="schedule-editor-end-time">Время окончания</FieldLabel>
                     <Input
                       id="schedule-editor-end-time"
@@ -361,16 +387,22 @@ function ScheduleEventEditorDialogContent({
                           : event.target.valueAsNumber / 1000 / 60;
                         field.handleChange(nextMinutes);
                       }}
+                      aria-invalid={errors.length > 0 || undefined}
                     />
+                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                   </Field>
-                )}
+                  );
+                }}
               </form.Field>
             </div>
 
             {deliveryMode === "DIRECT_GROUP" ? (
               <form.Field name="deliveryGroupId">
-                {(field) => (
-                  <Field>
+                {(field) => {
+                  const errors = getFieldErrorMessages(field);
+
+                  return (
+                  <Field data-invalid={errors.length > 0}>
                     <FieldLabel htmlFor="schedule-editor-direct-group">Группа</FieldLabel>
                     <Select
                       value={field.state.value ?? NONE_VALUE}
@@ -379,7 +411,11 @@ function ScheduleEventEditorDialogContent({
                         field.handleBlur();
                       }}
                     >
-                      <SelectTrigger id="schedule-editor-direct-group" className="w-full">
+                      <SelectTrigger
+                        id="schedule-editor-direct-group"
+                        className="w-full"
+                        aria-invalid={errors.length > 0 || undefined}
+                      >
                         <SelectValue>
                           {field.state.value
                             ? directGroupOptions.find((option) => option.id === field.state.value)?.name ?? "Группа"
@@ -396,16 +432,21 @@ function ScheduleEventEditorDialogContent({
                         </SelectGroup>
                       </SelectContent>
                     </Select>
+                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                   </Field>
-                )}
+                  );
+                }}
               </form.Field>
             ) : null}
 
             {deliveryMode === "ELECTIVE_GROUP" ? (
               <>
                 <form.Field name="deliveryGroupId">
-                  {(field) => (
-                    <Field>
+                  {(field) => {
+                    const errors = getFieldErrorMessages(field);
+
+                    return (
+                    <Field data-invalid={errors.length > 0}>
                       <FieldLabel htmlFor="schedule-editor-elective-group">Группа по выбору</FieldLabel>
                       <Select
                         value={field.state.value ?? NONE_VALUE}
@@ -417,7 +458,11 @@ function ScheduleEventEditorDialogContent({
                           form.setFieldValue("subjectId", nextGroup?.subjectId ?? "");
                         }}
                       >
-                        <SelectTrigger id="schedule-editor-elective-group" className="w-full">
+                        <SelectTrigger
+                          id="schedule-editor-elective-group"
+                          className="w-full"
+                          aria-invalid={errors.length > 0 || undefined}
+                        >
                           <SelectValue>
                             {field.state.value
                               ? electiveGroupOptions.find((option) => option.id === field.state.value)?.name ?? "Группа по выбору"
@@ -434,13 +479,18 @@ function ScheduleEventEditorDialogContent({
                           </SelectGroup>
                         </SelectContent>
                       </Select>
+                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>
-                  )}
+                    );
+                  }}
                 </form.Field>
 
                 <form.Field name="openClassIds">
-                  {(field) => (
-                    <Field>
+                  {(field) => {
+                    const errors = getFieldErrorMessages(field);
+
+                    return (
+                    <Field data-invalid={errors.length > 0}>
                       <FieldLabel>Открыт для классов</FieldLabel>
                       <ScheduleMultiSelect
                         title="Классы"
@@ -451,16 +501,21 @@ function ScheduleEventEditorDialogContent({
                           field.handleBlur();
                         }}
                       />
+                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                     </Field>
-                  )}
+                    );
+                  }}
                 </form.Field>
               </>
             ) : null}
 
             {deliveryMode === "SHARED_CLASSES" ? (
               <form.Field name="coveredClassIds">
-                {(field) => (
-                  <Field>
+                {(field) => {
+                  const errors = getFieldErrorMessages(field);
+
+                  return (
+                  <Field data-invalid={errors.length > 0}>
                     <FieldLabel>Покрываемые классы</FieldLabel>
                     <ScheduleMultiSelect
                       title="Классы"
@@ -471,14 +526,19 @@ function ScheduleEventEditorDialogContent({
                         field.handleBlur();
                       }}
                     />
+                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                   </Field>
-                )}
+                  );
+                }}
               </form.Field>
             ) : null}
 
             <form.Field name="subjectId">
-              {(field) => (
-                <Field>
+              {(field) => {
+                const errors = getFieldErrorMessages(field);
+
+                return (
+                <Field data-invalid={errors.length > 0}>
                   <FieldLabel htmlFor="schedule-editor-subject">Предмет</FieldLabel>
                   <Select
                     value={field.state.value || NONE_VALUE}
@@ -488,7 +548,11 @@ function ScheduleEventEditorDialogContent({
                     }}
                     disabled={deliveryMode === "ELECTIVE_GROUP"}
                   >
-                    <SelectTrigger id="schedule-editor-subject" className="w-full">
+                    <SelectTrigger
+                      id="schedule-editor-subject"
+                      className="w-full"
+                      aria-invalid={errors.length > 0 || undefined}
+                    >
                       <SelectValue>
                         {field.state.value
                           ? filteredSubjectOptions.find((option) => option.id === field.state.value)?.name ?? "Предмет"
@@ -508,8 +572,10 @@ function ScheduleEventEditorDialogContent({
                   {deliveryMode === "ELECTIVE_GROUP" ? (
                     <FieldDescription>Предмет берется из выбранной группы по выбору.</FieldDescription>
                   ) : null}
+                  {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
                 </Field>
-              )}
+                );
+              }}
             </form.Field>
 
             <Field>
@@ -589,8 +655,6 @@ function ScheduleEventEditorDialogContent({
                 </Field>
               )}
             </form.Field>
-
-          {submitError ? <FieldError>{submitError}</FieldError> : null}
         </FieldGroup>
 
         <DialogFooter>
@@ -620,6 +684,7 @@ function buildDefaultValues(
   if (mode === "ELECTIVE_GROUP") {
     const fallbackElectiveGroup = electiveGroupOptions[0] ?? null;
     return {
+      templateId: draft?.templateId,
       dayOfWeek: draft?.dayOfWeek ?? null,
       startMinutes: draft?.startMinutes ?? null,
       endMinutes: draft?.endMinutes ?? null,
@@ -635,6 +700,7 @@ function buildDefaultValues(
 
   if (mode === "SHARED_CLASSES") {
     return {
+      templateId: draft?.templateId,
       dayOfWeek: draft?.dayOfWeek ?? null,
       startMinutes: draft?.startMinutes ?? null,
       endMinutes: draft?.endMinutes ?? null,
@@ -649,6 +715,7 @@ function buildDefaultValues(
   }
 
   return {
+    templateId: draft?.templateId,
     dayOfWeek: draft?.dayOfWeek ?? null,
     startMinutes: draft?.startMinutes ?? null,
     endMinutes: draft?.endMinutes ?? null,
@@ -736,38 +803,6 @@ function formatDurationHint(durationHint: { kind: "none" | "single" | "mismatch"
   }
 
   return "Не задана";
-}
-
-function validateScheduleEditorValue(value: ScheduleEditorFormValue) {
-  const detached = value.dayOfWeek === null || value.startMinutes === null || value.endMinutes === null;
-
-  if (!detached && value.endMinutes !== null && value.startMinutes !== null && value.endMinutes <= value.startMinutes) {
-    return "Время окончания должно быть позже времени начала";
-  }
-
-  if (value.deliveryMode === "DIRECT_GROUP" && !value.deliveryGroupId) {
-    return "Выберите группу";
-  }
-
-  if (value.deliveryMode === "ELECTIVE_GROUP") {
-    if (!value.deliveryGroupId) {
-      return "Выберите группу по выбору";
-    }
-
-    if (value.openClassIds.length === 0) {
-      return "Укажите хотя бы один открытый класс";
-    }
-  }
-
-  if (value.deliveryMode === "SHARED_CLASSES" && value.coveredClassIds.length < 2) {
-    return "Укажите минимум два покрываемых класса";
-  }
-
-  if (!value.subjectId) {
-    return "Выберите предмет";
-  }
-
-  return null;
 }
 
 function minutesToTime(totalMinutes: number | null) {
