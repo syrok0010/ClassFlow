@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 
 import type { GroupType, ScheduleDeliveryMode, SubjectType } from "@/generated/prisma/enums";
@@ -74,6 +74,11 @@ interface ScheduleEventEditorDialogProps {
   onSave: (draft: ScheduleEditorDraft) => Promise<void>;
 }
 
+interface ScheduleEventEditorDialogContentProps extends Omit<ScheduleEventEditorDialogProps, "draft"> {
+  draft: ScheduleEditorDraft;
+  initialValues: ScheduleEditorFormValue;
+}
+
 const DAY_OPTIONS = [
   { value: "1", label: "Понедельник" },
   { value: "2", label: "Вторник" },
@@ -105,12 +110,56 @@ export function ScheduleEventEditorDialog({
   onOpenChange,
   onSave,
 }: ScheduleEventEditorDialogProps) {
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
   const initialValues = useMemo(
     () => buildDefaultValues(draft, subjectOptions, classOptions, directGroupOptions, electiveGroupOptions),
     [draft, subjectOptions, classOptions, directGroupOptions, electiveGroupOptions],
   );
+
+  if (!draft) {
+    return null;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open ? (
+        <ScheduleEventEditorDialogContent
+          key={JSON.stringify(initialValues)}
+          open={open}
+          title={title}
+          description={description}
+          draft={draft}
+          initialValues={initialValues}
+          subjectOptions={subjectOptions}
+          classOptions={classOptions}
+          directGroupOptions={directGroupOptions}
+          electiveGroupOptions={electiveGroupOptions}
+          roomOptions={roomOptions}
+          teacherOptions={teacherOptions}
+          lessonDurationByGroupSubject={lessonDurationByGroupSubject}
+          onOpenChange={onOpenChange}
+          onSave={onSave}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function ScheduleEventEditorDialogContent({
+  title,
+  description,
+  draft,
+  initialValues,
+  subjectOptions,
+  classOptions,
+  directGroupOptions,
+  electiveGroupOptions,
+  roomOptions,
+  teacherOptions,
+  lessonDurationByGroupSubject,
+  onOpenChange,
+  onSave,
+}: ScheduleEventEditorDialogContentProps) {
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useForm({
     defaultValues: initialValues satisfies ScheduleEditorFormValue,
@@ -122,7 +171,7 @@ export function ScheduleEventEditorDialog({
       }
 
       await onSave({
-        templateId: draft?.templateId,
+        templateId: draft.templateId,
         dayOfWeek: value.dayOfWeek,
         startMinutes: value.startMinutes,
         endMinutes: value.endMinutes,
@@ -138,15 +187,6 @@ export function ScheduleEventEditorDialog({
       onOpenChange(false);
     },
   });
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setSubmitError(null);
-    form.reset(initialValues);
-  }, [form, initialValues, open]);
 
   const deliveryMode = form.state.values.deliveryMode;
   const selectedSubjectId = form.state.values.subjectId;
@@ -176,27 +216,22 @@ export function ScheduleEventEditorDialog({
     ],
   );
 
-  if (!draft) {
-    return null;
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <form
-          className="flex flex-col gap-6"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setSubmitError(null);
-            void form.handleSubmit();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{description}</DialogDescription>
-          </DialogHeader>
+    <DialogContent className="sm:max-w-2xl">
+      <form
+        className="flex flex-col gap-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSubmitError(null);
+          void form.handleSubmit();
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
 
-          <FieldGroup>
+        <FieldGroup>
             <form.Field name="deliveryMode">
               {(field) => (
                 <Field>
@@ -555,20 +590,19 @@ export function ScheduleEventEditorDialog({
               )}
             </form.Field>
 
-            {submitError ? <FieldError>{submitError}</FieldError> : null}
-          </FieldGroup>
+          {submitError ? <FieldError>{submitError}</FieldError> : null}
+        </FieldGroup>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)} type="button">
-              Отмена
-            </Button>
-            <Button type="submit">
-              Сохранить
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} type="button">
+            Отмена
+          </Button>
+          <Button type="submit">
+            Сохранить
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
   );
 }
 
