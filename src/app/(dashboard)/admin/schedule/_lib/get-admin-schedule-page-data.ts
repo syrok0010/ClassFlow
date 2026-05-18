@@ -24,6 +24,11 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
       id: true,
       name: true,
       grade: true,
+      _count: {
+        select: {
+          studentGroups: true,
+        },
+      },
     },
     orderBy: [{ grade: "asc" }, { name: "asc" }],
   });
@@ -101,17 +106,45 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
           { type: "ELECTIVE_GROUP" },
         ],
       },
-      select: { id: true, name: true, type: true, subjectId: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        subjectId: true,
+        parentId: true,
+        grade: true,
+        _count: {
+          select: {
+            studentGroups: true,
+          },
+        },
+      },
       orderBy: [{ type: "asc" }, { name: "asc" }],
     }),
     prisma.room.findMany({
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        seatsCount: true,
+        roomSubjects: {
+          select: {
+            subjectId: true,
+          },
+        },
+      },
       orderBy: { name: "asc" },
     }),
     prisma.teacher.findMany({
       select: {
         id: true,
         user: { select: { surname: true, name: true, patronymicName: true } },
+        teacherSubjects: {
+          select: {
+            subjectId: true,
+            minGrade: true,
+            maxGrade: true,
+          },
+        },
       },
       orderBy: { user: { surname: "asc" } },
     }),
@@ -147,23 +180,61 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
   const lessonDurationByGroupSubject = Object.fromEntries(
     requirements.map((item) => [`${item.groupId}:${item.subjectId}`, item.durationInMinutes]),
   );
+  const subjectIdsByGroup = new Map<string, string[]>();
+  for (const requirement of requirements) {
+    const current = subjectIdsByGroup.get(requirement.groupId) ?? [];
+    current.push(requirement.subjectId);
+    subjectIdsByGroup.set(requirement.groupId, current);
+  }
+  const classSubjectIdsById = new Map(
+    classRows.map((row) => [row.id, [...new Set(subjectIdsByGroup.get(row.id) ?? [])].sort()]),
+  );
 
   return {
     events: templates.flatMap((entry) => mapWeeklyTemplateToAdminScheduleEvents(entry)),
-    classRows,
+    classRows: classRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      grade: row.grade,
+      studentCount: row._count.studentGroups,
+      subjectIds: classSubjectIdsById.get(row.id) ?? [],
+    })),
     subjectOptions: subjects,
-    directGroupOptions: groups.filter((group) => group.type === "CLASS" || group.type === "SUBJECT_SUBGROUP"),
+    directGroupOptions: groups
+      .filter((group) => group.type === "CLASS" || group.type === "SUBJECT_SUBGROUP")
+      .map((group) => ({
+        id: group.id,
+        name: group.name,
+        type: group.type,
+        subjectId: group.subjectId,
+        parentId: group.parentId ?? null,
+        grade: group.grade ?? null,
+        studentCount: group._count.studentGroups,
+        subjectIds: [...new Set(subjectIdsByGroup.get(group.id) ?? [])].sort(),
+      })),
     electiveGroupOptions: groups
       .filter((group) => group.type === "ELECTIVE_GROUP")
       .map((group) => ({
         id: group.id,
         name: group.name,
         subjectId: group.subjectId,
+        studentCount: group._count.studentGroups,
+        subjectIds: [...new Set(subjectIdsByGroup.get(group.id) ?? (group.subjectId ? [group.subjectId] : []))].sort(),
       })),
-    roomOptions: rooms,
+    roomOptions: rooms.map((room) => ({
+      id: room.id,
+      name: room.name,
+      seatsCount: room.seatsCount,
+      subjectIds: [...new Set(room.roomSubjects.map((item) => item.subjectId))].sort(),
+    })),
     teacherOptions: teachers.map((teacher) => ({
       id: teacher.id,
       name: getUserFullName(teacher.user) || "Без имени",
+      subjects: teacher.teacherSubjects.map((subject) => ({
+        subjectId: subject.subjectId,
+        minGrade: subject.minGrade,
+        maxGrade: subject.maxGrade,
+      })),
     })),
     lessonDurationByGroupSubject,
   };

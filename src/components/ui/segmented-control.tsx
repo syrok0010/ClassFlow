@@ -37,6 +37,7 @@ export function SegmentedControl<T extends string>({
         return (
           <button
             key={option.value}
+            type="button"
             role="radio"
             aria-checked={isActive}
             disabled={option.disabled}

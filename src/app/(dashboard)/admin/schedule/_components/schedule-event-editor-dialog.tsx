@@ -1,10 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
-import { useForm } from "@tanstack/react-form";
+import { useMemo, useState } from "react";
+import {
+  useForm,
+  type FieldComponent,
+  type FormAsyncValidateOrFn,
+  type FormValidateOrFn,
+} from "@tanstack/react-form";
+import { z } from "zod";
 
-import type { GroupType, ScheduleDeliveryMode, SubjectType } from "@/generated/prisma/enums";
+import type { SubjectType } from "@/generated/prisma/enums";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -13,8 +21,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   Select,
   SelectContent,
@@ -25,17 +40,36 @@ import {
 } from "@/components/ui/select";
 import { getFieldErrorMessages } from "@/lib/form-errors";
 
+import type {
+  AdminScheduleClassRow,
+  AdminScheduleElectiveGroupOption,
+  AdminScheduleGroupOption,
+  AdminScheduleRoomOption,
+  AdminScheduleTeacherOption,
+} from "../_lib/admin-schedule-types";
 import {
-  createAdminScheduleTemplateMutationSchema,
-  type AdminScheduleTemplateMutationInput,
-} from "../_lib/schedule-mutations-schema";
+  getAudienceSelection,
+  getAudienceSummaryLabel,
+  getAvailableRoomOptions,
+  getAvailableSubjectIds,
+  getAvailableTeacherOptions,
+  getCardKindLabel,
+  getDeliveryModeForCardKind,
+  getDerivedEndMinutes,
+  getDurationMinutes,
+  getGroupOptionsByKind,
+  getGroupTypeLabel,
+  getInitialCardKind,
+  getStepError,
+  SCHEDULE_EDITOR_STEPS,
+  type ScheduleCardKind,
+  type ScheduleEditorStepId,
+  type ScheduleStepperFormValue,
+} from "../_lib/schedule-editor-flow";
+import { ScheduleEditorStepper } from "./schedule-editor-stepper";
 import { ScheduleMultiSelect, type FilterOption } from "./schedule-multi-select";
 
 type SubjectOption = { id: string; name: string; type: SubjectType };
-type DirectGroupOption = { id: string; name: string; type: GroupType; subjectId: string | null };
-type ElectiveGroupOption = { id: string; name: string; subjectId: string | null };
-
-type ScheduleEditorFormValue = AdminScheduleTemplateMutationInput;
 
 export type ScheduleEditorDraft = {
   templateId?: string;
@@ -43,7 +77,7 @@ export type ScheduleEditorDraft = {
   startMinutes: number | null;
   endMinutes: number | null;
   subjectId: string;
-  deliveryMode: ScheduleDeliveryMode;
+  deliveryMode: ScheduleStepperFormValue["deliveryMode"];
   deliveryGroupId: string | null;
   roomId: string | null;
   teacherId: string | null;
@@ -58,17 +92,14 @@ interface ScheduleEventEditorDialogProps {
   draft: ScheduleEditorDraft | null;
   subjectOptions: SubjectOption[];
   classOptions: FilterOption[];
-  directGroupOptions: DirectGroupOption[];
-  electiveGroupOptions: ElectiveGroupOption[];
-  roomOptions: { id: string; name: string }[];
-  teacherOptions: { id: string; name: string }[];
+  directGroupOptions: AdminScheduleGroupOption[];
+  electiveGroupOptions: AdminScheduleElectiveGroupOption[];
+  roomOptions: AdminScheduleRoomOption[];
+  teacherOptions: AdminScheduleTeacherOption[];
+  classRows: AdminScheduleClassRow[];
   lessonDurationByGroupSubject: Record<string, number>;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: ScheduleEditorDraft) => Promise<void>;
-}
-
-interface ScheduleEventEditorDialogContentProps extends Omit<ScheduleEventEditorDialogProps, "draft"> {
-  initialValues: ScheduleEditorFormValue;
 }
 
 const DAY_OPTIONS = [
@@ -79,13 +110,14 @@ const DAY_OPTIONS = [
   { value: "5", label: "Пятница" },
 ];
 
-const DELIVERY_MODE_OPTIONS: Array<{ value: ScheduleDeliveryMode; label: string }> = [
-  { value: "DIRECT_GROUP", label: "Группа" },
-  { value: "ELECTIVE_GROUP", label: "Доп по выбору" },
-  { value: "SHARED_CLASSES", label: "Общий слот классов" },
-];
-
 const NONE_VALUE = "none";
+
+const CARD_KIND_OPTIONS: Array<{ value: ScheduleCardKind; label: string }> = [
+  { value: "CLASS", label: "Класс" },
+  { value: "SUBGROUP", label: "Подгруппа" },
+  { value: "ELECTIVE_GROUP", label: "Группа по выбору" },
+  { value: "SHARED_CLASSES", label: "Объединенная группа" },
+];
 
 export function ScheduleEventEditorDialog({
   open,
@@ -98,13 +130,27 @@ export function ScheduleEventEditorDialog({
   electiveGroupOptions,
   roomOptions,
   teacherOptions,
+  classRows,
   lessonDurationByGroupSubject,
   onOpenChange,
   onSave,
 }: ScheduleEventEditorDialogProps) {
   const initialValues = useMemo(
-    () => buildDefaultValues(draft, subjectOptions, classOptions, directGroupOptions, electiveGroupOptions),
-    [draft, subjectOptions, classOptions, directGroupOptions, electiveGroupOptions],
+    () =>
+      buildDefaultValues({
+        draft,
+        classRows,
+        directGroupOptions,
+        electiveGroupOptions,
+        lessonDurationByGroupSubject,
+      }),
+    [
+      classRows,
+      directGroupOptions,
+      draft,
+      electiveGroupOptions,
+      lessonDurationByGroupSubject,
+    ],
   );
 
   if (!draft) {
@@ -116,7 +162,6 @@ export function ScheduleEventEditorDialog({
       {open ? (
         <ScheduleEventEditorDialogContent
           key={JSON.stringify(initialValues)}
-          open={open}
           title={title}
           description={description}
           initialValues={initialValues}
@@ -126,6 +171,7 @@ export function ScheduleEventEditorDialog({
           electiveGroupOptions={electiveGroupOptions}
           roomOptions={roomOptions}
           teacherOptions={teacherOptions}
+          classRows={classRows}
           lessonDurationByGroupSubject={lessonDurationByGroupSubject}
           onOpenChange={onOpenChange}
           onSave={onSave}
@@ -134,6 +180,25 @@ export function ScheduleEventEditorDialog({
     </Dialog>
   );
 }
+
+type ScheduleEventEditorDialogContentProps = Omit<ScheduleEventEditorDialogProps, "open" | "draft"> & {
+  initialValues: ScheduleStepperFormValue;
+};
+
+type ScheduleEditorFieldRenderer = FieldComponent<
+  ScheduleStepperFormValue,
+  FormValidateOrFn<ScheduleStepperFormValue> | undefined,
+  FormValidateOrFn<ScheduleStepperFormValue> | undefined,
+  FormAsyncValidateOrFn<ScheduleStepperFormValue> | undefined,
+  FormValidateOrFn<ScheduleStepperFormValue> | undefined,
+  FormAsyncValidateOrFn<ScheduleStepperFormValue> | undefined,
+  FormValidateOrFn<ScheduleStepperFormValue> | undefined,
+  FormAsyncValidateOrFn<ScheduleStepperFormValue> | undefined,
+  FormValidateOrFn<ScheduleStepperFormValue> | undefined,
+  FormAsyncValidateOrFn<ScheduleStepperFormValue> | undefined,
+  FormAsyncValidateOrFn<ScheduleStepperFormValue> | undefined,
+  unknown
+>;
 
 function ScheduleEventEditorDialogContent({
   title,
@@ -145,43 +210,42 @@ function ScheduleEventEditorDialogContent({
   electiveGroupOptions,
   roomOptions,
   teacherOptions,
+  classRows,
   lessonDurationByGroupSubject,
   onOpenChange,
   onSave,
 }: ScheduleEventEditorDialogContentProps) {
   const validationSchema = useMemo(
     () =>
-      createAdminScheduleTemplateMutationSchema({
-        subjectsById: Object.fromEntries(
-          subjectOptions.map((subject) => [subject.id, { type: subject.type }]),
-        ),
-        groupsById: {
-          ...Object.fromEntries(
-            directGroupOptions.map((group) => [
-              group.id,
-              {
-                type: group.type,
-                subjectId: group.subjectId,
-              },
-            ]),
-          ),
-          ...Object.fromEntries(
-            electiveGroupOptions.map((group) => [
-              group.id,
-              {
-                type: "ELECTIVE_GROUP" as const,
-                subjectId: group.subjectId,
-              },
-            ]),
-          ),
-        },
-        classIds: classOptions.map((option) => option.id),
+      createScheduleEditorFormSchema({
+        classRows,
+        directGroupOptions,
+        electiveGroupOptions,
+        roomOptions,
+        teacherOptions,
+        lessonDurationByGroupSubject,
       }),
-    [classOptions, directGroupOptions, electiveGroupOptions, subjectOptions],
+    [
+      classRows,
+      directGroupOptions,
+      electiveGroupOptions,
+      lessonDurationByGroupSubject,
+      roomOptions,
+      teacherOptions,
+    ],
+  );
+  const [currentStepId, setCurrentStepId] = useState<ScheduleEditorStepId>(
+    getInitialStepId(
+      initialValues,
+      classRows,
+      directGroupOptions,
+      electiveGroupOptions,
+      lessonDurationByGroupSubject,
+    ),
   );
 
   const form = useForm({
-    defaultValues: initialValues satisfies ScheduleEditorFormValue,
+    defaultValues: initialValues satisfies ScheduleStepperFormValue,
     validators: {
       onChange: validationSchema,
       onBlur: validationSchema,
@@ -206,36 +270,109 @@ function ScheduleEventEditorDialogContent({
     },
   });
 
-  const deliveryMode = form.state.values.deliveryMode;
-  const selectedSubjectId = form.state.values.subjectId;
-  const selectedDeliveryGroupId = form.state.values.deliveryGroupId;
-  const selectedCoveredClassIds = form.state.values.coveredClassIds;
-
-  const filteredSubjectOptions = useMemo(
-    () => getSubjectOptionsForMode(subjectOptions, deliveryMode),
-    [subjectOptions, deliveryMode],
+  const values = form.state.values;
+  const audienceSelection = useMemo(
+    () => getAudienceSelection(values, classRows, directGroupOptions, electiveGroupOptions),
+    [classRows, directGroupOptions, electiveGroupOptions, values],
   );
-
-  const durationHint = useMemo(
+  const availableSubjectIds = useMemo(
+    () => getAvailableSubjectIds(values, classRows, directGroupOptions, electiveGroupOptions),
+    [classRows, directGroupOptions, electiveGroupOptions, values],
+  );
+  const availableSubjectOptions = useMemo(
+    () => subjectOptions.filter((option) => availableSubjectIds.includes(option.id)),
+    [availableSubjectIds, subjectOptions],
+  );
+  const availableRoomOptions = useMemo(
+    () => getAvailableRoomOptions(roomOptions, audienceSelection, values.subjectId),
+    [audienceSelection, roomOptions, values.subjectId],
+  );
+  const availableTeacherOptions = useMemo(
+    () => getAvailableTeacherOptions(teacherOptions, audienceSelection, values.subjectId),
+    [audienceSelection, teacherOptions, values.subjectId],
+  );
+  const durationMinutes = useMemo(
+    () => getDurationMinutes(values, lessonDurationByGroupSubject),
+    [lessonDurationByGroupSubject, values],
+  );
+  const stepErrors = useMemo(
     () =>
-      getDurationHint({
-        deliveryMode,
-        subjectId: selectedSubjectId,
-        deliveryGroupId: selectedDeliveryGroupId,
-        coveredClassIds: selectedCoveredClassIds,
-        lessonDurationByGroupSubject,
-      }),
-    [
-      deliveryMode,
-      selectedSubjectId,
-      selectedDeliveryGroupId,
-      selectedCoveredClassIds,
-      lessonDurationByGroupSubject,
-    ],
+      Object.fromEntries(
+        SCHEDULE_EDITOR_STEPS.map((step) => [
+          step.id,
+          getStepError(
+            step.id,
+            values,
+            classRows,
+            directGroupOptions,
+            electiveGroupOptions,
+            lessonDurationByGroupSubject,
+          ),
+        ]),
+      ) as Record<ScheduleEditorStepId, string | null>,
+    [classRows, directGroupOptions, electiveGroupOptions, lessonDurationByGroupSubject, values],
   );
+  const firstBlockedStepIndex = SCHEDULE_EDITOR_STEPS.findIndex((step) => stepErrors[step.id] !== null);
+  const accessibleStepIds = SCHEDULE_EDITOR_STEPS
+    .slice(0, firstBlockedStepIndex === -1 ? SCHEDULE_EDITOR_STEPS.length : firstBlockedStepIndex + 1)
+    .map((step) => step.id);
+  const completedStepIds = SCHEDULE_EDITOR_STEPS
+    .filter((step, index) => {
+      if (stepErrors[step.id] !== null) {
+        return false;
+      }
+
+      return SCHEDULE_EDITOR_STEPS
+        .slice(0, index)
+        .every((previousStep) => stepErrors[previousStep.id] === null);
+    })
+    .map((step) => step.id);
+  const currentStepIndex = SCHEDULE_EDITOR_STEPS.findIndex((step) => step.id === currentStepId);
+  const currentStepError = stepErrors[currentStepId];
+  const canGoPrev = currentStepIndex > 0;
+  const canGoNext =
+    currentStepError === null
+    && currentStepIndex < SCHEDULE_EDITOR_STEPS.length - 1
+    && accessibleStepIds.includes(SCHEDULE_EDITOR_STEPS[currentStepIndex + 1]?.id ?? "kind");
+
+  const setScheduleFieldValue = <K extends keyof ScheduleStepperFormValue>(
+    field: K,
+    value: ScheduleStepperFormValue[K],
+  ) => {
+    form.setFieldValue(field as never, value as never);
+  };
+
+  const applyPatch = (patch: Partial<ScheduleStepperFormValue>) => {
+    const nextValues = normalizeScheduleEditorValue(
+      {
+        ...form.state.values,
+        ...patch,
+      },
+      {
+        classRows,
+        directGroupOptions,
+        electiveGroupOptions,
+        roomOptions,
+        teacherOptions,
+        lessonDurationByGroupSubject,
+      },
+    );
+
+    const changedKeys = new Set<keyof ScheduleStepperFormValue>([
+      ...Object.keys(patch),
+      "deliveryMode",
+      "endMinutes",
+      "roomId",
+      "teacherId",
+    ] as Array<keyof ScheduleStepperFormValue>);
+
+    for (const key of changedKeys) {
+      setScheduleFieldValue(key, nextValues[key]);
+    }
+  };
 
   return (
-    <DialogContent className="sm:max-w-2xl">
+    <DialogContent className="sm:max-w-4xl">
       <form
         className="flex flex-col gap-6"
         onSubmit={(event) => {
@@ -248,561 +385,1044 @@ function ScheduleEventEditorDialogContent({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        <FieldGroup>
-            <form.Field name="deliveryMode">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor="schedule-editor-mode">Тип карточки</FieldLabel>
-                  <Select
-                    value={field.state.value}
-                    onValueChange={(value) => {
-                      const nextMode = (value ?? field.state.value) as ScheduleDeliveryMode;
-                      field.handleChange(nextMode);
-                      field.handleBlur();
+        <ScheduleEditorStepper
+          steps={SCHEDULE_EDITOR_STEPS}
+          currentStepId={currentStepId}
+          completedStepIds={completedStepIds}
+          accessibleStepIds={accessibleStepIds}
+          onStepSelect={setCurrentStepId}
+        />
 
-                      if (nextMode === "DIRECT_GROUP") {
-                        form.setFieldValue("deliveryGroupId", directGroupOptions[0]?.id ?? null);
-                        form.setFieldValue("openClassIds", []);
-                        form.setFieldValue("coveredClassIds", []);
-                        const nextSubject = getSubjectOptionsForMode(subjectOptions, nextMode)[0]?.id ?? "";
-                        form.setFieldValue("subjectId", nextSubject);
-                      } else if (nextMode === "ELECTIVE_GROUP") {
-                        const nextGroup = electiveGroupOptions[0] ?? null;
-                        form.setFieldValue("deliveryGroupId", nextGroup?.id ?? null);
-                        form.setFieldValue("openClassIds", classOptions[0] ? [classOptions[0].id] : []);
-                        form.setFieldValue("coveredClassIds", []);
-                        form.setFieldValue("subjectId", nextGroup?.subjectId ?? "");
-                      } else {
-                        form.setFieldValue("deliveryGroupId", null);
-                        form.setFieldValue("openClassIds", []);
-                        form.setFieldValue("coveredClassIds", classOptions.slice(0, 2).map((item) => item.id));
-                        const nextSubject = getSubjectOptionsForMode(subjectOptions, nextMode)[0]?.id ?? "";
-                        form.setFieldValue("subjectId", nextSubject);
-                      }
-                    }}
-                  >
-                    <SelectTrigger id="schedule-editor-mode" className="w-full">
-                      <SelectValue>
-                        {DELIVERY_MODE_OPTIONS.find((option) => option.value === field.state.value)?.label}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectGroup>
-                        {DELIVERY_MODE_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              )}
-            </form.Field>
+        <EditorSummaryCard
+          values={values}
+          classRows={classRows}
+          directGroupOptions={directGroupOptions}
+          electiveGroupOptions={electiveGroupOptions}
+          availableRoomOptions={availableRoomOptions}
+          availableTeacherOptions={availableTeacherOptions}
+          subjectOptions={subjectOptions}
+          durationMinutes={durationMinutes}
+        />
 
-            <form.Field name="dayOfWeek">
-              {(field) => {
-                const errors = getFieldErrorMessages(field);
+        <CurrentStepContent
+          stepId={currentStepId}
+          FormField={form.Field as unknown as ScheduleEditorFieldRenderer}
+          values={values}
+          classRows={classRows}
+          classOptions={classOptions}
+          directGroupOptions={directGroupOptions}
+          electiveGroupOptions={electiveGroupOptions}
+          availableSubjectOptions={availableSubjectOptions}
+          availableRoomOptions={availableRoomOptions}
+          availableTeacherOptions={availableTeacherOptions}
+          durationMinutes={durationMinutes}
+          stepError={currentStepError}
+          onPatch={applyPatch}
+        />
 
-                return (
-                  <Field data-invalid={errors.length > 0}>
-                    <FieldLabel htmlFor="schedule-editor-day">День</FieldLabel>
-                    <Select
-                      value={field.state.value === null ? NONE_VALUE : String(field.state.value)}
-                      onValueChange={(value) => {
-                        field.handleChange(value === NONE_VALUE ? null : Number(value));
-                        field.handleBlur();
-                      }}
-                    >
-                      <SelectTrigger
-                        id="schedule-editor-day"
-                        className="w-full"
-                        aria-invalid={errors.length > 0 || undefined}
-                      >
-                        <SelectValue>
-                          {field.state.value === null
-                            ? "Без дня (временная область)"
-                            : DAY_OPTIONS.find((option) => Number(option.value) === field.state.value)?.label}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        <SelectGroup>
-                          <SelectItem value={NONE_VALUE}>Без дня (временная область)</SelectItem>
-                          {DAY_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                  </Field>
-                );
-              }}
-            </form.Field>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <form.Field name="startMinutes">
-                {(field) => {
-                  const errors = getFieldErrorMessages(field);
-
-                  return (
-                  <Field data-invalid={errors.length > 0}>
-                    <FieldLabel htmlFor="schedule-editor-start-time">Время начала</FieldLabel>
-                    <Input
-                      id="schedule-editor-start-time"
-                      type="time"
-                      value={minutesToTime(field.state.value)}
-                      onBlur={field.handleBlur}
-                      onChange={(event) => {
-                        const nextMinutes = Number.isNaN(event.target.valueAsNumber)
-                          ? null
-                          : event.target.valueAsNumber / 1000 / 60;
-                        field.handleChange(nextMinutes);
-                      }}
-                      aria-invalid={errors.length > 0 || undefined}
-                    />
-                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                  </Field>
-                  );
-                }}
-              </form.Field>
-
-              <form.Field name="endMinutes">
-                {(field) => {
-                  const errors = getFieldErrorMessages(field);
-
-                  return (
-                  <Field data-invalid={errors.length > 0}>
-                    <FieldLabel htmlFor="schedule-editor-end-time">Время окончания</FieldLabel>
-                    <Input
-                      id="schedule-editor-end-time"
-                      type="time"
-                      value={minutesToTime(field.state.value)}
-                      onBlur={field.handleBlur}
-                      onChange={(event) => {
-                        const nextMinutes = Number.isNaN(event.target.valueAsNumber)
-                          ? null
-                          : event.target.valueAsNumber / 1000 / 60;
-                        field.handleChange(nextMinutes);
-                      }}
-                      aria-invalid={errors.length > 0 || undefined}
-                    />
-                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                  </Field>
-                  );
-                }}
-              </form.Field>
-            </div>
-
-            {deliveryMode === "DIRECT_GROUP" ? (
-              <form.Field name="deliveryGroupId">
-                {(field) => {
-                  const errors = getFieldErrorMessages(field);
-
-                  return (
-                  <Field data-invalid={errors.length > 0}>
-                    <FieldLabel htmlFor="schedule-editor-direct-group">Группа</FieldLabel>
-                    <Select
-                      value={field.state.value ?? NONE_VALUE}
-                      onValueChange={(value) => {
-                        field.handleChange(value === NONE_VALUE ? null : value);
-                        field.handleBlur();
-                      }}
-                    >
-                      <SelectTrigger
-                        id="schedule-editor-direct-group"
-                        className="w-full"
-                        aria-invalid={errors.length > 0 || undefined}
-                      >
-                        <SelectValue>
-                          {field.state.value
-                            ? directGroupOptions.find((option) => option.id === field.state.value)?.name ?? "Группа"
-                            : "Группа"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        <SelectGroup>
-                          {directGroupOptions.map((option) => (
-                            <SelectItem key={option.id} value={option.id}>
-                              {option.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                  </Field>
-                  );
-                }}
-              </form.Field>
+        <DialogFooter className="justify-between">
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} type="button">
+              Отмена
+            </Button>
+            {canGoPrev ? (
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setCurrentStepId(SCHEDULE_EDITOR_STEPS[currentStepIndex - 1].id)}
+              >
+                Назад
+              </Button>
             ) : null}
+          </div>
 
-            {deliveryMode === "ELECTIVE_GROUP" ? (
-              <>
-                <form.Field name="deliveryGroupId">
-                  {(field) => {
-                    const errors = getFieldErrorMessages(field);
-
-                    return (
-                    <Field data-invalid={errors.length > 0}>
-                      <FieldLabel htmlFor="schedule-editor-elective-group">Группа по выбору</FieldLabel>
-                      <Select
-                        value={field.state.value ?? NONE_VALUE}
-                        onValueChange={(value) => {
-                          const nextId = value === NONE_VALUE ? null : value;
-                          field.handleChange(nextId);
-                          field.handleBlur();
-                          const nextGroup = electiveGroupOptions.find((option) => option.id === nextId);
-                          form.setFieldValue("subjectId", nextGroup?.subjectId ?? "");
-                        }}
-                      >
-                        <SelectTrigger
-                          id="schedule-editor-elective-group"
-                          className="w-full"
-                          aria-invalid={errors.length > 0 || undefined}
-                        >
-                          <SelectValue>
-                            {field.state.value
-                              ? electiveGroupOptions.find((option) => option.id === field.state.value)?.name ?? "Группа по выбору"
-                              : "Группа по выбору"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent align="start">
-                          <SelectGroup>
-                            {electiveGroupOptions.map((option) => (
-                              <SelectItem key={option.id} value={option.id}>
-                                {option.name}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                    </Field>
-                    );
-                  }}
-                </form.Field>
-
-                <form.Field name="openClassIds">
-                  {(field) => {
-                    const errors = getFieldErrorMessages(field);
-
-                    return (
-                    <Field data-invalid={errors.length > 0}>
-                      <FieldLabel>Открыт для классов</FieldLabel>
-                      <ScheduleMultiSelect
-                        title="Классы"
-                        options={classOptions}
-                        selectedIds={field.state.value}
-                        onChange={(next) => {
-                          field.handleChange(next);
-                          field.handleBlur();
-                        }}
-                      />
-                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                    </Field>
-                    );
-                  }}
-                </form.Field>
-              </>
-            ) : null}
-
-            {deliveryMode === "SHARED_CLASSES" ? (
-              <form.Field name="coveredClassIds">
-                {(field) => {
-                  const errors = getFieldErrorMessages(field);
-
-                  return (
-                  <Field data-invalid={errors.length > 0}>
-                    <FieldLabel>Покрываемые классы</FieldLabel>
-                    <ScheduleMultiSelect
-                      title="Классы"
-                      options={classOptions}
-                      selectedIds={field.state.value}
-                      onChange={(next) => {
-                        field.handleChange(next);
-                        field.handleBlur();
-                      }}
-                    />
-                    {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                  </Field>
-                  );
-                }}
-              </form.Field>
-            ) : null}
-
-            <form.Field name="subjectId">
-              {(field) => {
-                const errors = getFieldErrorMessages(field);
-
-                return (
-                <Field data-invalid={errors.length > 0}>
-                  <FieldLabel htmlFor="schedule-editor-subject">Предмет</FieldLabel>
-                  <Select
-                    value={field.state.value || NONE_VALUE}
-                    onValueChange={(value) => {
-                      field.handleChange(value && value !== NONE_VALUE ? value : "");
-                      field.handleBlur();
-                    }}
-                    disabled={deliveryMode === "ELECTIVE_GROUP"}
-                  >
-                    <SelectTrigger
-                      id="schedule-editor-subject"
-                      className="w-full"
-                      aria-invalid={errors.length > 0 || undefined}
-                    >
-                      <SelectValue>
-                        {field.state.value
-                          ? filteredSubjectOptions.find((option) => option.id === field.state.value)?.name ?? "Предмет"
-                          : "Предмет"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectGroup>
-                        {filteredSubjectOptions.map((option) => (
-                          <SelectItem key={option.id} value={option.id}>
-                            {option.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  {deliveryMode === "ELECTIVE_GROUP" ? (
-                    <FieldDescription>Предмет берется из выбранной группы по выбору.</FieldDescription>
-                  ) : null}
-                  {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                </Field>
-                );
-              }}
-            </form.Field>
-
-            <Field>
-              <FieldLabel htmlFor="schedule-editor-duration">Подсказка по длительности</FieldLabel>
-              <Input
-                id="schedule-editor-duration"
-                value={formatDurationHint(durationHint)}
-                disabled
-              />
-              <FieldDescription>
-                Для режима и общих слотов время окончания можно задать вручную даже без совпадающего требования.
-              </FieldDescription>
-            </Field>
-
-            <form.Field name="roomId">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor="schedule-editor-room">Кабинет</FieldLabel>
-                  <Select
-                    value={field.state.value ?? NONE_VALUE}
-                    onValueChange={(value) => {
-                      field.handleChange(value === NONE_VALUE ? null : value);
-                      field.handleBlur();
-                    }}
-                  >
-                    <SelectTrigger id="schedule-editor-room" className="w-full">
-                      <SelectValue>
-                        {field.state.value
-                          ? roomOptions.find((option) => option.id === field.state.value)?.name ?? "Кабинет"
-                          : "Без кабинета"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectGroup>
-                        <SelectItem value={NONE_VALUE}>Без кабинета</SelectItem>
-                        {roomOptions.map((option) => (
-                          <SelectItem key={option.id} value={option.id}>
-                            {option.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
+          {currentStepIndex < SCHEDULE_EDITOR_STEPS.length - 1 ? (
+            <Button
+              type="button"
+              disabled={!canGoNext}
+              onClick={() => setCurrentStepId(SCHEDULE_EDITOR_STEPS[currentStepIndex + 1].id)}
+            >
+              Далее
+            </Button>
+          ) : (
+            <form.Subscribe
+              selector={(state) => ({
+                canSubmit: state.canSubmit,
+                isSubmitting: state.isSubmitting,
+              })}
+            >
+              {({ canSubmit, isSubmitting }) => (
+                <Button type="submit" disabled={!canSubmit || isSubmitting || currentStepError !== null}>
+                  Сохранить
+                </Button>
               )}
-            </form.Field>
-
-            <form.Field name="teacherId">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor="schedule-editor-teacher">Учитель</FieldLabel>
-                  <Select
-                    value={field.state.value ?? NONE_VALUE}
-                    onValueChange={(value) => {
-                      field.handleChange(value === NONE_VALUE ? null : value);
-                      field.handleBlur();
-                    }}
-                  >
-                    <SelectTrigger id="schedule-editor-teacher" className="w-full">
-                      <SelectValue>
-                        {field.state.value
-                          ? teacherOptions.find((option) => option.id === field.state.value)?.name ?? "Учитель"
-                          : "Без учителя"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectGroup>
-                        <SelectItem value={NONE_VALUE}>Без учителя</SelectItem>
-                        {teacherOptions.map((option) => (
-                          <SelectItem key={option.id} value={option.id}>
-                            {option.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              )}
-            </form.Field>
-        </FieldGroup>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} type="button">
-            Отмена
-          </Button>
-          <Button type="submit">
-            Сохранить
-          </Button>
+            </form.Subscribe>
+          )}
         </DialogFooter>
       </form>
     </DialogContent>
   );
 }
 
-function buildDefaultValues(
-  draft: ScheduleEditorDraft | null,
-  subjectOptions: SubjectOption[],
-  classOptions: FilterOption[],
-  directGroupOptions: DirectGroupOption[],
-  electiveGroupOptions: ElectiveGroupOption[],
-): ScheduleEditorFormValue {
-  const directSubjectOptions = getSubjectOptionsForMode(subjectOptions, "DIRECT_GROUP");
-  const sharedSubjectOptions = getSubjectOptionsForMode(subjectOptions, "SHARED_CLASSES");
-  const mode = draft?.deliveryMode ?? "DIRECT_GROUP";
+function CurrentStepContent({
+  stepId,
+  FormField,
+  values,
+  classRows,
+  classOptions,
+  directGroupOptions,
+  electiveGroupOptions,
+  availableSubjectOptions,
+  availableRoomOptions,
+  availableTeacherOptions,
+  durationMinutes,
+  stepError,
+  onPatch,
+}: {
+  stepId: ScheduleEditorStepId;
+  FormField: ScheduleEditorFieldRenderer;
+  values: ScheduleStepperFormValue;
+  classRows: AdminScheduleClassRow[];
+  classOptions: FilterOption[];
+  directGroupOptions: AdminScheduleGroupOption[];
+  electiveGroupOptions: AdminScheduleElectiveGroupOption[];
+  availableSubjectOptions: SubjectOption[];
+  availableRoomOptions: AdminScheduleRoomOption[];
+  availableTeacherOptions: AdminScheduleTeacherOption[];
+  durationMinutes: number | null;
+  stepError: string | null;
+  onPatch: (patch: Partial<ScheduleStepperFormValue>) => void;
+}) {
+  const currentStep = SCHEDULE_EDITOR_STEPS.find((step) => step.id === stepId) ?? SCHEDULE_EDITOR_STEPS[0];
 
-  if (mode === "ELECTIVE_GROUP") {
-    const fallbackElectiveGroup = electiveGroupOptions[0] ?? null;
-    return {
-      templateId: draft?.templateId,
-      dayOfWeek: draft?.dayOfWeek ?? null,
-      startMinutes: draft?.startMinutes ?? null,
-      endMinutes: draft?.endMinutes ?? null,
-      deliveryMode: mode,
-      deliveryGroupId: draft?.deliveryGroupId ?? fallbackElectiveGroup?.id ?? null,
-      subjectId: draft?.subjectId || fallbackElectiveGroup?.subjectId || "",
-      roomId: draft?.roomId ?? null,
-      teacherId: draft?.teacherId ?? null,
-      openClassIds: draft?.openClassIds.length ? draft.openClassIds : (classOptions[0] ? [classOptions[0].id] : []),
-      coveredClassIds: [],
-    };
-  }
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{currentStep.title}</Badge>
+        </div>
+        <CardTitle>{currentStep.title}</CardTitle>
+        <CardDescription>{currentStep.description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <FieldGroup>
+          {stepId === "kind" ? (
+            <KindStep value={values.cardKind} onPatch={onPatch} error={stepError} />
+          ) : null}
 
-  if (mode === "SHARED_CLASSES") {
-    return {
-      templateId: draft?.templateId,
-      dayOfWeek: draft?.dayOfWeek ?? null,
-      startMinutes: draft?.startMinutes ?? null,
-      endMinutes: draft?.endMinutes ?? null,
-      deliveryMode: mode,
-      deliveryGroupId: null,
-      subjectId: draft?.subjectId || sharedSubjectOptions[0]?.id || "",
-      roomId: draft?.roomId ?? null,
-      teacherId: draft?.teacherId ?? null,
-      openClassIds: [],
-      coveredClassIds: draft?.coveredClassIds.length ? draft.coveredClassIds : classOptions.slice(0, 2).map((item) => item.id),
-    };
-  }
+          {stepId === "audience" ? (
+            <AudienceStep
+              FormField={FormField}
+              values={values}
+              classOptions={classOptions}
+              classRows={classRows}
+              directGroupOptions={directGroupOptions}
+              electiveGroupOptions={electiveGroupOptions}
+              onPatch={onPatch}
+              error={stepError}
+            />
+          ) : null}
 
-  return {
-    templateId: draft?.templateId,
-    dayOfWeek: draft?.dayOfWeek ?? null,
-    startMinutes: draft?.startMinutes ?? null,
-    endMinutes: draft?.endMinutes ?? null,
-    deliveryMode: "DIRECT_GROUP",
-    deliveryGroupId: draft?.deliveryGroupId ?? directGroupOptions[0]?.id ?? null,
-    subjectId: draft?.subjectId || directSubjectOptions[0]?.id || "",
-    roomId: draft?.roomId ?? null,
-    teacherId: draft?.teacherId ?? null,
-    openClassIds: [],
-    coveredClassIds: [],
-  };
+          {stepId === "subject" ? (
+            <SubjectStep
+              FormField={FormField}
+              values={values}
+              subjectOptions={availableSubjectOptions}
+              electiveGroupOptions={electiveGroupOptions}
+              onPatch={onPatch}
+              error={stepError}
+            />
+          ) : null}
+
+          {stepId === "room" ? (
+            <RoomStep
+              FormField={FormField}
+              values={values}
+              roomOptions={availableRoomOptions}
+              error={stepError}
+            />
+          ) : null}
+
+          {stepId === "teacher" ? (
+            <TeacherStep
+              FormField={FormField}
+              values={values}
+              teacherOptions={availableTeacherOptions}
+              error={stepError}
+            />
+          ) : null}
+
+          {stepId === "time" ? (
+            <TimeStep
+              FormField={FormField}
+              values={values}
+              durationMinutes={durationMinutes}
+              onPatch={onPatch}
+              error={stepError}
+            />
+          ) : null}
+        </FieldGroup>
+      </CardContent>
+    </Card>
+  );
 }
 
-function getSubjectOptionsForMode(
-  subjectOptions: SubjectOption[],
-  deliveryMode: ScheduleDeliveryMode,
-) {
-  if (deliveryMode === "ELECTIVE_GROUP") {
-    return subjectOptions.filter((option) => option.type === "ELECTIVE_OPTIONAL");
-  }
-
-  if (deliveryMode === "SHARED_CLASSES") {
-    return subjectOptions.filter((option) => option.type === "ELECTIVE_REQUIRED" || option.type === "REGIME");
-  }
-
-  return subjectOptions.filter((option) => option.type !== "ELECTIVE_OPTIONAL");
+function KindStep({
+  value,
+  onPatch,
+  error,
+}: {
+  value: ScheduleCardKind;
+  onPatch: (patch: Partial<ScheduleStepperFormValue>) => void;
+  error: string | null;
+}) {
+  return (
+    <Field data-invalid={Boolean(error)}>
+      <FieldLabel>Тип карточки</FieldLabel>
+      <SegmentedControl
+        value={value}
+        onChange={(nextValue) => {
+          if (nextValue === "CLASS") {
+            onPatch({
+              cardKind: nextValue,
+              deliveryGroupId: null,
+              openClassIds: [],
+              coveredClassIds: [],
+              subjectId: "",
+            });
+          } else if (nextValue === "SUBGROUP") {
+            onPatch({
+              cardKind: nextValue,
+              deliveryGroupId: null,
+              openClassIds: [],
+              coveredClassIds: [],
+              subjectId: "",
+            });
+          } else if (nextValue === "ELECTIVE_GROUP") {
+            onPatch({
+              cardKind: nextValue,
+              deliveryGroupId: null,
+              openClassIds: [],
+              coveredClassIds: [],
+              subjectId: "",
+            });
+          } else {
+            onPatch({
+              cardKind: nextValue,
+              deliveryGroupId: null,
+              openClassIds: [],
+              coveredClassIds: [],
+              subjectId: "",
+            });
+          }
+        }}
+        options={CARD_KIND_OPTIONS}
+        className="w-full"
+      />
+      <FieldDescription>Тип определяет, какие группы можно будет выбрать на следующем шаге.</FieldDescription>
+      {error ? <FieldError>{error}</FieldError> : null}
+    </Field>
+  );
 }
 
-function getDurationHint({
-  deliveryMode,
-  subjectId,
-  deliveryGroupId,
-  coveredClassIds,
+function AudienceStep({
+  FormField,
+  values,
+  classOptions,
+  classRows,
+  directGroupOptions,
+  electiveGroupOptions,
+  onPatch,
+  error,
+}: {
+  FormField: ScheduleEditorFieldRenderer;
+  values: ScheduleStepperFormValue;
+  classOptions: FilterOption[];
+  classRows: AdminScheduleClassRow[];
+  directGroupOptions: AdminScheduleGroupOption[];
+  electiveGroupOptions: AdminScheduleElectiveGroupOption[];
+  onPatch: (patch: Partial<ScheduleStepperFormValue>) => void;
+  error: string | null;
+}) {
+  if (values.cardKind === "SHARED_CLASSES") {
+    return (
+      <FormField name="coveredClassIds">
+        {(field) => (
+          <Field data-invalid={Boolean(error)}>
+            <FieldLabel>Классы</FieldLabel>
+            <ScheduleMultiSelect
+              title="Классы"
+              options={classOptions}
+              selectedIds={field.state.value}
+              onChange={(next) => {
+                field.handleBlur();
+                onPatch({
+                  coveredClassIds: next,
+                  subjectId: "",
+                });
+              }}
+            />
+            <FieldDescription>Нужно выбрать минимум два класса.</FieldDescription>
+            {error ? <FieldError>{error}</FieldError> : null}
+          </Field>
+        )}
+      </FormField>
+    );
+  }
+
+  const groupOptions = getGroupOptionsByKind(values.cardKind, directGroupOptions, electiveGroupOptions);
+  const selectedGroup = groupOptions.find((option) => option.id === values.deliveryGroupId) ?? null;
+
+  return (
+    <>
+      <FormField name="deliveryGroupId">
+        {(field) => (
+          <Field data-invalid={Boolean(error)}>
+            <FieldLabel>{values.cardKind === "ELECTIVE_GROUP" ? "Группа по выбору" : "Группа"}</FieldLabel>
+            <Select
+              value={field.state.value ?? NONE_VALUE}
+              onValueChange={(nextValue) => {
+                field.handleBlur();
+                onPatch({
+                  deliveryGroupId: nextValue === NONE_VALUE ? null : nextValue,
+                  subjectId: "",
+                });
+              }}
+            >
+              <SelectTrigger className="w-full" aria-invalid={Boolean(error) || undefined}>
+                <SelectValue>
+                  {selectedGroup?.name
+                    ?? (values.cardKind === "ELECTIVE_GROUP" ? "Выберите группу по выбору" : "Выберите группу")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectGroup>
+                  {groupOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <FieldDescription>
+              {selectedGroup
+                ? `${selectedGroup.studentCount} чел.`
+                : values.cardKind === "SUBGROUP"
+                  ? "Показываются только подгруппы."
+                  : values.cardKind === "CLASS"
+                    ? "Показываются только классы."
+                    : "Показываются только группы по выбору."}
+            </FieldDescription>
+            {error ? <FieldError>{error}</FieldError> : null}
+          </Field>
+        )}
+      </FormField>
+
+      {values.cardKind === "ELECTIVE_GROUP" ? (
+        <FormField name="openClassIds">
+          {(field) => (
+            <Field>
+              <FieldLabel>Открыт для классов</FieldLabel>
+              <ScheduleMultiSelect
+                title="Классы"
+                options={classOptions}
+                selectedIds={field.state.value}
+                onChange={(next) => {
+                  field.handleChange(next);
+                  field.handleBlur();
+                }}
+              />
+              <FieldDescription>
+                Эти классы увидят карточку у себя в строках расписания.
+              </FieldDescription>
+            </Field>
+          )}
+        </FormField>
+      ) : null}
+
+      {selectedGroup ? (
+        <Field>
+          <FieldLabel>Параметры группы</FieldLabel>
+          <Input
+            value={
+              values.cardKind === "ELECTIVE_GROUP"
+                ? `${selectedGroup.studentCount} чел.`
+                : `${getGroupTypeLabel((selectedGroup as AdminScheduleGroupOption).type)} • ${selectedGroup.studentCount} чел.`
+            }
+            disabled
+          />
+        </Field>
+      ) : null}
+
+      {values.cardKind === "ELECTIVE_GROUP" && values.openClassIds.length > 0 ? (
+        <Field>
+          <FieldLabel>Открытые классы</FieldLabel>
+          <Input
+            value={classRows.filter((row) => values.openClassIds.includes(row.id)).map((row) => row.name).join(", ")}
+            disabled
+          />
+        </Field>
+      ) : null}
+    </>
+  );
+}
+
+function SubjectStep({
+  FormField,
+  values,
+  subjectOptions,
+  electiveGroupOptions,
+  onPatch,
+  error,
+}: {
+  FormField: ScheduleEditorFieldRenderer;
+  values: ScheduleStepperFormValue;
+  subjectOptions: SubjectOption[];
+  electiveGroupOptions: AdminScheduleElectiveGroupOption[];
+  onPatch: (patch: Partial<ScheduleStepperFormValue>) => void;
+  error: string | null;
+}) {
+  const selectedSubject = subjectOptions.find((option) => option.id === values.subjectId) ?? null;
+  const electiveGroup = values.cardKind === "ELECTIVE_GROUP"
+    ? electiveGroupOptions.find((option) => option.id === values.deliveryGroupId) ?? null
+    : null;
+
+  if (subjectOptions.length === 0) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Нет доступных предметов</EmptyTitle>
+          <EmptyDescription>Выбранная сущность не имеет предметов с настроенной длительностью.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  return (
+    <FormField name="subjectId">
+      {(field) => (
+        <Field data-invalid={Boolean(error)}>
+          <FieldLabel>Предмет</FieldLabel>
+          <Select
+            value={field.state.value || NONE_VALUE}
+            onValueChange={(nextValue) => {
+              field.handleBlur();
+              onPatch({
+                subjectId: nextValue && nextValue !== NONE_VALUE ? nextValue : "",
+              });
+            }}
+            disabled={values.cardKind === "ELECTIVE_GROUP" && subjectOptions.length <= 1}
+          >
+            <SelectTrigger className="w-full" aria-invalid={Boolean(error) || undefined}>
+              <SelectValue>{selectedSubject?.name ?? "Выберите предмет"}</SelectValue>
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectGroup>
+                {subjectOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          {values.cardKind === "ELECTIVE_GROUP" && electiveGroup ? (
+            <FieldDescription>Предмет уже закреплен за группой «{electiveGroup.name}».</FieldDescription>
+          ) : null}
+          {error ? <FieldError>{error}</FieldError> : null}
+        </Field>
+      )}
+    </FormField>
+  );
+}
+
+function RoomStep({
+  FormField,
+  values,
+  roomOptions,
+  error,
+}: {
+  FormField: ScheduleEditorFieldRenderer;
+  values: ScheduleStepperFormValue;
+  roomOptions: AdminScheduleRoomOption[];
+  error: string | null;
+}) {
+  if (!values.subjectId) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Сначала выберите предмет</EmptyTitle>
+          <EmptyDescription>После выбора предмета станут доступны подходящие кабинеты.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  return (
+    <FormField name="roomId">
+      {(field) => (
+        <Field data-invalid={Boolean(error)}>
+          <FieldLabel>Кабинет</FieldLabel>
+          <Select
+            value={field.state.value ?? NONE_VALUE}
+            onValueChange={(nextValue) => {
+              field.handleChange(nextValue === NONE_VALUE ? null : nextValue);
+              field.handleBlur();
+            }}
+          >
+            <SelectTrigger className="w-full" aria-invalid={Boolean(error) || undefined}>
+              <SelectValue>
+                {field.state.value
+                  ? roomOptions.find((option) => option.id === field.state.value)?.name ?? "Кабинет"
+                  : "Не указывать кабинет"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectGroup>
+                <SelectItem value={NONE_VALUE}>Не указывать кабинет</SelectItem>
+                {roomOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name} • {option.seatsCount} мест
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <FieldDescription>
+            Показываются только кабинеты, где можно вести предмет и хватает мест.
+          </FieldDescription>
+          {error ? <FieldError>{error}</FieldError> : null}
+        </Field>
+      )}
+    </FormField>
+  );
+}
+
+function TeacherStep({
+  FormField,
+  values,
+  teacherOptions,
+  error,
+}: {
+  FormField: ScheduleEditorFieldRenderer;
+  values: ScheduleStepperFormValue;
+  teacherOptions: AdminScheduleTeacherOption[];
+  error: string | null;
+}) {
+  if (!values.subjectId) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Сначала выберите предмет</EmptyTitle>
+          <EmptyDescription>После выбора предмета станут доступны подходящие учителя.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  return (
+    <FormField name="teacherId">
+      {(field) => (
+        <Field data-invalid={Boolean(error)}>
+          <FieldLabel>Учитель</FieldLabel>
+          <Select
+            value={field.state.value ?? NONE_VALUE}
+            onValueChange={(nextValue) => {
+              field.handleChange(nextValue === NONE_VALUE ? null : nextValue);
+              field.handleBlur();
+            }}
+          >
+            <SelectTrigger className="w-full" aria-invalid={Boolean(error) || undefined}>
+              <SelectValue>
+                {field.state.value
+                  ? teacherOptions.find((option) => option.id === field.state.value)?.name ?? "Учитель"
+                  : "Не указывать учителя"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectGroup>
+                <SelectItem value={NONE_VALUE}>Не указывать учителя</SelectItem>
+                {teacherOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <FieldDescription>Показываются только учителя, которым назначен выбранный предмет.</FieldDescription>
+          {error ? <FieldError>{error}</FieldError> : null}
+        </Field>
+      )}
+    </FormField>
+  );
+}
+
+function TimeStep({
+  FormField,
+  values,
+  durationMinutes,
+  onPatch,
+  error,
+}: {
+  FormField: ScheduleEditorFieldRenderer;
+  values: ScheduleStepperFormValue;
+  durationMinutes: number | null;
+  onPatch: (patch: Partial<ScheduleStepperFormValue>) => void;
+  error: string | null;
+}) {
+  return (
+    <>
+      <FormField name="dayOfWeek">
+        {(field) => {
+          const errors = getFieldErrorMessages(field as never);
+
+          return (
+            <Field data-invalid={errors.length > 0}>
+              <FieldLabel>День</FieldLabel>
+              <Select
+                value={field.state.value === null ? NONE_VALUE : String(field.state.value)}
+                onValueChange={(value) => {
+                  field.handleBlur();
+                  onPatch({
+                    dayOfWeek: value === NONE_VALUE ? null : Number(value),
+                    startMinutes: value === NONE_VALUE ? null : values.startMinutes,
+                  });
+                }}
+              >
+                <SelectTrigger className="w-full" aria-invalid={errors.length > 0 || undefined}>
+                  <SelectValue>
+                    {field.state.value === null
+                      ? "Без дня (временная область)"
+                      : DAY_OPTIONS.find((option) => Number(option.value) === field.state.value)?.label}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectGroup>
+                    <SelectItem value={NONE_VALUE}>Без дня (временная область)</SelectItem>
+                    {DAY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+            </Field>
+          );
+        }}
+      </FormField>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <FormField name="startMinutes">
+          {(field) => {
+            const errors = getFieldErrorMessages(field as never);
+
+            return (
+              <Field data-invalid={errors.length > 0}>
+                <FieldLabel htmlFor="schedule-editor-start-time">Время начала</FieldLabel>
+                <Input
+                  id="schedule-editor-start-time"
+                  type="time"
+                  value={minutesToTime(field.state.value)}
+                  aria-invalid={errors.length > 0 || undefined}
+                  disabled={values.dayOfWeek === null}
+                  onBlur={field.handleBlur}
+                  onChange={(event) =>
+                    onPatch({
+                      startMinutes: Number.isNaN(event.target.valueAsNumber)
+                        ? null
+                        : event.target.valueAsNumber / 1000 / 60,
+                    })}
+                />
+                {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+              </Field>
+            );
+          }}
+        </FormField>
+
+        <Field data-invalid={Boolean(error)}>
+          <FieldLabel htmlFor="schedule-editor-duration">Длительность</FieldLabel>
+          <Input
+            id="schedule-editor-duration"
+            value={durationMinutes === null ? "Не задана" : `${durationMinutes} мин`}
+            disabled
+            aria-invalid={Boolean(error) || undefined}
+          />
+        </Field>
+
+        <Field data-invalid={Boolean(error)}>
+          <FieldLabel htmlFor="schedule-editor-end-time">Время окончания</FieldLabel>
+          <Input
+            id="schedule-editor-end-time"
+            type="time"
+            value={minutesToTime(values.endMinutes)}
+            disabled
+            aria-invalid={Boolean(error) || undefined}
+          />
+          {error ? <FieldError>{error}</FieldError> : null}
+        </Field>
+      </div>
+    </>
+  );
+}
+
+function EditorSummaryCard({
+  values,
+  classRows,
+  directGroupOptions,
+  electiveGroupOptions,
+  availableRoomOptions,
+  availableTeacherOptions,
+  subjectOptions,
+  durationMinutes,
+}: {
+  values: ScheduleStepperFormValue;
+  classRows: AdminScheduleClassRow[];
+  directGroupOptions: AdminScheduleGroupOption[];
+  electiveGroupOptions: AdminScheduleElectiveGroupOption[];
+  availableRoomOptions: AdminScheduleRoomOption[];
+  availableTeacherOptions: AdminScheduleTeacherOption[];
+  subjectOptions: SubjectOption[];
+  durationMinutes: number | null;
+}) {
+  const audienceLabel = getAudienceSummaryLabel(values, classRows, directGroupOptions, electiveGroupOptions);
+  const subjectName = subjectOptions.find((option) => option.id === values.subjectId)?.name ?? "Не выбран";
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>Текущая конфигурация</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryItem label="Тип" value={getCardKindLabel(values.cardKind)} />
+        <SummaryItem label="Состав" value={audienceLabel ?? "Не выбран"} />
+        <SummaryItem label="Предмет" value={subjectName} />
+        <SummaryItem label="Длительность" value={durationMinutes === null ? "Не задана" : `${durationMinutes} мин`} />
+        <SummaryItem label="Кабинет" value={values.roomId ? "Выбран" : "Не указан"} />
+        <SummaryItem label="Учитель" value={values.teacherId ? "Выбран" : "Не указан"} />
+        <SummaryItem label="Подходящих кабинетов" value={String(availableRoomOptions.length)} />
+        <SummaryItem label="Подходящих учителей" value={String(availableTeacherOptions.length)} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border bg-muted/30 p-3">
+      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium">{value}</span>
+    </div>
+  );
+}
+
+function buildDefaultValues({
+  draft,
+  classRows,
+  directGroupOptions,
+  electiveGroupOptions,
   lessonDurationByGroupSubject,
 }: {
-  deliveryMode: ScheduleDeliveryMode;
-  subjectId: string;
-  deliveryGroupId: string | null;
-  coveredClassIds: string[];
+  draft: ScheduleEditorDraft | null;
+  classRows: AdminScheduleClassRow[];
+  directGroupOptions: AdminScheduleGroupOption[];
+  electiveGroupOptions: AdminScheduleElectiveGroupOption[];
   lessonDurationByGroupSubject: Record<string, number>;
 }) {
-  if (!subjectId) {
-    return { kind: "none" as const, minutes: null };
-  }
+  const cardKind = getInitialCardKind(draft, directGroupOptions);
+  const availableGroups = getGroupOptionsByKind(cardKind, directGroupOptions, electiveGroupOptions);
+  const fallbackGroupId = availableGroups[0]?.id ?? null;
+  const initialValue = normalizeScheduleEditorValue(
+    {
+      templateId: draft?.templateId,
+      cardKind,
+      deliveryMode: getDeliveryModeForCardKind(cardKind),
+      deliveryGroupId: draft?.deliveryGroupId ?? fallbackGroupId,
+      openClassIds: draft?.openClassIds ?? [],
+      coveredClassIds: draft?.coveredClassIds ?? [],
+      subjectId: draft?.subjectId ?? "",
+      roomId: draft?.roomId ?? null,
+      teacherId: draft?.teacherId ?? null,
+      dayOfWeek: draft?.dayOfWeek ?? null,
+      startMinutes: draft?.startMinutes ?? null,
+      endMinutes: draft?.endMinutes ?? null,
+    },
+    {
+      classRows,
+      directGroupOptions,
+      electiveGroupOptions,
+      roomOptions: [],
+      teacherOptions: [],
+      lessonDurationByGroupSubject,
+    },
+  );
 
-  if (deliveryMode === "SHARED_CLASSES") {
-    const durations = Array.from(
-      new Set(
-        coveredClassIds
-          .map((classId) => lessonDurationByGroupSubject[`${classId}:${subjectId}`])
-          .filter((duration): duration is number => typeof duration === "number"),
-      ),
+  const availableSubjectIds = getAvailableSubjectIds(
+    initialValue,
+    classRows,
+    directGroupOptions,
+    electiveGroupOptions,
+  );
+
+  if (!initialValue.subjectId && availableSubjectIds.length === 1) {
+    return normalizeScheduleEditorValue(
+      {
+        ...initialValue,
+        subjectId: availableSubjectIds[0],
+      },
+      {
+        classRows,
+        directGroupOptions,
+        electiveGroupOptions,
+        roomOptions: [],
+        teacherOptions: [],
+        lessonDurationByGroupSubject,
+      },
     );
-
-    if (durations.length === 0) {
-      return { kind: "none" as const, minutes: null };
-    }
-
-    if (durations.length > 1) {
-      return { kind: "mismatch" as const, minutes: null };
-    }
-
-    return { kind: "single" as const, minutes: durations[0] };
   }
 
-  if (!deliveryGroupId) {
-    return { kind: "none" as const, minutes: null };
-  }
-
-  const duration = lessonDurationByGroupSubject[`${deliveryGroupId}:${subjectId}`] ?? null;
-  if (duration === null) {
-    return { kind: "none" as const, minutes: null };
-  }
-
-  return { kind: "single" as const, minutes: duration };
+  return initialValue;
 }
 
-function formatDurationHint(durationHint: { kind: "none" | "single" | "mismatch"; minutes: number | null }) {
-  if (durationHint.kind === "single" && durationHint.minutes !== null) {
-    return `${durationHint.minutes} мин`;
-  }
+function createScheduleEditorFormSchema(context: {
+  classRows: AdminScheduleClassRow[];
+  directGroupOptions: AdminScheduleGroupOption[];
+  electiveGroupOptions: AdminScheduleElectiveGroupOption[];
+  roomOptions: AdminScheduleRoomOption[];
+  teacherOptions: AdminScheduleTeacherOption[];
+  lessonDurationByGroupSubject: Record<string, number>;
+}) {
+  return z.object({
+    templateId: z.string().optional(),
+    cardKind: z.enum(["CLASS", "SUBGROUP", "ELECTIVE_GROUP", "SHARED_CLASSES"]),
+    deliveryMode: z.enum(["DIRECT_GROUP", "ELECTIVE_GROUP", "SHARED_CLASSES"]),
+    deliveryGroupId: z.string().nullable(),
+    openClassIds: z.array(z.string().min(1)),
+    coveredClassIds: z.array(z.string().min(1)),
+    subjectId: z.string(),
+    roomId: z.string().nullable(),
+    teacherId: z.string().nullable(),
+    dayOfWeek: z.number().int().min(1).max(5).nullable(),
+    startMinutes: z.number().int().min(0).max(24 * 60 - 1).nullable(),
+    endMinutes: z.number().int().min(1).max(24 * 60).nullable(),
+  }).superRefine((value, ctx) => {
+    if (value.deliveryMode !== getDeliveryModeForCardKind(value.cardKind)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["cardKind"],
+        message: "Тип карточки и режим доставки рассинхронизированы",
+      });
+    }
 
-  if (durationHint.kind === "mismatch") {
-    return "Требования классов отличаются";
-  }
+    if (value.cardKind === "SHARED_CLASSES") {
+      if (value.coveredClassIds.length < 2) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["coveredClassIds"],
+          message: "Нужно выбрать минимум два класса",
+        });
+      }
+    } else if (!value.deliveryGroupId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["deliveryGroupId"],
+        message: "Выберите группу",
+      });
+    }
 
-  return "Не задана";
+    const subjectIds = getAvailableSubjectIds(
+      value,
+      context.classRows,
+      context.directGroupOptions,
+      context.electiveGroupOptions,
+    );
+
+    if (subjectIds.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["subjectId"],
+        message: "Для выбранной сущности нет доступных предметов",
+      });
+    } else if (!value.subjectId || !subjectIds.includes(value.subjectId)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["subjectId"],
+        message: "Выберите подходящий предмет",
+      });
+    }
+
+    if (value.roomId) {
+      const audienceSelection = getAudienceSelection(
+        value,
+        context.classRows,
+        context.directGroupOptions,
+        context.electiveGroupOptions,
+      );
+      const rooms = getAvailableRoomOptions(context.roomOptions, audienceSelection, value.subjectId);
+      if (!rooms.some((room) => room.id === value.roomId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["roomId"],
+          message: "Выбранный кабинет не подходит",
+        });
+      }
+    }
+
+    if (value.teacherId) {
+      const audienceSelection = getAudienceSelection(
+        value,
+        context.classRows,
+        context.directGroupOptions,
+        context.electiveGroupOptions,
+      );
+      const teachers = getAvailableTeacherOptions(context.teacherOptions, audienceSelection, value.subjectId);
+      if (!teachers.some((teacher) => teacher.id === value.teacherId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["teacherId"],
+          message: "Выбранный учитель не подходит",
+        });
+      }
+    }
+
+    if (value.dayOfWeek === null) {
+      if (value.startMinutes !== null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["startMinutes"],
+          message: "Во временной области не нужно задавать время начала",
+        });
+      }
+      return;
+    }
+
+    const durationMinutes = getDurationMinutes(value, context.lessonDurationByGroupSubject);
+    if (durationMinutes === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["subjectId"],
+        message: "Для выбранной комбинации не найдена длительность",
+      });
+      return;
+    }
+
+    if (value.startMinutes === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["startMinutes"],
+        message: "Укажите время начала",
+      });
+      return;
+    }
+
+    const endMinutes = getDerivedEndMinutes(value.startMinutes, durationMinutes);
+    if (endMinutes === null || value.endMinutes !== endMinutes) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["endMinutes"],
+        message: "Время окончания рассчитано некорректно",
+      });
+      return;
+    }
+
+    if (endMinutes > 24 * 60) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["endMinutes"],
+        message: "Время окончания выходит за пределы суток",
+      });
+    }
+  });
+}
+
+function getInitialStepId(
+  value: ScheduleStepperFormValue,
+  classRows: AdminScheduleClassRow[],
+  directGroupOptions: AdminScheduleGroupOption[],
+  electiveGroupOptions: AdminScheduleElectiveGroupOption[],
+  lessonDurationByGroupSubject: Record<string, number>,
+) {
+  const firstInvalid = SCHEDULE_EDITOR_STEPS.find(
+    (step) => getStepError(step.id, value, classRows, directGroupOptions, electiveGroupOptions, lessonDurationByGroupSubject) !== null,
+  );
+
+  return firstInvalid?.id ?? "time";
+}
+
+function normalizeScheduleEditorValue(
+  value: ScheduleStepperFormValue,
+  context: {
+    classRows: AdminScheduleClassRow[];
+    directGroupOptions: AdminScheduleGroupOption[];
+    electiveGroupOptions: AdminScheduleElectiveGroupOption[];
+    roomOptions: AdminScheduleRoomOption[];
+    teacherOptions: AdminScheduleTeacherOption[];
+    lessonDurationByGroupSubject: Record<string, number>;
+  },
+) {
+  const classIdSet = new Set(context.classRows.map((row) => row.id));
+  const availableGroups = getGroupOptionsByKind(
+    value.cardKind,
+    context.directGroupOptions,
+    context.electiveGroupOptions,
+  );
+  const availableGroupIdSet = new Set(availableGroups.map((group) => group.id));
+  const baseValue: ScheduleStepperFormValue = {
+    ...value,
+    deliveryMode: getDeliveryModeForCardKind(value.cardKind),
+    deliveryGroupId: value.cardKind === "SHARED_CLASSES"
+      ? null
+      : value.deliveryGroupId && availableGroupIdSet.has(value.deliveryGroupId)
+        ? value.deliveryGroupId
+        : null,
+    openClassIds: value.cardKind === "ELECTIVE_GROUP"
+      ? value.openClassIds.filter((classId) => classIdSet.has(classId))
+      : [],
+    coveredClassIds: value.cardKind === "SHARED_CLASSES"
+      ? value.coveredClassIds.filter((classId) => classIdSet.has(classId))
+      : [],
+  };
+  const availableSubjectIds = getAvailableSubjectIds(
+    baseValue,
+    context.classRows,
+    context.directGroupOptions,
+    context.electiveGroupOptions,
+  );
+  const subjectId = availableSubjectIds.includes(baseValue.subjectId)
+    ? baseValue.subjectId
+    : availableSubjectIds.length === 1
+      ? availableSubjectIds[0]
+      : "";
+  const normalizedValue = {
+    ...baseValue,
+    subjectId,
+  } satisfies ScheduleStepperFormValue;
+  const durationMinutes = getDurationMinutes(normalizedValue, context.lessonDurationByGroupSubject);
+  const endMinutes = getDerivedEndMinutes(normalizedValue.startMinutes, durationMinutes);
+  const audienceSelection = getAudienceSelection(
+    normalizedValue,
+    context.classRows,
+    context.directGroupOptions,
+    context.electiveGroupOptions,
+  );
+  const availableRooms = getAvailableRoomOptions(context.roomOptions, audienceSelection, subjectId);
+  const availableTeachers = getAvailableTeacherOptions(context.teacherOptions, audienceSelection, subjectId);
+
+  return {
+    ...normalizedValue,
+    dayOfWeek: normalizedValue.dayOfWeek,
+    startMinutes: normalizedValue.dayOfWeek === null ? null : normalizedValue.startMinutes,
+    endMinutes: normalizedValue.dayOfWeek === null ? null : endMinutes,
+    roomId: normalizedValue.roomId && availableRooms.some((room) => room.id === normalizedValue.roomId)
+      ? normalizedValue.roomId
+      : null,
+    teacherId: normalizedValue.teacherId && availableTeachers.some((teacher) => teacher.id === normalizedValue.teacherId)
+      ? normalizedValue.teacherId
+      : null,
+  } satisfies ScheduleStepperFormValue;
 }
 
 function minutesToTime(totalMinutes: number | null) {

@@ -33,15 +33,53 @@ export interface AdminScheduleClassRow {
   id: string;
   name: string;
   grade: number | null;
+  studentCount: number;
+  subjectIds: string[];
+}
+
+export interface AdminScheduleGroupOption {
+  id: string;
+  name: string;
+  type: GroupType;
+  subjectId: string | null;
+  parentId: string | null;
+  grade: number | null;
+  studentCount: number;
+  subjectIds: string[];
+}
+
+export interface AdminScheduleElectiveGroupOption {
+  id: string;
+  name: string;
+  subjectId: string | null;
+  studentCount: number;
+  subjectIds: string[];
+}
+
+export interface AdminScheduleRoomOption {
+  id: string;
+  name: string;
+  seatsCount: number;
+  subjectIds: string[];
+}
+
+export interface AdminScheduleTeacherOption {
+  id: string;
+  name: string;
+  subjects: Array<{
+    subjectId: string;
+    minGrade: number | null;
+    maxGrade: number | null;
+  }>;
 }
 
 export interface AdminSchedulePageData {
   events: AdminScheduleEvent[];
   classRows: AdminScheduleClassRow[];
   subjectOptions: { id: string; name: string; type: SubjectType }[];
-  directGroupOptions: { id: string; name: string; type: GroupType; subjectId: string | null }[];
-  electiveGroupOptions: { id: string; name: string; subjectId: string | null }[];
-  roomOptions: { id: string; name: string }[];
-  teacherOptions: { id: string; name: string }[];
+  directGroupOptions: AdminScheduleGroupOption[];
+  electiveGroupOptions: AdminScheduleElectiveGroupOption[];
+  roomOptions: AdminScheduleRoomOption[];
+  teacherOptions: AdminScheduleTeacherOption[];
   lessonDurationByGroupSubject: Record<string, number>;
 }

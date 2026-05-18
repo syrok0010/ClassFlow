@@ -341,6 +341,7 @@ export function AdminScheduleView({
         draft={editingDraft}
         subjectOptions={subjectOptions}
         classOptions={classOptions}
+        classRows={classRows}
         directGroupOptions={directGroupOptions}
         electiveGroupOptions={electiveGroupOptions}
         roomOptions={roomOptions}
