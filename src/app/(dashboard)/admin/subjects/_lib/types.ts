@@ -23,6 +23,7 @@ export type SubjectListFilters = {
 export type SubjectUsageDetails = {
   rooms: string[];
   teachers: string[];
+  requirements: string[];
 };
 
 export type SubjectDeleteGuards = {

@@ -274,6 +274,20 @@ export async function getSubjectUsageDetailsAction(
             },
           },
         },
+        groupSubjectRequirements: {
+          select: {
+            lessonsPerWeek: true,
+            durationInMinutes: true,
+            breakDuration: true,
+            group: {
+              select: {
+                name: true,
+                type: true,
+                grade: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -288,7 +302,16 @@ export async function getSubjectUsageDetailsAction(
       new Set(subject.teacherSubjects.map((item) => formatTeacherName(item.teacher)))
     ).sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }));
 
-    return ok({ rooms, teachers });
+    const requirements = subject.groupSubjectRequirements
+        .map((item) => {
+          const breakPart =
+              item.breakDuration > 0 ? `, перерыв ${item.breakDuration} мин` : "";
+
+          return `${item.group.name}: ${item.lessonsPerWeek} ч/нед, ${item.durationInMinutes} мин${breakPart}`;
+        })
+        .sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }));
+
+    return ok({ rooms, teachers, requirements });
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось загрузить данные использования"));
   }
