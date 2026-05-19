@@ -7,6 +7,16 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -57,6 +67,8 @@ export function ApplyTemplateDialogButton() {
   const [isPending, startTransition] = useTransition();
   const [isApplying, setIsApplying] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [pendingApplyInput, setPendingApplyInput] =
+    useState<ApplyWeeklyScheduleTemplateInput | null>(null);
   const previewLoader = useLatestAsyncDebouncer(
     async (input: ApplyWeeklyScheduleTemplateInput, key: string) => {
       void key;
@@ -102,7 +114,16 @@ export function ApplyTemplateDialogButton() {
         return;
       }
 
-      submit(mapApplyTemplateEditorToActionInput(value));
+      const parsed = applyWeeklyScheduleTemplateEditorSchema.parse(value);
+      const currentPreview = getCurrentPreview(parsed, preview);
+      const input = mapApplyTemplateEditorToActionInput(parsed);
+
+      if (currentPreview && currentPreview.existingEntriesCount > 0) {
+        setPendingApplyInput(input);
+        return;
+      }
+
+      submit(input);
     },
   });
 
@@ -120,6 +141,7 @@ export function ApplyTemplateDialogButton() {
 
     previewLoader.cancel();
     setPreview(null);
+    setPendingApplyInput(null);
     resetState();
   }
 
@@ -283,6 +305,44 @@ export function ApplyTemplateDialogButton() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={pendingApplyInput !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setPendingApplyInput(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Перезаписать расписание за период?</AlertDialogTitle>
+            <AlertDialogDescription>
+              В выбранном периоде уже есть {getPendingOverwriteCount(form.state.values, preview)}{" "}
+              записей. При подтверждении они будут полностью удалены и созданы заново по текущему
+              недельному шаблону.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={disabled}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={disabled}
+              onClick={() => {
+                if (!pendingApplyInput) {
+                  return;
+                }
+
+                const input = pendingApplyInput;
+                setPendingApplyInput(null);
+                submit(input);
+              }}
+            >
+              {disabled ? <Spinner data-icon="inline-start" /> : null}
+              Перезаписать
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -344,7 +404,29 @@ function isPreviewReady(
 ) {
   const parsed = applyWeeklyScheduleTemplateEditorSchema.safeParse(values);
 
-  return parsed.success && preview?.key === getPreviewKey(parsed.data) && preview.status === "success";
+  return parsed.success && getCurrentPreview(parsed.data, preview) !== null;
+}
+
+function getCurrentPreview(
+  values: ApplyWeeklyScheduleTemplateEditorInput,
+  preview: PreviewState | null,
+) {
+  return preview?.key === getPreviewKey(values) && preview.status === "success"
+    ? preview
+    : null;
+}
+
+function getPendingOverwriteCount(
+  values: ApplyWeeklyScheduleTemplateEditorInput,
+  preview: PreviewState | null,
+) {
+  const parsed = applyWeeklyScheduleTemplateEditorSchema.safeParse(values);
+
+  if (!parsed.success) {
+    return 0;
+  }
+
+  return getCurrentPreview(parsed.data, preview)?.existingEntriesCount ?? 0;
 }
 
 function getDefaultValues(): ApplyWeeklyScheduleTemplateEditorInput {

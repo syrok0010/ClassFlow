@@ -4,7 +4,7 @@ const startDate = "2031-02-03";
 const endDate = "2031-02-07";
 
 test.describe("Admin schedule template apply", () => {
-  test("applies weekly template and shows overwrite count in the main dialog", async ({ page }) => {
+  test("applies weekly template and confirms overwrite when entries exist", async ({ page }) => {
     await page.goto("/admin/schedule");
 
     await expect(page.getByRole("button", { name: "Применить шаблон" })).toBeVisible();
@@ -23,9 +23,16 @@ test.describe("Admin schedule template apply", () => {
     await page.getByLabel("Дата окончания").fill(endDate);
 
     await expect(page.getByText(/Будет перезаписано записей: [1-9]\d*/)).toBeVisible();
-    await expect(page.getByRole("alertdialog")).not.toBeVisible();
 
     await page.getByRole("button", { name: "Применить", exact: true }).click();
+    const overwriteDialog = page.getByRole("alertdialog");
+    await expect(overwriteDialog).toBeVisible();
+    await overwriteDialog.getByRole("button", { name: "Отмена" }).click();
+    await expect(overwriteDialog).not.toBeVisible();
+
+    await page.getByRole("button", { name: "Применить", exact: true }).click();
+    await expect(overwriteDialog).toBeVisible();
+    await overwriteDialog.getByRole("button", { name: "Перезаписать" }).click();
     await expect(page.getByText(/перезаписано: [1-9]\d*/)).toBeVisible();
   });
 });
