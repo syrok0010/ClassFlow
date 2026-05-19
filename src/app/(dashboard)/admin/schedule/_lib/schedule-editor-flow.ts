@@ -27,7 +27,7 @@ export type ScheduleEditorStep = {
 };
 
 export type ScheduleStepperFormValue = AdminScheduleTemplateMutationInput & {
-  cardKind: ScheduleCardKind;
+  cardKind: ScheduleCardKind | null;
 };
 
 type AudienceSelection = {
@@ -97,7 +97,7 @@ export function getInitialCardKind(
   return group?.type === "SUBJECT_SUBGROUP" ? "SUBGROUP" : "CLASS";
 }
 
-export function getDeliveryModeForCardKind(kind: ScheduleCardKind): ScheduleDeliveryMode {
+export function getDeliveryModeForCardKind(kind: ScheduleCardKind | null): ScheduleDeliveryMode {
   if (kind === "ELECTIVE_GROUP") {
     return "ELECTIVE_GROUP";
   }
@@ -110,10 +110,14 @@ export function getDeliveryModeForCardKind(kind: ScheduleCardKind): ScheduleDeli
 }
 
 export function getGroupOptionsByKind(
-  cardKind: ScheduleCardKind,
+  cardKind: ScheduleCardKind | null,
   directGroupOptions: AdminScheduleGroupOption[],
   electiveGroupOptions: AdminScheduleElectiveGroupOption[],
 ) {
+  if (!cardKind) {
+    return [];
+  }
+
   if (cardKind === "CLASS") {
     return directGroupOptions.filter((option) => option.type === "CLASS");
   }
@@ -135,6 +139,10 @@ export function getAudienceSelection(
   directGroupOptions: AdminScheduleGroupOption[],
   electiveGroupOptions: AdminScheduleElectiveGroupOption[],
 ): AudienceSelection | null {
+  if (!value.cardKind) {
+    return null;
+  }
+
   if (value.cardKind === "SHARED_CLASSES") {
     if (value.coveredClassIds.length === 0) {
       return null;
@@ -304,84 +312,6 @@ export function getDerivedEndMinutes(startMinutes: number | null, durationMinute
   return startMinutes + durationMinutes;
 }
 
-export function getStepError(
-  stepId: ScheduleEditorStepId,
-  value: ScheduleStepperFormValue,
-  classRows: AdminScheduleClassRow[],
-  directGroupOptions: AdminScheduleGroupOption[],
-  electiveGroupOptions: AdminScheduleElectiveGroupOption[],
-  lessonDurationByGroupSubject: Record<string, number>,
-) {
-  if (stepId === "kind") {
-    return value.cardKind ? null : "Выберите тип карточки";
-  }
-
-  if (stepId === "audience") {
-    if (value.cardKind === "SHARED_CLASSES") {
-      return value.coveredClassIds.length >= 2 ? null : "Нужно выбрать минимум два класса";
-    }
-
-    return value.deliveryGroupId ? null : "Нужно выбрать группу или класс";
-  }
-
-  if (stepId === "subject") {
-    const subjectIds = getAvailableSubjectIds(value, classRows, directGroupOptions, electiveGroupOptions);
-    if (subjectIds.length === 0) {
-      return "Для выбранной сущности нет доступных предметов";
-    }
-
-    if (!value.subjectId) {
-      return "Выберите предмет";
-    }
-
-    return subjectIds.includes(value.subjectId) ? null : "Выбранный предмет не подходит";
-  }
-
-  if (stepId === "room") {
-    if (!value.subjectId) {
-      return "Сначала выберите предмет";
-    }
-
-    return null;
-  }
-
-  if (stepId === "teacher") {
-    if (!value.subjectId) {
-      return "Сначала выберите предмет";
-    }
-
-    return null;
-  }
-
-  if (stepId === "time") {
-    const durationMinutes = getDurationMinutes(value, lessonDurationByGroupSubject);
-    if (durationMinutes === null) {
-      return "Для выбранной комбинации не найдена длительность";
-    }
-
-    if (value.dayOfWeek === null) {
-      return null;
-    }
-
-    if (value.startMinutes === null) {
-      return "Укажите время начала";
-    }
-
-    const endMinutes = getDerivedEndMinutes(value.startMinutes, durationMinutes);
-    if (endMinutes === null) {
-      return "Не удалось вычислить время окончания";
-    }
-
-    if (endMinutes > 24 * 60) {
-      return "Время окончания выходит за пределы суток";
-    }
-
-    return null;
-  }
-
-  return null;
-}
-
 export function getAudienceSummaryLabel(
   value: Pick<ScheduleStepperFormValue, "cardKind" | "deliveryGroupId" | "coveredClassIds">,
   classRows: AdminScheduleClassRow[],
@@ -426,7 +356,11 @@ function getMaxNumber(values: Array<number | null>) {
   return numbers.length > 0 ? Math.max(...numbers) : null;
 }
 
-export function getCardKindLabel(kind: ScheduleCardKind) {
+export function getCardKindLabel(kind: ScheduleCardKind | null) {
+  if (!kind) {
+    return null;
+  }
+
   const labels: Record<ScheduleCardKind, string> = {
     CLASS: "Класс",
     SUBGROUP: "Подгруппа",

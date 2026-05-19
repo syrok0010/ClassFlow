@@ -19,8 +19,8 @@ import {
   getDurationMinutes,
   getGroupOptionsByKind,
   getInitialCardKind,
-  getStepError,
   SCHEDULE_EDITOR_STEPS,
+  type ScheduleEditorStepId,
   type ScheduleEditorSubjectOption,
   type ScheduleStepperFormValue,
 } from "./schedule-editor-flow";
@@ -63,7 +63,9 @@ export function buildDefaultScheduleEditorValues({
   draft: ScheduleEditorDraft | null;
   context: ScheduleEditorFormContext;
 }) {
-  const cardKind = getInitialCardKind(draft, context.directGroupOptions);
+  const cardKind = draft?.templateId
+    ? getInitialCardKind(draft, context.directGroupOptions)
+    : null;
   const initialValue = normalizeScheduleEditorValue(
     {
       templateId: draft?.templateId,
@@ -82,30 +84,13 @@ export function buildDefaultScheduleEditorValues({
     context,
   );
 
-  const availableSubjectIds = getAvailableSubjectIds(
-    initialValue,
-    context.classRows,
-    context.directGroupOptions,
-    context.electiveGroupOptions,
-  );
-
-  if (!initialValue.subjectId && availableSubjectIds.length === 1) {
-    return normalizeScheduleEditorValue(
-      {
-        ...initialValue,
-        subjectId: availableSubjectIds[0],
-      },
-      context,
-    );
-  }
-
   return initialValue;
 }
 
 export function createScheduleEditorFormSchema(context: ScheduleEditorFormContext) {
   return z.object({
     templateId: z.string().optional(),
-    cardKind: z.enum(["CLASS", "SUBGROUP", "ELECTIVE_GROUP", "SHARED_CLASSES"]),
+    cardKind: z.enum(["CLASS", "SUBGROUP", "ELECTIVE_GROUP", "SHARED_CLASSES"]).nullable(),
     deliveryMode: z.enum(["DIRECT_GROUP", "ELECTIVE_GROUP", "SHARED_CLASSES"]),
     deliveryGroupId: z.string().nullable(),
     openClassIds: z.array(z.string().min(1)),
@@ -117,7 +102,15 @@ export function createScheduleEditorFormSchema(context: ScheduleEditorFormContex
     startMinutes: z.number().int().min(0).max(24 * 60 - 1).nullable(),
     endMinutes: z.number().int().min(1).max(24 * 60).nullable(),
   }).superRefine((value, ctx) => {
-    if (value.deliveryMode !== getDeliveryModeForCardKind(value.cardKind)) {
+    if (value.cardKind === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["cardKind"],
+        message: "Выберите тип карточки",
+      });
+    }
+
+    if (value.cardKind !== null && value.deliveryMode !== getDeliveryModeForCardKind(value.cardKind)) {
       ctx.addIssue({
         code: "custom",
         path: ["cardKind"],
@@ -147,6 +140,12 @@ export function createScheduleEditorFormSchema(context: ScheduleEditorFormContex
           message: "Нужно выбрать минимум два класса",
         });
       }
+    } else if (value.cardKind === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["deliveryGroupId"],
+        message: "Сначала выберите тип карточки",
+      });
     } else if (!value.deliveryGroupId) {
       ctx.addIssue({
         code: "custom",
@@ -176,19 +175,34 @@ export function createScheduleEditorFormSchema(context: ScheduleEditorFormContex
       });
     }
 
-    if (value.roomId) {
-      const audienceSelection = getAudienceSelection(
-        value,
-        context.classRows,
-        context.directGroupOptions,
-        context.electiveGroupOptions,
-      );
-      const rooms = getAvailableRoomOptions(
-        context.roomOptions,
-        audienceSelection,
-        context.subjectOptions.find((subject) => subject.id === value.subjectId) ?? null,
-      );
-      if (!rooms.some((room) => room.id === value.roomId)) {
+    const audienceSelection = getAudienceSelection(
+      value,
+      context.classRows,
+      context.directGroupOptions,
+      context.electiveGroupOptions,
+    );
+    const selectedSubject = context.subjectOptions.find((subject) => subject.id === value.subjectId) ?? null;
+
+    const rooms = getAvailableRoomOptions(
+      context.roomOptions,
+      audienceSelection,
+      selectedSubject,
+    );
+
+    if (value.subjectId) {
+      if (rooms.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["roomId"],
+          message: "Нет доступных кабинетов",
+        });
+      } else if (!value.roomId) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["roomId"],
+          message: "Выберите кабинет",
+        });
+      } else if (!rooms.some((room) => room.id === value.roomId)) {
         ctx.addIssue({
           code: "custom",
           path: ["roomId"],
@@ -197,15 +211,25 @@ export function createScheduleEditorFormSchema(context: ScheduleEditorFormContex
       }
     }
 
-    if (value.teacherId) {
-      const audienceSelection = getAudienceSelection(
-        value,
-        context.classRows,
-        context.directGroupOptions,
-        context.electiveGroupOptions,
-      );
-      const teachers = getAvailableTeacherOptions(context.teacherOptions, audienceSelection, value.subjectId);
-      if (!teachers.some((teacher) => teacher.id === value.teacherId)) {
+    const teachers = getAvailableTeacherOptions(context.teacherOptions, audienceSelection, value.subjectId);
+    const isTeacherRequired = selectedSubject?.type !== "REGIME";
+
+    if (value.subjectId) {
+      if (!isTeacherRequired && !value.teacherId) {
+        // For regime subjects, "teacher not selected" is valid even when no teachers are available.
+      } else if (teachers.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["teacherId"],
+          message: "Нет доступных учителей",
+        });
+      } else if (isTeacherRequired && !value.teacherId) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["teacherId"],
+          message: "Выберите учителя",
+        });
+      } else if (value.teacherId && !teachers.some((teacher) => teacher.id === value.teacherId)) {
         ctx.addIssue({
           code: "custom",
           path: ["teacherId"],
@@ -214,14 +238,23 @@ export function createScheduleEditorFormSchema(context: ScheduleEditorFormContex
       }
     }
 
-    if (value.dayOfWeek === null) {
-      if (value.startMinutes !== null) {
+    if (value.startMinutes === null) {
+      if (value.endMinutes !== null) {
         ctx.addIssue({
           code: "custom",
-          path: ["startMinutes"],
-          message: "Во временной области не нужно задавать время начала",
+          path: ["endMinutes"],
+          message: "Во временной области не нужно задавать время окончания",
         });
       }
+      return;
+    }
+
+    if (value.dayOfWeek === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["dayOfWeek"],
+        message: "Выберите день",
+      });
       return;
     }
 
@@ -266,24 +299,35 @@ export function createScheduleEditorFormSchema(context: ScheduleEditorFormContex
 
 export function getInitialScheduleEditorStepId(
   value: ScheduleStepperFormValue,
-  context: Pick<
-    ScheduleEditorFormContext,
-    "classRows" | "directGroupOptions" | "electiveGroupOptions" | "lessonDurationByGroupSubject"
-  >,
+  context: ScheduleEditorFormContext,
 ) {
   const firstInvalid = SCHEDULE_EDITOR_STEPS.find(
-    (step) =>
-      getStepError(
-        step.id,
-        value,
-        context.classRows,
-        context.directGroupOptions,
-        context.electiveGroupOptions,
-        context.lessonDurationByGroupSubject,
-      ) !== null,
+    (step) => getScheduleEditorStepError(step.id, value, context) !== null,
   );
 
   return firstInvalid?.id ?? "time";
+}
+
+export function getScheduleEditorStepErrors(
+  value: ScheduleStepperFormValue,
+  context: ScheduleEditorFormContext,
+) {
+  return Object.fromEntries(
+    SCHEDULE_EDITOR_STEPS.map((step) => [
+      step.id,
+      getScheduleEditorStepError(step.id, value, context),
+    ]),
+  ) as Record<ScheduleEditorStepId, string | null>;
+}
+
+export function getScheduleEditorStepError(
+  stepId: ScheduleEditorStepId,
+  value: ScheduleStepperFormValue,
+  context: ScheduleEditorFormContext,
+) {
+  const issues = getScheduleEditorIssues(value, context);
+  const matchingIssue = issues.find((issue) => getScheduleEditorIssueStepId(issue) === stepId);
+  return matchingIssue?.message ?? null;
 }
 
 export function normalizeScheduleEditorValue(
@@ -318,11 +362,7 @@ export function normalizeScheduleEditorValue(
     context.directGroupOptions,
     context.electiveGroupOptions,
   );
-  const subjectId = availableSubjectIds.includes(baseValue.subjectId)
-    ? baseValue.subjectId
-    : availableSubjectIds.length === 1
-      ? availableSubjectIds[0]
-      : "";
+  const subjectId = availableSubjectIds.includes(baseValue.subjectId) ? baseValue.subjectId : "";
   const normalizedValue = {
     ...baseValue,
     subjectId,
@@ -368,11 +408,13 @@ export function minutesToTime(totalMinutes: number | null) {
 }
 
 function toTemplateMutationInput(value: ScheduleStepperFormValue): AdminScheduleTemplateMutationInput {
+  const isScheduled = value.startMinutes !== null && value.dayOfWeek !== null;
+
   return {
     templateId: value.templateId,
-    dayOfWeek: value.dayOfWeek,
-    startMinutes: value.startMinutes,
-    endMinutes: value.endMinutes,
+    dayOfWeek: isScheduled ? value.dayOfWeek : null,
+    startMinutes: isScheduled ? value.startMinutes : null,
+    endMinutes: isScheduled ? value.endMinutes : null,
     deliveryMode: value.deliveryMode,
     deliveryGroupId: value.deliveryGroupId,
     openClassIds: value.openClassIds,
@@ -381,6 +423,46 @@ function toTemplateMutationInput(value: ScheduleStepperFormValue): AdminSchedule
     roomId: value.roomId,
     teacherId: value.teacherId,
   };
+}
+
+function getScheduleEditorIssues(
+  value: ScheduleStepperFormValue,
+  context: ScheduleEditorFormContext,
+) {
+  const parsed = createScheduleEditorFormSchema(context).safeParse(value);
+  return parsed.success ? [] : parsed.error.issues;
+}
+
+function getScheduleEditorIssueStepId(
+  issue: { path: PropertyKey[]; message: string },
+): ScheduleEditorStepId | null {
+  const field = issue.path[0];
+
+  if (field === "cardKind" || field === "deliveryMode") {
+    return "kind";
+  }
+
+  if (field === "deliveryGroupId" || field === "openClassIds" || field === "coveredClassIds") {
+    return "audience";
+  }
+
+  if (field === "subjectId") {
+    return issue.message.includes("длительность") ? "time" : "subject";
+  }
+
+  if (field === "roomId") {
+    return "room";
+  }
+
+  if (field === "teacherId") {
+    return "teacher";
+  }
+
+  if (field === "dayOfWeek" || field === "startMinutes" || field === "endMinutes") {
+    return "time";
+  }
+
+  return null;
 }
 
 function buildClientTemplateValidationContext(
