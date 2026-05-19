@@ -1,4 +1,5 @@
 import { AdminScheduleView } from "./_components/admin-schedule-view";
+import { ApplyTemplateDialogButton } from "./_components/apply-template-dialog-button";
 import { GenerateScheduleButton } from "./_components/generate-schedule-button";
 import { getAdminSchedulePageData } from "./_lib/get-admin-schedule-page-data";
 
@@ -16,7 +17,10 @@ export default async function SchedulePage() {
             Просмотр недельного шаблона по всем классам.
           </p>
         </div>
-        <GenerateScheduleButton />
+        <div className="flex flex-wrap gap-2">
+          <ApplyTemplateDialogButton />
+          <GenerateScheduleButton />
+        </div>
       </div>
 
       <AdminScheduleView {...pageData} />
