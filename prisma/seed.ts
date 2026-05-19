@@ -57,7 +57,6 @@ async function main() {
   await prisma.weeklyTemplateCoveredClass.deleteMany();
   await prisma.weeklyTemplateOpenClass.deleteMany();
   await prisma.weeklyScheduleTemplate.deleteMany();
-  await prisma.scheduleSettings.deleteMany();
   await prisma.teacherAvailabilityOverride.deleteMany();
   await prisma.teacherAvailability.deleteMany();
   await prisma.teacherSubject.deleteMany();
@@ -89,13 +88,6 @@ async function main() {
     },
   });
   await createCredentialAccount(admin.id, "admin1234");
-
-  await prisma.scheduleSettings.create({
-    data: {
-      id: "main",
-      afterschoolAttendanceCoefficient: "0.55",
-    },
-  });
 
   const subjectSeed = [
     { name: "Математика", type: "ACADEMIC" },

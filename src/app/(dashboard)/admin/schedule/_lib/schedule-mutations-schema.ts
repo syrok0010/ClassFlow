@@ -1,19 +1,28 @@
-import type { GroupType, SubjectType } from "@/generated/prisma/enums";
+import type { AttendanceLoadMode, GroupType, SubjectType } from "@/generated/prisma/enums";
 import { z } from "zod";
+
+import { getExpectedScheduleAudienceSize } from "./schedule-load-policy";
 
 type ScheduleValidationSubject = {
   type: SubjectType;
+  defaultAttendanceLoadMode?: AttendanceLoadMode;
 };
 
 type ScheduleValidationGroup = {
   type: GroupType;
   subjectId: string | null;
+  studentCount?: number;
+  parentId?: string | null;
+  grade?: number | null;
 };
 
 type AdminScheduleTemplateValidationContext = {
   subjectsById?: Record<string, ScheduleValidationSubject>;
   groupsById?: Record<string, ScheduleValidationGroup>;
   classIds?: readonly string[];
+  lessonDurationByGroupSubject?: Record<string, number>;
+  roomById?: Record<string, { seatsCount: number; subjectIds: readonly string[] }>;
+  teacherById?: Record<string, { subjects: readonly { subjectId: string; minGrade: number | null; maxGrade: number | null }[] }>;
 };
 
 const adminScheduleTemplateMutationSchemaBase = z.object({
@@ -201,6 +210,84 @@ export function createAdminScheduleTemplateMutationSchema(
       }
     }
 
+    const hasContextualAudience =
+      context.lessonDurationByGroupSubject
+      || context.roomById
+      || context.teacherById;
+    const audience = hasContextualAudience
+      ? resolveValidationAudience(value, context)
+      : null;
+
+    if (context.lessonDurationByGroupSubject && audience) {
+      const durations = audience.requirementGroupIds
+        .map((groupId) => context.lessonDurationByGroupSubject?.[`${groupId}:${value.subjectId}`])
+        .filter((duration): duration is number => typeof duration === "number");
+      const uniqueDurations = Array.from(new Set(durations));
+
+      if (durations.length !== audience.requirementGroupIds.length || uniqueDurations.length !== 1) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["subjectId"],
+          message: "Для выбранной комбинации не найдена единая длительность занятия",
+        });
+      } else if (
+        value.dayOfWeek !== null
+        && value.startMinutes !== null
+        && value.endMinutes !== value.startMinutes + uniqueDurations[0]
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["endMinutes"],
+          message: "Время окончания должно соответствовать длительности из требований",
+        });
+      }
+    }
+
+    if (value.roomId && context.roomById && audience && subject) {
+      const room = context.roomById[value.roomId];
+      if (!room) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["roomId"],
+          message: "Кабинет не найден",
+        });
+      } else if (!room.subjectIds.includes(value.subjectId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["roomId"],
+          message: "В выбранном кабинете нельзя вести этот предмет",
+        });
+      } else if (
+        room.seatsCount < getExpectedAudienceSize(
+          audience,
+          subject.defaultAttendanceLoadMode ?? "DELIVERY_GROUP_SIZE",
+        )
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["roomId"],
+          message: "В выбранном кабинете не хватает мест",
+        });
+      }
+    }
+
+    if (value.teacherId && context.teacherById && audience) {
+      const teacher = context.teacherById[value.teacherId];
+      if (!teacher) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["teacherId"],
+          message: "Учитель не найден",
+        });
+      } else if (!teacherCanTeachSubject(teacher, value.subjectId, audience.gradeRange)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["teacherId"],
+          message: "Выбранный учитель не ведет этот предмет для выбранной аудитории",
+        });
+      }
+    }
+
     if (!value.deliveryGroupId) {
       return;
     }
@@ -245,6 +332,94 @@ export function createAdminScheduleTemplateMutationSchema(
       }
     }
   });
+}
+
+function resolveValidationAudience(
+  value: AdminScheduleTemplateMutationInput,
+  context: AdminScheduleTemplateValidationContext,
+) {
+  const groupsById = context.groupsById ?? {};
+
+  if (value.deliveryMode === "SHARED_CLASSES") {
+    const classes = value.coveredClassIds
+      .map((classId) => groupsById[classId])
+      .filter((group): group is ScheduleValidationGroup => Boolean(group));
+
+    return {
+      requirementGroupIds: value.coveredClassIds,
+      deliveryGroupSize: classes.reduce((sum, group) => sum + (group.studentCount ?? 0), 0),
+      fullClassSize: classes.reduce((sum, group) => sum + (group.studentCount ?? 0), 0),
+      gradeRange: getGradeRange(classes.map((group) => group.grade ?? null)),
+    };
+  }
+
+  if (!value.deliveryGroupId) {
+    return null;
+  }
+
+  const group = groupsById[value.deliveryGroupId];
+  if (!group) {
+    return null;
+  }
+
+  if (value.deliveryMode === "ELECTIVE_GROUP") {
+    return {
+      requirementGroupIds: [value.deliveryGroupId],
+      deliveryGroupSize: group.studentCount ?? 0,
+      fullClassSize: group.studentCount ?? 0,
+      gradeRange: { min: null, max: null },
+    };
+  }
+
+  const parentClass = group.parentId ? groupsById[group.parentId] : null;
+
+  return {
+    requirementGroupIds: [value.deliveryGroupId],
+    deliveryGroupSize: group.studentCount ?? 0,
+    fullClassSize: parentClass?.studentCount ?? group.studentCount ?? 0,
+    gradeRange: {
+      min: group.grade ?? parentClass?.grade ?? null,
+      max: group.grade ?? parentClass?.grade ?? null,
+    },
+  };
+}
+
+function getExpectedAudienceSize(
+  audience: NonNullable<ReturnType<typeof resolveValidationAudience>>,
+  loadMode: AttendanceLoadMode,
+) {
+  return getExpectedScheduleAudienceSize(audience, loadMode);
+}
+
+function teacherCanTeachSubject(
+  teacher: { subjects: readonly { subjectId: string; minGrade: number | null; maxGrade: number | null }[] },
+  subjectId: string,
+  gradeRange: { min: number | null; max: number | null },
+) {
+  return teacher.subjects.some((subject) => {
+    if (subject.subjectId !== subjectId) {
+      return false;
+    }
+
+    if (gradeRange.min !== null && subject.minGrade !== null && gradeRange.min < subject.minGrade) {
+      return false;
+    }
+
+    if (gradeRange.max !== null && subject.maxGrade !== null && gradeRange.max > subject.maxGrade) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function getGradeRange(grades: Array<number | null>) {
+  const actualGrades = grades.filter((grade): grade is number => typeof grade === "number");
+
+  return {
+    min: actualGrades.length > 0 ? Math.min(...actualGrades) : null,
+    max: actualGrades.length > 0 ? Math.max(...actualGrades) : null,
+  };
 }
 
 export const adminScheduleTemplateMutationSchema = createAdminScheduleTemplateMutationSchema();

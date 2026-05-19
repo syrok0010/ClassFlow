@@ -1,5 +1,5 @@
 import type { BaseScheduleEvent } from "@/features/schedule";
-import type { GroupType, ScheduleDeliveryMode, SubjectType } from "@/generated/prisma/enums";
+import type { AttendanceLoadMode, GroupType, ScheduleDeliveryMode, SubjectType } from "@/generated/prisma/enums";
 
 export interface AdminScheduleEvent extends BaseScheduleEvent {
   id: string;
@@ -76,7 +76,7 @@ export interface AdminScheduleTeacherOption {
 export interface AdminSchedulePageData {
   events: AdminScheduleEvent[];
   classRows: AdminScheduleClassRow[];
-  subjectOptions: { id: string; name: string; type: SubjectType }[];
+  subjectOptions: { id: string; name: string; type: SubjectType; defaultAttendanceLoadMode: AttendanceLoadMode }[];
   directGroupOptions: AdminScheduleGroupOption[];
   electiveGroupOptions: AdminScheduleElectiveGroupOption[];
   roomOptions: AdminScheduleRoomOption[];

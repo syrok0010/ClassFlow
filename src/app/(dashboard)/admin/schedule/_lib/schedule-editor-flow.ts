@@ -1,4 +1,4 @@
-import type { GroupType, ScheduleDeliveryMode } from "@/generated/prisma/enums";
+import type { AttendanceLoadMode, GroupType, ScheduleDeliveryMode } from "@/generated/prisma/enums";
 
 import type {
   AdminScheduleClassRow,
@@ -7,6 +7,7 @@ import type {
   AdminScheduleRoomOption,
   AdminScheduleTeacherOption,
 } from "./admin-schedule-types";
+import { getExpectedScheduleAudienceSize } from "./schedule-load-policy";
 import type { AdminScheduleTemplateMutationInput } from "./schedule-mutations-schema";
 
 export type ScheduleCardKind = "CLASS" | "SUBGROUP" | "ELECTIVE_GROUP" | "SHARED_CLASSES";
@@ -31,8 +32,16 @@ export type ScheduleStepperFormValue = AdminScheduleTemplateMutationInput & {
 
 type AudienceSelection = {
   gradeRange: { min: number | null; max: number | null };
-  size: number;
+  deliveryGroupSize: number;
+  fullClassSize: number;
   subjectIds: string[];
+};
+
+export type ScheduleEditorSubjectOption = {
+  id: string;
+  name: string;
+  type: string;
+  defaultAttendanceLoadMode: AttendanceLoadMode;
 };
 
 export const SCHEDULE_EDITOR_STEPS: ScheduleEditorStep[] = [
@@ -142,7 +151,8 @@ export function getAudienceSelection(
         min: getMinNumber(classes.map((item) => item.grade)),
         max: getMaxNumber(classes.map((item) => item.grade)),
       },
-      size: classes.reduce((sum, item) => sum + item.studentCount, 0),
+      deliveryGroupSize: classes.reduce((sum, item) => sum + item.studentCount, 0),
+      fullClassSize: classes.reduce((sum, item) => sum + item.studentCount, 0),
       subjectIds,
     };
   }
@@ -159,7 +169,8 @@ export function getAudienceSelection(
 
     return {
       gradeRange: { min: null, max: null },
-      size: group.studentCount,
+      deliveryGroupSize: group.studentCount,
+      fullClassSize: group.studentCount,
       subjectIds: group.subjectIds,
     };
   }
@@ -176,7 +187,8 @@ export function getAudienceSelection(
 
   return {
     gradeRange: { min: grade, max: grade },
-    size: group.studentCount,
+    deliveryGroupSize: group.studentCount,
+    fullClassSize: parentClass?.studentCount ?? group.studentCount,
     subjectIds: group.subjectIds,
   };
 }
@@ -193,15 +205,27 @@ export function getAvailableSubjectIds(
 export function getAvailableRoomOptions(
   roomOptions: AdminScheduleRoomOption[],
   audienceSelection: AudienceSelection | null,
-  subjectId: string,
+  subject: Pick<ScheduleEditorSubjectOption, "id" | "defaultAttendanceLoadMode"> | null,
 ) {
-  if (!audienceSelection || !subjectId) {
+  if (!audienceSelection || !subject) {
     return [] as AdminScheduleRoomOption[];
   }
 
-  return roomOptions.filter(
-    (room) => room.subjectIds.includes(subjectId) && room.seatsCount >= audienceSelection.size,
+  const expectedSize = getExpectedAttendanceSize(
+    audienceSelection,
+    subject.defaultAttendanceLoadMode,
   );
+
+  return roomOptions.filter(
+    (room) => room.subjectIds.includes(subject.id) && room.seatsCount >= expectedSize,
+  );
+}
+
+export function getExpectedAttendanceSize(
+  audienceSelection: AudienceSelection,
+  loadMode: AttendanceLoadMode,
+) {
+  return getExpectedScheduleAudienceSize(audienceSelection, loadMode);
 }
 
 export function getAvailableTeacherOptions(

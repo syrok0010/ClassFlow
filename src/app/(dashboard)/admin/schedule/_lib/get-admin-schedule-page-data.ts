@@ -8,6 +8,7 @@ import {
 } from "./admin-schedule-mapper";
 import type { AdminSchedulePageData } from "./admin-schedule-types";
 import { getUserFullName } from "@/lib/auth-access";
+import { buildLessonDurationByGroupSubject } from "./schedule-duration-map";
 
 const VISIBLE_CLASS_TYPES: GroupType[] = ["CLASS"];
 
@@ -95,7 +96,7 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
 
   const [subjects, groups, rooms, teachers, requirements] = await Promise.all([
     prisma.subject.findMany({
-      select: { id: true, name: true, type: true },
+      select: { id: true, name: true, type: true, defaultAttendanceLoadMode: true },
       orderBy: { name: "asc" },
     }),
     prisma.group.findMany({
@@ -177,14 +178,26 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
     }),
   ]);
 
-  const lessonDurationByGroupSubject = Object.fromEntries(
-    requirements.map((item) => [`${item.groupId}:${item.subjectId}`, item.durationInMinutes]),
-  );
+  const lessonDurationByGroupSubject = buildLessonDurationByGroupSubject(requirements, templates);
   const subjectIdsByGroup = new Map<string, string[]>();
   for (const requirement of requirements) {
     const current = subjectIdsByGroup.get(requirement.groupId) ?? [];
     current.push(requirement.subjectId);
     subjectIdsByGroup.set(requirement.groupId, current);
+  }
+
+  for (const template of templates) {
+    const subjectGroupIds = template.deliveryMode === "SHARED_CLASSES"
+      ? template.coveredClasses.map((coveredClass) => coveredClass.classGroupId)
+      : template.deliveryGroupId
+        ? [template.deliveryGroupId]
+        : [];
+
+    for (const groupId of subjectGroupIds) {
+      const current = subjectIdsByGroup.get(groupId) ?? [];
+      current.push(template.subjectId);
+      subjectIdsByGroup.set(groupId, current);
+    }
   }
   const classSubjectIdsById = new Map(
     classRows.map((row) => [row.id, [...new Set(subjectIdsByGroup.get(row.id) ?? [])].sort()]),

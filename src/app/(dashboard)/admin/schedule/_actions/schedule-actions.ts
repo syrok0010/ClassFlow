@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { Prisma } from "@/generated/prisma/client";
+import type { GroupType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { requireAdminContext } from "@/lib/server-action-auth";
 
@@ -11,8 +12,41 @@ import {
   createAdminScheduleTemplateMutationSchema,
   type AdminScheduleTemplateMutationInput,
 } from "../_lib/schedule-mutations-schema";
+import { buildLessonDurationByGroupSubject } from "../_lib/schedule-duration-map";
 
 const SCHEDULE_PATH = "/admin/schedule";
+
+type ValidationGroupRecord = {
+  id: string;
+  type: GroupType;
+  subjectId: string | null;
+  parentId: string | null;
+  grade: number | null;
+  _count: { studentGroups: number };
+};
+
+function getRequirementGroupIds(payload: AdminScheduleTemplateMutationInput) {
+  if (payload.deliveryMode === "SHARED_CLASSES") {
+    return payload.coveredClassIds;
+  }
+
+  return payload.deliveryGroupId ? [payload.deliveryGroupId] : [];
+}
+
+function buildValidationGroupsById(groups: ValidationGroupRecord[]) {
+  return Object.fromEntries(
+    groups.map((group) => [
+      group.id,
+      {
+        type: group.type,
+        subjectId: group.subjectId,
+        studentCount: group._count.studentGroups,
+        parentId: group.parentId ?? null,
+        grade: group.grade ?? null,
+      },
+    ]),
+  );
+}
 
 export async function createOrUpdateAdminScheduleTemplateAction(input: AdminScheduleTemplateMutationInput) {
   await requireAdminContext();
@@ -34,41 +68,133 @@ export async function createOrUpdateAdminScheduleTemplateAction(input: AdminSche
 
   const subject = await prisma.subject.findUnique({
     where: { id: payload.subjectId },
-    select: { id: true, type: true },
+    select: { id: true, type: true, defaultAttendanceLoadMode: true },
   });
 
   const deliveryGroup = payload.deliveryGroupId
     ? await prisma.group.findUnique({
         where: { id: payload.deliveryGroupId },
-	        select: { id: true, type: true, subjectId: true },
-	      })
+        select: {
+          id: true,
+          type: true,
+          subjectId: true,
+          parentId: true,
+          grade: true,
+          _count: { select: { studentGroups: true } },
+        },
+      })
     : null;
 
-  const linkedClassIds = Array.from(new Set([...payload.openClassIds, ...payload.coveredClassIds]));
-  const linkedClasses = linkedClassIds.length > 0
+  const groupLookupIds = Array.from(
+    new Set([
+      ...payload.openClassIds,
+      ...payload.coveredClassIds,
+      ...(payload.deliveryGroupId ? [payload.deliveryGroupId] : []),
+      ...(deliveryGroup?.parentId ? [deliveryGroup.parentId] : []),
+    ]),
+  );
+  const linkedClasses = groupLookupIds.length > 0
     ? await prisma.group.findMany({
-	        where: { id: { in: linkedClassIds } },
-        select: { id: true, type: true },
-	      })
+        where: { id: { in: groupLookupIds } },
+        select: {
+          id: true,
+          type: true,
+          subjectId: true,
+          parentId: true,
+          grade: true,
+          _count: { select: { studentGroups: true } },
+        },
+      })
     : [];
+  const requirementGroupIds = getRequirementGroupIds(payload);
+  const [room, teacher, requirements, existingDurationTemplates] = await Promise.all([
+    payload.roomId
+      ? prisma.room.findUnique({
+          where: { id: payload.roomId },
+          select: {
+            id: true,
+            seatsCount: true,
+            roomSubjects: { select: { subjectId: true } },
+          },
+        })
+      : null,
+    payload.teacherId
+      ? prisma.teacher.findUnique({
+          where: { id: payload.teacherId },
+          select: {
+            id: true,
+            teacherSubjects: {
+              select: {
+                subjectId: true,
+                minGrade: true,
+                maxGrade: true,
+              },
+            },
+          },
+        })
+      : null,
+    prisma.groupSubjectRequirement.findMany({
+      where: {
+        groupId: {
+          in: requirementGroupIds,
+        },
+        subjectId: payload.subjectId,
+      },
+      select: {
+        groupId: true,
+        subjectId: true,
+        durationInMinutes: true,
+      },
+    }),
+    prisma.weeklyScheduleTemplate.findMany({
+      where: {
+        subjectId: payload.subjectId,
+        OR: [
+          { deliveryGroupId: { in: requirementGroupIds } },
+          { coveredClasses: { some: { classGroupId: { in: requirementGroupIds } } } },
+        ],
+      },
+      select: {
+        subjectId: true,
+        deliveryGroupId: true,
+        startTime: true,
+        endTime: true,
+        coveredClasses: { select: { classGroupId: true } },
+      },
+    }),
+  ]);
+  const groupsForValidation = [
+    ...linkedClasses,
+    ...(deliveryGroup && !linkedClasses.some((group) => group.id === deliveryGroup.id) ? [deliveryGroup] : []),
+  ];
 
   const contextualValidation = createAdminScheduleTemplateMutationSchema({
     subjectsById: subject
       ? {
           [subject.id]: {
             type: subject.type,
+            defaultAttendanceLoadMode: subject.defaultAttendanceLoadMode,
           },
         }
       : {},
-    groupsById: deliveryGroup
-      ? {
-          [deliveryGroup.id]: {
-            type: deliveryGroup.type,
-            subjectId: deliveryGroup.subjectId,
-          },
-        }
-      : {},
+    groupsById: buildValidationGroupsById(groupsForValidation),
     classIds: linkedClasses.filter((group) => group.type === "CLASS").map((group) => group.id),
+    lessonDurationByGroupSubject: buildLessonDurationByGroupSubject(requirements, existingDurationTemplates),
+    roomById: room
+      ? {
+          [room.id]: {
+            seatsCount: room.seatsCount,
+            subjectIds: room.roomSubjects.map((item) => item.subjectId),
+          },
+        }
+      : {},
+    teacherById: teacher
+      ? {
+          [teacher.id]: {
+            subjects: teacher.teacherSubjects,
+          },
+        }
+      : {},
   }).safeParse(payload);
 
   if (!contextualValidation.success) {

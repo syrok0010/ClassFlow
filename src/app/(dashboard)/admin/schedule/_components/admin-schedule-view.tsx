@@ -5,26 +5,26 @@ import { useRouter } from "next/navigation";
 import {
   DndContext,
   PointerSensor,
-  useDraggable,
-  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import { BookOpen, Plus } from "lucide-react";
+import { BookOpen } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { ReadonlySchedule } from "@/features/schedule";
-import { cn } from "@/lib/utils";
 
 import {
   createOrUpdateAdminScheduleTemplateAction,
   deleteAdminScheduleTemplateAction,
 } from "../_actions/schedule-actions";
 import type { AdminScheduleEvent, AdminSchedulePageData } from "../_lib/admin-schedule-types";
-import { detectAdminScheduleConflicts, type EventConflict } from "./admin-schedule-conflicts";
-import { AdminScheduleEventCard } from "./admin-schedule-event-card";
+import { detectAdminScheduleConflicts } from "./admin-schedule-conflicts";
+import {
+  DraggableScheduleEventCard,
+  GridDropOverlay,
+  PARKING_DROP_ID,
+  TemporaryScheduleArea,
+} from "./schedule-dnd-components";
 import { ScheduleDeleteDialog } from "./schedule-delete-dialog";
 import {
   type ScheduleEditorDraft,
@@ -34,7 +34,13 @@ import { ScheduleMultiSelect } from "./schedule-multi-select";
 
 type AdminScheduleViewProps = AdminSchedulePageData;
 
-const PARKING_DROP_ID = "parking-drop-zone";
+const DAY_CODE_TO_NUMBER: Record<string, number> = {
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+};
 
 export function AdminScheduleView({
   events,
@@ -192,7 +198,7 @@ export function AdminScheduleView({
     }
 
     if (overId === PARKING_DROP_ID) {
-      await createOrUpdateAdminScheduleTemplateAction({
+      const result = await createOrUpdateAdminScheduleTemplateAction({
         templateId: activeEvent.templateId,
         dayOfWeek: null,
         startMinutes: null,
@@ -205,6 +211,9 @@ export function AdminScheduleView({
         roomId: activeEvent.roomId,
         teacherId: activeEvent.teacherId,
       });
+      if (result.error) {
+        return;
+      }
       router.refresh();
       return;
     }
@@ -214,14 +223,7 @@ export function AdminScheduleView({
     }
 
     const [, dayKey, rowId, startMinutesRaw] = overId.split(":");
-    const dayMap: Record<string, number> = {
-      "mon": 1,
-      "tue": 2,
-      "wed": 3,
-      "thu": 4,
-      "fri": 5,
-    };
-    const dayOfWeek = dayMap[dayKey];
+    const dayOfWeek = DAY_CODE_TO_NUMBER[dayKey];
     const startMinutes = Number(startMinutesRaw);
     const duration =
       activeEvent.startMinutes !== null && activeEvent.endMinutes !== null
@@ -242,20 +244,29 @@ export function AdminScheduleView({
       && activeEvent.deliveryGroupType === "CLASS"
       ? rowId
       : activeEvent.deliveryGroupId;
+    const nextOpenClassIds = activeEvent.deliveryMode === "ELECTIVE_GROUP"
+      ? replaceProjectionClassId(activeEvent.openClassIds, activeEvent.projectionClassId, rowId)
+      : activeEvent.openClassIds;
+    const nextCoveredClassIds = activeEvent.deliveryMode === "SHARED_CLASSES"
+      ? replaceProjectionClassId(activeEvent.coveredClassIds, activeEvent.projectionClassId, rowId)
+      : activeEvent.coveredClassIds;
 
-    await createOrUpdateAdminScheduleTemplateAction({
+    const result = await createOrUpdateAdminScheduleTemplateAction({
       templateId: activeEvent.templateId,
       dayOfWeek,
       startMinutes,
       endMinutes: startMinutes + duration,
       deliveryMode: activeEvent.deliveryMode,
       deliveryGroupId: nextDeliveryGroupId,
-      openClassIds: activeEvent.openClassIds,
-      coveredClassIds: activeEvent.coveredClassIds,
+      openClassIds: nextOpenClassIds,
+      coveredClassIds: nextCoveredClassIds,
       subjectId: activeEvent.subjectId,
       roomId: activeEvent.roomId,
       teacherId: activeEvent.teacherId,
     });
+    if (result.error) {
+      return;
+    }
     router.refresh();
   };
 
@@ -349,8 +360,13 @@ export function AdminScheduleView({
         lessonDurationByGroupSubject={lessonDurationByGroupSubject}
         onOpenChange={setIsEditorOpen}
         onSave={async (draft) => {
-          await createOrUpdateAdminScheduleTemplateAction(draft);
+          const result = await createOrUpdateAdminScheduleTemplateAction(draft);
+          if (result.error) {
+            return result.error;
+          }
+
           router.refresh();
+          return null;
         }}
       />
 
@@ -374,145 +390,11 @@ export function AdminScheduleView({
   );
 }
 
-function DraggableScheduleEventCard({
-  event,
-  isDimmed,
-  conflicts,
-  onEdit,
-  onDelete,
-}: {
-  event: AdminScheduleEvent;
-  isDimmed: boolean;
-  conflicts: EventConflict[];
-  onEdit: (event: AdminScheduleEvent) => void;
-  onDelete: (event: AdminScheduleEvent) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: event.id });
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Translate.toString(transform) }}
-      className={cn(isDragging && "opacity-70")}
-      {...listeners}
-      {...attributes}
-    >
-      <AdminScheduleEventCard
-        event={event}
-        isDimmed={isDimmed}
-        conflicts={conflicts}
-        showActions
-        forceFullDetails={event.detached}
-        onEdit={onEdit}
-        onDelete={onDelete}
-      />
-    </div>
-  );
-}
-
-function TemporaryScheduleArea({
-  events,
-  shouldDimByMetaFilters,
-  isEventHighlighted,
-  onCreate,
-  onEdit,
-  onDelete,
-}: {
-  events: AdminScheduleEvent[];
-  shouldDimByMetaFilters: boolean;
-  isEventHighlighted: (event: AdminScheduleEvent) => boolean;
-  onCreate: () => void;
-  onEdit: (event: AdminScheduleEvent) => void;
-  onDelete: (event: AdminScheduleEvent) => void;
-}) {
-  const { isOver, setNodeRef } = useDroppable({ id: PARKING_DROP_ID });
-
-  return (
-    <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
-      <div className="flex items-center justify-between border-b px-3 py-2">
-        <span className="text-sm font-semibold">Временная область</span>
-        <Button size="sm" variant="outline" onClick={onCreate}>
-          <Plus className="size-3.5" />
-          Добавить
-        </Button>
-      </div>
-      <div
-        ref={setNodeRef}
-        className={cn(
-          "min-h-[70vh] space-y-2 p-2",
-          isOver && "bg-primary/10",
-        )}
-      >
-        {events.map((event) => (
-          <DraggableScheduleEventCard
-            key={event.id}
-            event={event}
-            isDimmed={shouldDimByMetaFilters && !isEventHighlighted(event)}
-            conflicts={[]}
-            onEdit={onEdit}
-            onDelete={onDelete}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function GridDropOverlay({
-  dayKey,
-  rowId,
-  startMinutes,
-  endMinutes,
-  heightPx,
-}: {
-  dayKey: string;
-  rowId: string | null;
-  startMinutes: number;
-  endMinutes: number;
-  heightPx: number;
-}) {
-  if (!rowId) {
-    return null;
+function replaceProjectionClassId(classIds: string[], sourceClassId: string, targetClassId: string) {
+  if (sourceClassId === targetClassId || classIds.includes(targetClassId)) {
+    return classIds;
   }
 
-  const [year, month, day] = dayKey.split("-").map(Number);
-  const dayMap = ["mon", "tue", "wed", "thu", "fri"];
-  const dayIndex = new Date(year, (month ?? 1) - 1, day ?? 1).getDay();
-  const dayCode = dayMap[(dayIndex + 6) % 7] ?? "mon";
-
-  const slots: { id: string; top: number; height: number }[] = [];
-  const step = 15;
-  const minutesSpan = endMinutes - startMinutes;
-  const pxPerMinute = heightPx / Math.max(minutesSpan, 1);
-
-  for (let minutes = startMinutes; minutes < endMinutes; minutes += step) {
-    slots.push({
-      id: `slot:${dayCode}:${rowId}:${minutes}`,
-      top: (minutes - startMinutes) * pxPerMinute,
-      height: Math.max(step * pxPerMinute, 20),
-    });
-  }
-
-  return (
-    <div className="pointer-events-none absolute inset-0">
-      {slots.map((slot) => (
-        <DropSlot key={slot.id} id={slot.id} top={slot.top} height={slot.height} />
-      ))}
-    </div>
-  );
-}
-
-function DropSlot({ id, top, height }: { id: string; top: number; height: number }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "pointer-events-auto absolute inset-x-0 rounded-sm",
-        isOver && "bg-primary/20 ring-1 ring-primary/50",
-      )}
-      style={{ top, height }}
-    />
-  );
+  const next = classIds.map((classId) => (classId === sourceClassId ? targetClassId : classId));
+  return Array.from(new Set(next));
 }
