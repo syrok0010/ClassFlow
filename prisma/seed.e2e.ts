@@ -159,6 +159,17 @@ async function seedAuthAndUsers() {
       buildingId: parentScheduleBuilding.id,
     },
   });
+  await prisma.weeklyScheduleTemplate.create({
+    data: {
+      dayOfWeek: 1,
+      startTime: 9 * 60,
+      endTime: 9 * 60 + 45,
+      groupId: parentScheduleGroup.id,
+      subjectId: parentScheduleSubject.id,
+      teacherId: teacher.id,
+      roomId: parentScheduleRoom.id,
+    },
+  });
   const parentChildrenIds = [
     studentPortalProfile.id,
     ...duplicateStudentProfiles.map((student) => student.id),
