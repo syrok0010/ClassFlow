@@ -9,19 +9,31 @@ test.describe("Admin schedule entries", () => {
     await expect(page.getByTestId("sidebar-link-admin-schedule")).not.toHaveClass(/bg-primary/);
     await expect(page.getByText("Выберите группу, преподавателя или кабинет")).toBeVisible();
 
-    await page.getByPlaceholder("Выберите группу").fill("5 А");
+    const targetCombobox = page.getByPlaceholder("Выберите группу, преподавателя или кабинет");
+    await expect(targetCombobox).toBeEnabled();
+
+    await targetCombobox.fill("5 А");
     await page.locator('[data-slot="combobox-content"]').getByText("5 А").click();
     await expect(page.getByTestId("admin-schedule-card").filter({ hasText: "Математика" })).toBeVisible();
+    await expect(targetCombobox).toBeEnabled();
 
-    await page.getByRole("radio", { name: "Преподаватели" }).click();
-    await page.getByPlaceholder("Выберите преподавателя").fill("Иванов Иван Иванович");
+    const groupUrl = new URL(page.url());
+    expect(groupUrl.searchParams.get("targetId")).toBeTruthy();
+    expect(groupUrl.searchParams.get("scope")).toBeNull();
+
+    await targetCombobox.fill("Иванов Иван Иванович");
     await page.locator('[data-slot="combobox-content"]').getByText("Иванов Иван Иванович").click();
     await expect(page.getByTestId("admin-schedule-card").filter({ hasText: "Математика" })).toBeVisible();
+    await expect(targetCombobox).toBeEnabled();
 
-    await page.getByRole("radio", { name: "Кабинеты" }).click();
-    await page.getByPlaceholder("Выберите кабинет").fill("Кабинет 5А");
+    const teacherUrl = new URL(page.url());
+    expect(teacherUrl.searchParams.get("targetId")).toBeTruthy();
+    expect(teacherUrl.searchParams.get("scope")).toBe("teacher");
+
+    await targetCombobox.fill("Кабинет 5А");
     await page.locator('[data-slot="combobox-content"]').getByText("Кабинет 5А").click();
     await expect(page.getByTestId("admin-schedule-card").filter({ hasText: "Математика" })).toBeVisible();
+    await expect(targetCombobox).toBeEnabled();
 
     const targetId = new URL(page.url()).searchParams.get("targetId");
     expect(targetId).toBeTruthy();

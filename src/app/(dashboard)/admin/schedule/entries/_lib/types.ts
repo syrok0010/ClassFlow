@@ -26,3 +26,11 @@ export type GetAdminScheduleEntriesPageDataParams = {
     scope: AdminScheduleEntriesScope;
     targetId: string | null;
 };
+
+export type ScheduleTargetOption = {
+    id: string;
+    scope: AdminScheduleEntriesScope;
+    targetId: string;
+    label: string;
+    description: string;
+};

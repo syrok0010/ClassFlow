@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { useQueryState } from "nuqs";
 
@@ -14,29 +14,14 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox";
 import { Label } from "@/components/ui/label";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DEFAULT_SCHEDULE_VIEW, ReadonlyScheduleBrowser } from "@/features/schedule";
 
 import { AdminScheduleEventCard } from "../../_components/admin-schedule-event-card";
 import type {
-  AdminScheduleEntriesOption,
   AdminScheduleEntriesPageData,
   AdminScheduleEntriesScope,
+  ScheduleTargetOption
 } from "../_lib/types";
-
-type AdminScheduleEntriesViewProps = AdminScheduleEntriesPageData;
-
-const SCOPE_LABELS: Record<AdminScheduleEntriesScope, string> = {
-  group: "Группы",
-  teacher: "Преподаватели",
-  room: "Кабинеты",
-};
-
-const SCOPE_PLACEHOLDERS: Record<AdminScheduleEntriesScope, string> = {
-  group: "Выберите группу",
-  teacher: "Выберите преподавателя",
-  room: "Выберите кабинет",
-};
 
 export function AdminScheduleEntriesView({
   anchorDate,
@@ -47,83 +32,88 @@ export function AdminScheduleEntriesView({
   selectedTarget,
   targetId,
   viewMode,
-}: AdminScheduleEntriesViewProps) {
-  const [isPending, startTransition] = useTransition();
+}: AdminScheduleEntriesPageData) {
   const [currentScope, setCurrentScope] = useQueryState("scope", {
     defaultValue: scope,
     shallow: false,
-    startTransition,
   });
   const [currentTargetId, setCurrentTargetId] = useQueryState("targetId", {
     defaultValue: targetId ?? "",
     shallow: false,
-    startTransition,
   });
+  const [targetInputValue, setTargetInputValue] = useState(
+    selectedTarget?.label ?? "",
+  );
 
   const optimisticScope = parseScope(currentScope);
-  const currentOptions = options[optimisticScope];
-  const optimisticSelectedTarget = useMemo(
-    () => currentOptions.find((option) => option.id === currentTargetId) ?? null,
-    [currentOptions, currentTargetId],
+  const targetOptions = useMemo(
+    () => buildTargetOptions(options),
+    [options],
   );
-  const isRefreshing =
-    isPending ||
-    optimisticScope !== scope ||
-    (currentTargetId || null) !== (targetId ?? null);
-  const visibleSelectedTarget = optimisticSelectedTarget ?? selectedTarget;
+  const filteredTargetOptions = useMemo(
+    () => filterTargetOptions(targetOptions, targetInputValue),
+    [targetInputValue, targetOptions],
+  );
+  const optimisticSelectedTarget = useMemo(
+    () =>
+      targetOptions.find(
+        (option) =>
+          option.scope === optimisticScope && option.targetId === currentTargetId,
+      ) ?? null,
+    [currentTargetId, optimisticScope, targetOptions],
+  );
+  const confirmedSelectedTarget = useMemo(
+    () =>
+      targetOptions.find(
+        (option) => option.scope === scope && option.targetId === targetId,
+      ) ?? null,
+    [scope, targetId, targetOptions],
+  );
+  const visibleSelectedTarget = optimisticSelectedTarget ?? confirmedSelectedTarget;
+  const comboboxValue =
+    visibleSelectedTarget && targetInputValue === visibleSelectedTarget.label
+      ? visibleSelectedTarget
+      : null;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-3 text-card-foreground shadow-sm">
-        <div className="overflow-x-auto pb-1">
-          <SegmentedControl
-            value={optimisticScope}
-            onChange={(nextScope) => {
-              void setCurrentTargetId(null);
-              void setCurrentScope(nextScope === "group" ? null : nextScope);
-            }}
-            options={[
-              { value: "group", label: SCOPE_LABELS.group, disabled: isRefreshing },
-              { value: "teacher", label: SCOPE_LABELS.teacher, disabled: isRefreshing },
-              { value: "room", label: SCOPE_LABELS.room, disabled: isRefreshing },
-            ]}
-            size="sm"
-          />
-        </div>
-
         <div className="grid gap-1.5 sm:max-w-md">
-          <Label htmlFor="admin-schedule-entries-target">
-            {SCOPE_LABELS[optimisticScope]}
-          </Label>
+          <Label htmlFor="admin-schedule-entries-target">Объект расписания</Label>
           <Combobox
-            items={currentOptions}
+            items={targetOptions}
+            filteredItems={filteredTargetOptions}
             itemToStringLabel={(item) => item.label}
             itemToStringValue={(item) => item.id}
-            value={visibleSelectedTarget}
+            inputValue={targetInputValue}
+            onInputValueChange={setTargetInputValue}
+            value={comboboxValue}
             onValueChange={(value) => {
               const nextValue = normalizeComboboxValue(value);
-              void setCurrentTargetId(nextValue?.id ?? null);
+              setTargetInputValue(nextValue?.label ?? "");
+              void setCurrentScope(
+                nextValue && nextValue.scope !== "group" ? nextValue.scope : null,
+              );
+              void setCurrentTargetId(nextValue?.targetId ?? null);
             }}
           >
             <ComboboxInput
               id="admin-schedule-entries-target"
-              placeholder={SCOPE_PLACEHOLDERS[optimisticScope]}
-              disabled={isRefreshing}
+              placeholder="Выберите группу, преподавателя или кабинет"
+              onFocus={(event) => event.currentTarget.select()}
               showClear
             />
             <ComboboxContent className="w-80 bg-white p-0">
               <ComboboxEmpty className="py-3">Ничего не найдено</ComboboxEmpty>
               <ComboboxList>
                 <ComboboxCollection>
-                  {(option: AdminScheduleEntriesOption) => (
+                  {(option: ScheduleTargetOption) => (
                     <ComboboxItem key={option.id} value={option}>
                       <div className="min-w-0">
                         <div className="truncate">{option.label}</div>
-                        {option.description ? (
-                          <div className="truncate text-xs text-muted-foreground">
-                            {option.description}
-                          </div>
-                        ) : null}
+                        <div className="truncate text-xs text-muted-foreground">
+                          {option.description}
+                        </div>
                       </div>
                     </ComboboxItem>
                   )}
@@ -159,9 +149,54 @@ function parseScope(value: string | null): AdminScheduleEntriesScope {
   return value === "teacher" || value === "room" ? value : "group";
 }
 
+function buildTargetOptions(
+  options: AdminScheduleEntriesPageData["options"],
+): ScheduleTargetOption[] {
+  return [
+    ...options.group.map((option) => ({
+      id: `group:${option.id}`,
+      scope: "group" as const,
+      targetId: option.id,
+      label: option.label,
+      description: `Группа${option.description ? ` · ${option.description}` : ""}`,
+    })),
+    ...options.teacher.map((option) => ({
+      id: `teacher:${option.id}`,
+      scope: "teacher" as const,
+      targetId: option.id,
+      label: option.label,
+      description: "Преподаватель",
+    })),
+    ...options.room.map((option) => ({
+      id: `room:${option.id}`,
+      scope: "room" as const,
+      targetId: option.id,
+      label: option.label,
+      description: `Кабинет${option.description ? ` · ${option.description}` : ""}`,
+    })),
+  ];
+}
+
+function filterTargetOptions(
+  options: ScheduleTargetOption[],
+  query: string,
+): ScheduleTargetOption[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase("ru");
+
+  if (!normalizedQuery) {
+    return options;
+  }
+
+  return options.filter((option) =>
+    `${option.label} ${option.description}`
+      .toLocaleLowerCase("ru")
+      .includes(normalizedQuery),
+  );
+}
+
 function normalizeComboboxValue(
-  value: AdminScheduleEntriesOption | AdminScheduleEntriesOption[] | null,
-): AdminScheduleEntriesOption | null {
+  value: ScheduleTargetOption | ScheduleTargetOption[] | null,
+): ScheduleTargetOption | null {
   if (Array.isArray(value)) {
     return value[0] ?? null;
   }
