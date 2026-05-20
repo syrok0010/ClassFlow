@@ -83,6 +83,23 @@ async function seedAuthAndUsers() {
     },
   });
 
+  const scheduleTeacherUser = await prisma.user.create({
+    data: {
+      email: "schedule-teacher@classflow.local",
+      role: "USER",
+      status: "ACTIVE",
+      name: "Мария",
+      surname: "Расписанова",
+      patronymicName: "Игоревна",
+    },
+  });
+  const scheduleTeacher = await prisma.teacher.create({
+    data: {
+      id: "e2e-schedule-teacher-profile",
+      userId: scheduleTeacherUser.id,
+    },
+  });
+
   const parentUser = await prisma.user.create({
     data: {
       email: "parent1@classflow.local",
@@ -161,7 +178,7 @@ async function seedAuthAndUsers() {
   });
   await prisma.teacherSubject.create({
     data: {
-      teacherId: teacher.id,
+      teacherId: scheduleTeacher.id,
       subjectId: parentScheduleSubject.id,
       minGrade: 5,
       maxGrade: 5,
@@ -190,7 +207,7 @@ async function seedAuthAndUsers() {
       deliveryMode: "DIRECT_GROUP",
       deliveryGroupId: parentScheduleGroup.id,
       subjectId: parentScheduleSubject.id,
-      teacherId: teacher.id,
+      teacherId: scheduleTeacher.id,
       roomId: parentScheduleRoom.id,
     },
   });
@@ -222,7 +239,7 @@ async function seedAuthAndUsers() {
       deliveryGroupId: parentScheduleGroup.id,
       attendanceLoadMode: "DELIVERY_GROUP_SIZE",
       roomId: parentScheduleRoom.id,
-      teacherId: teacher.id,
+      teacherId: scheduleTeacher.id,
       subjectId: parentScheduleSubject.id,
     },
   });

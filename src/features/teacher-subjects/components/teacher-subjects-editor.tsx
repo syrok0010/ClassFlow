@@ -61,15 +61,16 @@ export function TeacherSubjectsEditor({
   const visibleRows = useMemo(
     () =>
       filterAndSortTeacherSubjects(rows, {
-        search: searchQuery,
+        search: searchInput,
         typeFilter: safeFilterType,
       }),
-    [rows, searchQuery, safeFilterType]
+    [rows, searchInput, safeFilterType]
   );
 
-  const hasActiveFilters = Boolean(searchQuery) || safeFilterType !== "ALL";
+  const hasActiveFilters = Boolean(searchInput.trim()) || safeFilterType !== "ALL";
 
   const resetFilters = () => {
+    setSearchInput("");
     void setSearchQuery(null);
     void setFilterType(null);
   };
