@@ -4,6 +4,7 @@ import {addDays, addMinutes, eachDayOfInterval, format, getISODay, startOfDay} f
 import { revalidatePath } from "next/cache";
 
 import { Prisma } from "@/generated/prisma/client";
+import type { AttendanceLoadMode, ScheduleDeliveryMode } from "@/generated/prisma/enums";
 import { getActionErrorMessage } from "@/lib/action-error";
 import { prisma } from "@/lib/prisma";
 import { err, ok, type Result } from "@/lib/result";
@@ -37,10 +38,32 @@ type WeeklyScheduleTemplateRow = {
   dayOfWeek: number;
   startTime: number;
   endTime: number;
-  groupId: string;
+  deliveryMode: ScheduleDeliveryMode;
+  deliveryGroupId: string | null;
+  attendanceLoadModeOverride: AttendanceLoadMode | null;
   roomId: string | null;
   teacherId: string | null;
   subjectId: string;
+  subject: {
+    defaultAttendanceLoadMode: AttendanceLoadMode;
+  };
+  coveredClasses: Array<{
+    classGroupId: string;
+  }>;
+};
+
+type ScheduleEntryDraft = {
+  templateId: string;
+  date: Date;
+  startTime: Date;
+  endTime: Date;
+  deliveryMode: ScheduleDeliveryMode;
+  deliveryGroupId: string | null;
+  attendanceLoadMode: AttendanceLoadMode;
+  roomId: string | null;
+  teacherId: string | null;
+  subjectId: string;
+  coveredClassIds: string[];
 };
 
 export async function getWeeklyScheduleTemplateApplyPreviewAction(
@@ -88,6 +111,23 @@ export async function applyWeeklyScheduleTemplateAction(
     );
 
     const templates = await prisma.weeklyScheduleTemplate.findMany({
+      where: {
+        dayOfWeek: { not: null },
+        startTime: { not: null },
+        endTime: { not: null },
+      },
+      include: {
+        subject: {
+          select: {
+            defaultAttendanceLoadMode: true,
+          },
+        },
+        coveredClasses: {
+          select: {
+            classGroupId: true,
+          },
+        },
+      },
       orderBy: [
         { dayOfWeek: "asc" },
         { startTime: "asc" },
@@ -100,7 +140,19 @@ export async function applyWeeklyScheduleTemplateAction(
       return err("Недельный шаблон расписания пуст");
     }
 
-    const entriesToCreate = buildScheduleEntriesFromTemplates(templates, startDate, endDate);
+    const scheduledTemplates: WeeklyScheduleTemplateRow[] = templates.flatMap((template) => {
+      if (template.dayOfWeek === null || template.startTime === null || template.endTime === null) {
+        return [];
+      }
+
+      return [{
+        ...template,
+        dayOfWeek: template.dayOfWeek,
+        startTime: template.startTime,
+        endTime: template.endTime,
+      }];
+    });
+    const entriesToCreate = buildScheduleEntriesFromTemplates(scheduledTemplates, startDate, endDate);
 
     const result = await prisma.$transaction(async (tx) => {
       const deleted = await tx.scheduleEntry.deleteMany({
@@ -119,13 +171,32 @@ export async function applyWeeklyScheduleTemplateAction(
         };
       }
 
-      const created = await tx.scheduleEntry.createMany({
-        data: entriesToCreate,
-      });
+      for (const entry of entriesToCreate) {
+        await tx.scheduleEntry.create({
+          data: {
+            templateId: entry.templateId,
+            date: entry.date,
+            startTime: entry.startTime,
+            endTime: entry.endTime,
+            deliveryMode: entry.deliveryMode,
+            deliveryGroupId: entry.deliveryGroupId,
+            attendanceLoadMode: entry.attendanceLoadMode,
+            roomId: entry.roomId,
+            teacherId: entry.teacherId,
+            subjectId: entry.subjectId,
+            coveredClasses:
+              entry.coveredClassIds.length > 0
+                ? {
+                    create: entry.coveredClassIds.map((classGroupId) => ({ classGroupId })),
+                  }
+                : undefined,
+          },
+        });
+      }
 
       return {
         deletedEntriesCount: deleted.count,
-        createdEntriesCount: created.count,
+        createdEntriesCount: entriesToCreate.length,
       };
     });
 
@@ -147,7 +218,7 @@ function buildScheduleEntriesFromTemplates(
     templates: WeeklyScheduleTemplateRow[],
     startDate: Date,
     endDate: Date,
-): Prisma.ScheduleEntryCreateManyInput[] {
+): ScheduleEntryDraft[] {
 
   const templatesByDay = templates.reduce(
       (acc, template) => {
@@ -168,10 +239,13 @@ function buildScheduleEntriesFromTemplates(
       date: dayStart,
       startTime: addMinutes(dayStart, template.startTime),
       endTime: addMinutes(dayStart, template.endTime),
-      groupId: template.groupId,
+      deliveryMode: template.deliveryMode,
+      deliveryGroupId: template.deliveryGroupId,
+      attendanceLoadMode: template.attendanceLoadModeOverride ?? template.subject.defaultAttendanceLoadMode,
       roomId: template.roomId,
       teacherId: template.teacherId,
       subjectId: template.subjectId,
+      coveredClassIds: template.coveredClasses.map((coveredClass) => coveredClass.classGroupId),
     }));
   });
 }

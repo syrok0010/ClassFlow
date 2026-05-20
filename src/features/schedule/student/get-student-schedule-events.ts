@@ -37,19 +37,36 @@ export async function getStudentScheduleEvents({
     },
     select: {
       groupId: true,
+      group: {
+        select: {
+          type: true,
+        },
+      },
     },
   });
 
   const groupIds = studentGroups.map((membership) => membership.groupId);
+  const classId = studentGroups.find((membership) => membership.group.type === "CLASS")?.groupId ?? null;
 
-  if (groupIds.length === 0) {
+  if (groupIds.length === 0 || !classId) {
     return { events: [] };
   }
 
   const { rangeStart, rangeEnd } = getScheduleRange(anchorDate, viewMode);
   const scheduleEntries = await prisma.scheduleEntry.findMany({
     where: {
-      groupId: { in: groupIds },
+      OR: [
+        {
+          deliveryGroupId: { in: groupIds },
+        },
+        {
+          coveredClasses: {
+            some: {
+              classGroupId: classId,
+            },
+          },
+        },
+      ],
       startTime: {
         gte: rangeStart,
         lt: rangeEnd,

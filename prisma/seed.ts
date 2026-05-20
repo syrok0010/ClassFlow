@@ -31,9 +31,31 @@ function dateAtMinutes(baseDate: Date, minutesFromMidnight: number) {
   return date;
 }
 
+function getDefaultAttendanceLoadMode(
+  subjectName: string,
+  subjectType: string,
+) {
+  if (subjectType === "ELECTIVE_REQUIRED") {
+    return "AFTERSCHOOL_COEFFICIENT" as const;
+  }
+
+  if (subjectType !== "REGIME") {
+    return "DELIVERY_GROUP_SIZE" as const;
+  }
+
+  if (subjectName === "Завтрак" || subjectName === "Обед" || subjectName === "Полдник") {
+    return "FULL_CLASS_SIZE" as const;
+  }
+
+  return "AFTERSCHOOL_COEFFICIENT" as const;
+}
+
 async function main() {
   console.log("Clearing existing data...");
+  await prisma.scheduleEntryCoveredClass.deleteMany();
   await prisma.scheduleEntry.deleteMany();
+  await prisma.weeklyTemplateCoveredClass.deleteMany();
+  await prisma.weeklyTemplateOpenClass.deleteMany();
   await prisma.weeklyScheduleTemplate.deleteMany();
   await prisma.teacherAvailabilityOverride.deleteMany();
   await prisma.teacherAvailability.deleteMany();
@@ -112,6 +134,7 @@ async function main() {
       data: {
         name: subject.name,
         type: subject.type,
+        defaultAttendanceLoadMode: getDefaultAttendanceLoadMode(subject.name, subject.type),
       },
     });
     subjectByName[subject.name] = created.id;
@@ -422,7 +445,8 @@ async function main() {
     ],
   });
 
-  type TemplateSeed = {
+  type DirectTemplateSeed = {
+    deliveryMode: "DIRECT_GROUP";
     dayOfWeek: number;
     start: string;
     end: string;
@@ -430,8 +454,22 @@ async function main() {
     subjectName: string;
     roomId: string | null;
     teacherId: string | null;
-    grade: number;
+    grades: number[];
   };
+
+  type SharedTemplateSeed = {
+    deliveryMode: "SHARED_CLASSES";
+    dayOfWeek: number;
+    start: string;
+    end: string;
+    coveredClassIds: string[];
+    subjectName: string;
+    roomId: string | null;
+    teacherId: string | null;
+    grades: number[];
+  };
+
+  type TemplateSeed = DirectTemplateSeed | SharedTemplateSeed;
 
   const weeklyTemplateSeed: TemplateSeed[] = [];
 
@@ -445,7 +483,40 @@ async function main() {
     teacherId: string | null,
     grade: number,
   ) => {
-    weeklyTemplateSeed.push({ dayOfWeek, start, end, groupId, subjectName, roomId, teacherId, grade });
+    weeklyTemplateSeed.push({
+      deliveryMode: "DIRECT_GROUP",
+      dayOfWeek,
+      start,
+      end,
+      groupId,
+      subjectName,
+      roomId,
+      teacherId,
+      grades: [grade],
+    });
+  };
+
+  const addSharedTemplate = (
+    dayOfWeek: number,
+    start: string,
+    end: string,
+    coveredClassIds: string[],
+    subjectName: string,
+    roomId: string | null,
+    teacherId: string | null,
+    grades: number[],
+  ) => {
+    weeklyTemplateSeed.push({
+      deliveryMode: "SHARED_CLASSES",
+      dayOfWeek,
+      start,
+      end,
+      coveredClassIds,
+      subjectName,
+      roomId,
+      teacherId,
+      grades,
+    });
   };
 
   // 3A schedule
@@ -527,7 +598,7 @@ async function main() {
   addTemplate(5, "15:00", "15:15", class3.id, "Полдник", null, null, 3);
   addTemplate(5, "15:15", "16:00", class3.id, "ДЗ", roomByKey.AFTERSCHOOL_3, teacherByKey.C3_HOMEWORK, 3);
   addTemplate(5, "16:15", "17:00", class3.id, "Шахматы и шашки", roomByKey.MEDIA, teacherByKey.C3_CHESS, 3);
-  addTemplate(5, "17:00", "18:00", class3.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
+  addSharedTemplate(5, "17:00", "18:00", [class3.id, class4.id], "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, [3, 4]);
 
   // 6A schedule + fixed meal slots
   for (const dayOfWeek of [1, 2, 3, 4, 5]) {
@@ -583,28 +654,185 @@ async function main() {
   addTemplate(5, "14:05", "15:00", class6Subgroup2.id, "Рукоделие", roomByKey.CRAFT, teacherByKey.C6_CRAFT, 6);
   addTemplate(5, "15:15", "16:00", class6.id, "Театр", roomByKey.THEATER, teacherByKey.C6_THEATER, 6);
 
-  const teacherSubjectRows = new Map<string, { teacherId: string; subjectId: string; minGrade: number; maxGrade: number }>();
-  for (const lesson of weeklyTemplateSeed) {
-    if (!lesson.teacherId) {
-      continue;
+  const subjectTypeByName = new Map<string, string>(subjectSeed.map((subject) => [subject.name, subject.type]));
+  const subjectTypeById = new Map<string, string>(
+    subjectSeed.map((subject) => [subjectByName[subject.name], subject.type]),
+  );
+  const groupInfoById = new Map(
+    (await prisma.group.findMany({
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        grade: true,
+        parentId: true,
+        subjectId: true,
+      },
+    })).map((group) => [group.id, group]),
+  );
+
+  const getOwningClassId = (groupId: string) => {
+    const group = groupInfoById.get(groupId);
+    if (!group) {
+      throw new Error(`Unknown group ${groupId}`);
     }
 
-    const subjectId = subjectByName[lesson.subjectName];
-    const key = `${lesson.teacherId}:${subjectId}`;
-    const existing = teacherSubjectRows.get(key);
+    if (group.type === "SUBJECT_SUBGROUP" && group.parentId) {
+      return group.parentId;
+    }
 
-    if (!existing) {
-      teacherSubjectRows.set(key, {
-        teacherId: lesson.teacherId,
+    return group.id;
+  };
+
+  const reusableElectiveGroupByKey = new Map<string, string>([
+    [`${class3.id}:${subjectByName["Шахматы и шашки"]}`, electiveChess.id],
+    [`${class6.id}:${subjectByName["Журналистика"]}`, electiveMedia.id],
+  ]);
+  const electiveOfferingGroupByKey = new Map(reusableElectiveGroupByKey);
+
+  const ensureElectiveOfferingGroup = async (classId: string, subjectName: string) => {
+    const subjectId = subjectByName[subjectName];
+    const key = `${classId}:${subjectId}`;
+    const existing = electiveOfferingGroupByKey.get(key);
+
+    if (existing) {
+      return existing;
+    }
+
+    const classInfo = groupInfoById.get(classId);
+    if (!classInfo) {
+      throw new Error(`Class ${classId} not found for elective offering`);
+    }
+
+    const created = await prisma.group.create({
+      data: {
+        name: `${subjectName} • ${classInfo.name}`,
+        type: "ELECTIVE_GROUP",
+        grade: classInfo.grade,
         subjectId,
-        minGrade: lesson.grade,
-        maxGrade: lesson.grade,
+      },
+    });
+
+    electiveOfferingGroupByKey.set(key, created.id);
+    groupInfoById.set(created.id, {
+      id: created.id,
+      name: created.name,
+      type: created.type,
+      grade: created.grade,
+      parentId: created.parentId,
+      subjectId: created.subjectId,
+    });
+
+    return created.id;
+  };
+
+  type NormalizedTemplateSeed = {
+    dayOfWeek: number;
+    startTime: number;
+    endTime: number;
+    subjectId: string;
+    teacherId: string | null;
+    roomId: string | null;
+    deliveryMode: "DIRECT_GROUP" | "ELECTIVE_GROUP" | "SHARED_CLASSES";
+    deliveryGroupId: string | null;
+    openClassIds: string[];
+    coveredClassIds: string[];
+    requirementGroupIds: string[];
+    grades: number[];
+  };
+
+  const normalizedTemplateSeeds: NormalizedTemplateSeed[] = [];
+
+  for (const lesson of weeklyTemplateSeed) {
+    const subjectId = subjectByName[lesson.subjectName];
+    const subjectType = subjectTypeByName.get(lesson.subjectName);
+
+    if (!subjectType) {
+      throw new Error(`Unknown subject type for ${lesson.subjectName}`);
+    }
+
+    if (lesson.deliveryMode === "SHARED_CLASSES") {
+      normalizedTemplateSeeds.push({
+        dayOfWeek: lesson.dayOfWeek,
+        startTime: toMinutes(lesson.start),
+        endTime: toMinutes(lesson.end),
+        subjectId,
+        teacherId: lesson.teacherId,
+        roomId: lesson.roomId,
+        deliveryMode: "SHARED_CLASSES",
+        deliveryGroupId: null,
+        openClassIds: [],
+        coveredClassIds: lesson.coveredClassIds,
+        requirementGroupIds: subjectType === "REGIME" ? [] : lesson.coveredClassIds,
+        grades: lesson.grades,
       });
       continue;
     }
 
-    existing.minGrade = Math.min(existing.minGrade, lesson.grade);
-    existing.maxGrade = Math.max(existing.maxGrade, lesson.grade);
+    if (subjectType === "ELECTIVE_OPTIONAL") {
+      const classId = getOwningClassId(lesson.groupId);
+      const electiveGroupId = await ensureElectiveOfferingGroup(classId, lesson.subjectName);
+      const openClassIds =
+        electiveGroupId === electiveChess.id
+          ? [class3.id, class6.id]
+          : [classId];
+
+      normalizedTemplateSeeds.push({
+        dayOfWeek: lesson.dayOfWeek,
+        startTime: toMinutes(lesson.start),
+        endTime: toMinutes(lesson.end),
+        subjectId,
+        teacherId: lesson.teacherId,
+        roomId: lesson.roomId,
+        deliveryMode: "ELECTIVE_GROUP",
+        deliveryGroupId: electiveGroupId,
+        openClassIds,
+        coveredClassIds: [],
+        requirementGroupIds: [electiveGroupId],
+        grades: lesson.grades,
+      });
+      continue;
+    }
+
+    normalizedTemplateSeeds.push({
+      dayOfWeek: lesson.dayOfWeek,
+      startTime: toMinutes(lesson.start),
+      endTime: toMinutes(lesson.end),
+      subjectId,
+      teacherId: lesson.teacherId,
+      roomId: lesson.roomId,
+      deliveryMode: "DIRECT_GROUP",
+      deliveryGroupId: lesson.groupId,
+      openClassIds: [],
+      coveredClassIds: [],
+      requirementGroupIds: subjectType === "REGIME" ? [] : [lesson.groupId],
+      grades: lesson.grades,
+    });
+  }
+
+  const teacherSubjectRows = new Map<string, { teacherId: string; subjectId: string; minGrade: number; maxGrade: number }>();
+  for (const lesson of normalizedTemplateSeeds) {
+    if (!lesson.teacherId) {
+      continue;
+    }
+
+    const key = `${lesson.teacherId}:${lesson.subjectId}`;
+    const existing = teacherSubjectRows.get(key);
+    const minGrade = Math.min(...lesson.grades);
+    const maxGrade = Math.max(...lesson.grades);
+
+    if (!existing) {
+      teacherSubjectRows.set(key, {
+        teacherId: lesson.teacherId,
+        subjectId: lesson.subjectId,
+        minGrade,
+        maxGrade,
+      });
+      continue;
+    }
+
+    existing.minGrade = Math.min(existing.minGrade, minGrade);
+    existing.maxGrade = Math.max(existing.maxGrade, maxGrade);
   }
 
   const widenTeacherSubject = (teacherKey: string, subjectName: string, minGrade: number, maxGrade: number) => {
@@ -658,15 +886,14 @@ async function main() {
   });
 
   const roomSubjectRows = new Map<string, { roomId: string; subjectId: string }>();
-  for (const lesson of weeklyTemplateSeed) {
+  for (const lesson of normalizedTemplateSeeds) {
     if (!lesson.roomId) {
       continue;
     }
 
-    const subjectId = subjectByName[lesson.subjectName];
-    const key = `${lesson.roomId}:${subjectId}`;
+    const key = `${lesson.roomId}:${lesson.subjectId}`;
     if (!roomSubjectRows.has(key)) {
-      roomSubjectRows.set(key, { roomId: lesson.roomId, subjectId });
+      roomSubjectRows.set(key, { roomId: lesson.roomId, subjectId: lesson.subjectId });
     }
   }
 
@@ -674,34 +901,35 @@ async function main() {
     data: Array.from(roomSubjectRows.values()),
   });
 
-  const weeklyRows = weeklyTemplateSeed.map((lesson) => ({
-    dayOfWeek: lesson.dayOfWeek,
-    startTime: toMinutes(lesson.start),
-    endTime: toMinutes(lesson.end),
-    groupId: lesson.groupId,
-    subjectId: subjectByName[lesson.subjectName],
-    teacherId: lesson.teacherId,
-    roomId: lesson.roomId,
-  }));
-
-  await prisma.weeklyScheduleTemplate.createMany({ data: weeklyRows });
-
-  const groupRows = await prisma.group.findMany({
-    where: {
-      id: {
-        in: [class3.id, class6.id, class3Subgroup1.id, class3Subgroup2.id, class6Subgroup1.id, class6Subgroup2.id],
+  const createdTemplateIds: string[] = [];
+  for (const lesson of normalizedTemplateSeeds) {
+    const created = await prisma.weeklyScheduleTemplate.create({
+      data: {
+        dayOfWeek: lesson.dayOfWeek,
+        startTime: lesson.startTime,
+        endTime: lesson.endTime,
+        subjectId: lesson.subjectId,
+        teacherId: lesson.teacherId,
+        roomId: lesson.roomId,
+        deliveryMode: lesson.deliveryMode,
+        deliveryGroupId: lesson.deliveryGroupId,
+        openClasses:
+          lesson.openClassIds.length > 0
+            ? {
+                create: lesson.openClassIds.map((classGroupId) => ({ classGroupId })),
+              }
+            : undefined,
+        coveredClasses:
+          lesson.coveredClassIds.length > 0
+            ? {
+                create: lesson.coveredClassIds.map((classGroupId) => ({ classGroupId })),
+              }
+            : undefined,
       },
-    },
-    select: { id: true, grade: true },
-  });
-  const gradeByGroupId = new Map(groupRows.map((group) => [group.id, group.grade ?? 0]));
+    });
 
-  const subjectTypeById = new Map(
-    Object.entries(subjectByName).map(([subjectName, subjectId]) => {
-      const subject = subjectSeed.find((item) => item.name === subjectName);
-      return [subjectId, subject?.type ?? "ACADEMIC"];
-    }),
-  );
+    createdTemplateIds.push(created.id);
+  }
 
   const requirementRows = new Map<string, {
     groupId: string;
@@ -727,33 +955,36 @@ async function main() {
     });
   };
 
-  for (const row of weeklyRows) {
-    const grade = gradeByGroupId.get(row.groupId);
-    if (grade !== 3 && grade !== 6) {
-      continue;
-    }
+  for (const lesson of normalizedTemplateSeeds) {
+    const subjectType = subjectTypeById.get(lesson.subjectId);
 
-    const subjectType = subjectTypeById.get(row.subjectId);
     if (subjectType === "REGIME") {
       continue;
     }
 
-    const key = `${row.groupId}:${row.subjectId}`;
-    const duration = row.endTime - row.startTime;
-    const existing = requirementRows.get(key);
+    for (const requirementGroupId of lesson.requirementGroupIds) {
+      const groupInfo = groupInfoById.get(requirementGroupId);
+      if (!groupInfo || (groupInfo.grade ?? 0) !== 3 && (groupInfo.grade ?? 0) !== 6) {
+        continue;
+      }
 
-    if (!existing) {
-      requirementRows.set(key, {
-        groupId: row.groupId,
-        subjectId: row.subjectId,
-        lessonsPerWeek: 1,
-        durationInMinutes: duration,
-        breakDuration: 0,
-      });
-      continue;
+      const key = `${requirementGroupId}:${lesson.subjectId}`;
+      const duration = lesson.endTime - lesson.startTime;
+      const existing = requirementRows.get(key);
+
+      if (!existing) {
+        requirementRows.set(key, {
+          groupId: requirementGroupId,
+          subjectId: lesson.subjectId,
+          lessonsPerWeek: 1,
+          durationInMinutes: duration,
+          breakDuration: 0,
+        });
+        continue;
+      }
+
+      existing.lessonsPerWeek += 1;
     }
-
-    existing.lessonsPerWeek += 1;
   }
 
   const commonRegime = [
@@ -822,8 +1053,20 @@ async function main() {
 
   const createdTemplates = await prisma.weeklyScheduleTemplate.findMany({
     where: {
-      groupId: {
-        in: [class3.id, class6.id, class3Subgroup1.id, class3Subgroup2.id, class6Subgroup1.id, class6Subgroup2.id],
+      id: {
+        in: createdTemplateIds,
+      },
+    },
+    include: {
+      subject: {
+        select: {
+          defaultAttendanceLoadMode: true,
+        },
+      },
+      coveredClasses: {
+        select: {
+          classGroupId: true,
+        },
       },
     },
   });
@@ -833,22 +1076,37 @@ async function main() {
   monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
   monday.setHours(0, 0, 0, 0);
 
-  await prisma.scheduleEntry.createMany({
-    data: createdTemplates.map((template) => {
-      const date = new Date(monday);
-      date.setDate(monday.getDate() + (template.dayOfWeek - 1));
-      return {
+  for (const template of createdTemplates) {
+    if (template.dayOfWeek === null || template.startTime === null || template.endTime === null) {
+      continue;
+    }
+
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + (template.dayOfWeek - 1));
+
+    await prisma.scheduleEntry.create({
+      data: {
         templateId: template.id,
         date,
         startTime: dateAtMinutes(date, template.startTime),
         endTime: dateAtMinutes(date, template.endTime),
-        groupId: template.groupId,
-        roomId: template.roomId,
-        teacherId: template.teacherId,
         subjectId: template.subjectId,
-      };
-    }),
-  });
+        teacherId: template.teacherId,
+        roomId: template.roomId,
+        deliveryMode: template.deliveryMode,
+        deliveryGroupId: template.deliveryGroupId,
+        attendanceLoadMode: template.attendanceLoadModeOverride ?? template.subject.defaultAttendanceLoadMode,
+        coveredClasses:
+          template.coveredClasses.length > 0
+            ? {
+                create: template.coveredClasses.map((coveredClass) => ({
+                  classGroupId: coveredClass.classGroupId,
+                })),
+              }
+            : undefined,
+      },
+    });
+  }
 
   console.log("Creating teacher availability data...");
 

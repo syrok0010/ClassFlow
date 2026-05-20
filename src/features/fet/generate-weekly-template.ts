@@ -91,7 +91,17 @@ export async function generateWeeklyScheduleTemplate(
 
     if (importedRows.length > 0) {
       await tx.weeklyScheduleTemplate.createMany({
-        data: importedRows,
+        data: importedRows.map((row) => ({
+          dayOfWeek: row.dayOfWeek,
+          startTime: row.startTime,
+          endTime: row.endTime,
+          subjectId: row.subjectId,
+          roomId: row.roomId,
+          teacherId: row.teacherId,
+          deliveryMode: "DIRECT_GROUP" as const,
+          deliveryGroupId: row.groupId,
+          attendanceLoadModeOverride: null,
+        })),
       });
     }
 

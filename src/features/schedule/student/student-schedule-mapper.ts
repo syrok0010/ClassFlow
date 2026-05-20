@@ -15,15 +15,22 @@ export const studentScheduleEntryInclude = {
     },
   },
   room: { select: { id: true, name: true } },
-  group: { select: { id: true, name: true, type: true } },
-  template: {
+  deliveryGroup: {
     select: {
       id: true,
-      startTime: true,
-      endTime: true,
-      teacherId: true,
-      roomId: true,
-      subjectId: true,
+      name: true,
+      type: true,
+    },
+  },
+  coveredClasses: {
+    select: {
+      schoolClass: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+        },
+      },
     },
   },
 } satisfies Prisma.ScheduleEntryInclude;
@@ -42,6 +49,9 @@ export function mapScheduleEntryToStudentScheduleEvent(
     ? getUserFullName(entry.teacher.user) || MISSING_TEACHER_LABEL
     : MISSING_TEACHER_LABEL;
   const roomName = entry.room?.name ?? MISSING_ROOM_LABEL;
+  const coveredClassNames = entry.coveredClasses.map((item) => item.schoolClass.name).sort((left, right) => left.localeCompare(right, "ru"));
+  const groupName = entry.deliveryGroup?.name ?? coveredClassNames.join(" + ");
+  const groupType = entry.deliveryGroup?.type ?? "CLASS";
 
   return {
     id: entry.id,
@@ -51,8 +61,8 @@ export function mapScheduleEntryToStudentScheduleEvent(
     subjectType: entry.subject.type as SubjectType,
     teacherName,
     roomName,
-    groupName: entry.group.name,
-    groupType: entry.group.type as GroupType,
+    groupName,
+    groupType: groupType as GroupType,
     timeLabel: `${format(entry.startTime, "HH:mm")}-${format(entry.endTime, "HH:mm")}`,
     metaLine: `${teacherName} • ${roomName}`,
   };
