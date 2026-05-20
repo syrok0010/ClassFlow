@@ -159,6 +159,29 @@ async function seedAuthAndUsers() {
       buildingId: parentScheduleBuilding.id,
     },
   });
+  await prisma.teacherSubject.create({
+    data: {
+      teacherId: teacher.id,
+      subjectId: parentScheduleSubject.id,
+      minGrade: 5,
+      maxGrade: 5,
+    },
+  });
+  await prisma.roomSubject.create({
+    data: {
+      roomId: parentScheduleRoom.id,
+      subjectId: parentScheduleSubject.id,
+    },
+  });
+  await prisma.groupSubjectRequirement.create({
+    data: {
+      groupId: parentScheduleGroup.id,
+      subjectId: parentScheduleSubject.id,
+      lessonsPerWeek: 5,
+      durationInMinutes: 45,
+      breakDuration: 10,
+    },
+  });
   await prisma.weeklyScheduleTemplate.create({
     data: {
       dayOfWeek: 1,
