@@ -11,12 +11,18 @@ import { SUBJECT_CARD_TONES, SUBJECT_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import type { AdminScheduleEvent } from "../_lib/admin-schedule-types";
-import type { EventConflict } from "./admin-schedule-conflicts";
+import {
+  getScheduleConflictFieldSeverities,
+  getScheduleConflictLevel as getConflictLevel,
+  type ScheduleConflict,
+  type ScheduleConflictField,
+  type ScheduleConflictSeverity,
+} from "../_lib/schedule-conflicts";
 
 interface AdminScheduleEventCardProps {
   event: AdminScheduleEvent;
   isDimmed?: boolean;
-  conflicts?: EventConflict[];
+  conflicts?: ScheduleConflict[];
   showActions?: boolean;
   forceFullDetails?: boolean;
   onEdit?: (event: AdminScheduleEvent) => void;
@@ -41,7 +47,9 @@ export function AdminScheduleEventCard({
   const displayGroupLabel = event.detached && groupLabel === "Весь класс" ? event.className : groupLabel;
   const cardLabel = `${event.subjectName}, ${event.timeLabel}, ${displayGroupLabel}, ${event.roomName}, ${event.teacherName}`;
   const conflictLevel = getConflictLevel(conflicts);
-  const conflictFields = new Set(conflicts.flatMap((conflict) => conflict.fields));
+  const fieldSeverities = getScheduleConflictFieldSeverities(conflicts);
+  const hardConflicts = conflicts.filter((conflict) => conflict.severity === "hard");
+  const warningConflicts = conflicts.filter((conflict) => conflict.severity === "warning");
 
   if (isDimmed) {
     return (
@@ -59,7 +67,7 @@ export function AdminScheduleEventCard({
           layout={layout}
           isDimmed
           conflictLevel={conflictLevel}
-          conflictFields={conflictFields}
+          fieldSeverities={fieldSeverities}
         />
       </div>
     );
@@ -82,7 +90,7 @@ export function AdminScheduleEventCard({
           layout={layout}
           isDimmed={isDimmed}
           conflictLevel={conflictLevel}
-          conflictFields={conflictFields}
+          fieldSeverities={fieldSeverities}
           showActions={showActions}
           onEdit={onEdit}
           onDelete={onDelete}
@@ -95,11 +103,11 @@ export function AdminScheduleEventCard({
         align="start"
         side="right"
         sideOffset={8}
-        className="block w-80 max-w-none gap-0 bg-popover p-0 text-popover-foreground shadow-md"
+        className="block w-96 max-w-none gap-0 bg-popover p-0 text-popover-foreground shadow-md"
       >
         <div
           className={cn(
-            "flex min-h-full flex-col gap-2 rounded-lg border px-3 py-2",
+            "flex min-h-full flex-col gap-3 rounded-lg border px-3 py-2",
             SUBJECT_CARD_TONES[event.subjectType],
           )}
         >
@@ -117,6 +125,24 @@ export function AdminScheduleEventCard({
           <div className="wrap-break-word whitespace-normal text-xs leading-tight text-muted-foreground">
             {event.teacherName}
           </div>
+          {conflicts.length > 0 ? (
+            <div className="border-t border-border/60 pt-2">
+              {hardConflicts.length > 0 ? (
+                <ConflictList
+                  title="Жесткие конфликты"
+                  severity="hard"
+                  conflicts={hardConflicts}
+                />
+              ) : null}
+              {warningConflicts.length > 0 ? (
+                <ConflictList
+                  title="Предупреждения"
+                  severity="warning"
+                  conflicts={warningConflicts}
+                />
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </TooltipContent>
     </Tooltip>
@@ -129,7 +155,7 @@ interface AdminScheduleEventInlineCardProps {
   layout: AdminScheduleCardLayout;
   isDimmed: boolean;
   conflictLevel: "none" | "warning" | "hard";
-  conflictFields: Set<string>;
+  fieldSeverities: Map<ScheduleConflictField, ScheduleConflictSeverity>;
   showActions?: boolean;
   onEdit?: (event: AdminScheduleEvent) => void;
   onDelete?: (event: AdminScheduleEvent) => void;
@@ -141,7 +167,7 @@ function AdminScheduleEventInlineCard({
   layout,
   isDimmed,
   conflictLevel,
-  conflictFields,
+  fieldSeverities,
   showActions = false,
   onEdit,
   onDelete,
@@ -161,8 +187,7 @@ function AdminScheduleEventInlineCard({
         <div
           className={cn(
             "min-w-0 truncate text-[13px] font-semibold leading-tight text-foreground",
-            conflictFields.has("subject") && conflictLevel === "hard" && "text-red-700",
-            conflictFields.has("subject") && conflictLevel === "warning" && "text-amber-700",
+            getConflictTextTone(fieldSeverities.get("subject")),
           )}
         >
           {event.subjectName}
@@ -200,8 +225,7 @@ function AdminScheduleEventInlineCard({
         <div
           className={cn(
             "mt-1 truncate text-xs font-medium leading-tight text-muted-foreground",
-            conflictFields.has("time") && conflictLevel === "hard" && "text-red-700",
-            conflictFields.has("time") && conflictLevel === "warning" && "text-amber-700",
+            getConflictTextTone(fieldSeverities.get("time")),
           )}
         >
           {event.detached ? "Без времени" : event.timeLabel}
@@ -213,8 +237,7 @@ function AdminScheduleEventInlineCard({
           <div
             className={cn(
               "truncate text-xs leading-tight text-muted-foreground",
-              conflictFields.has("group") && conflictLevel === "hard" && "text-red-700",
-              conflictFields.has("group") && conflictLevel === "warning" && "text-amber-700",
+              getConflictTextTone(fieldSeverities.get("group")),
             )}
           >
             {groupLabel}
@@ -222,8 +245,7 @@ function AdminScheduleEventInlineCard({
           <div
             className={cn(
               "truncate text-xs leading-tight text-muted-foreground",
-              conflictFields.has("room") && conflictLevel === "hard" && "text-red-700",
-              conflictFields.has("room") && conflictLevel === "warning" && "text-amber-700",
+              getConflictTextTone(fieldSeverities.get("room")),
             )}
           >
             {event.roomName}
@@ -231,8 +253,7 @@ function AdminScheduleEventInlineCard({
           <div
             className={cn(
               "truncate text-xs leading-tight text-muted-foreground",
-              conflictFields.has("teacher") && conflictLevel === "hard" && "text-red-700",
-              conflictFields.has("teacher") && conflictLevel === "warning" && "text-amber-700",
+              getConflictTextTone(fieldSeverities.get("teacher")),
             )}
           >
             {event.teacherName}
@@ -243,14 +264,46 @@ function AdminScheduleEventInlineCard({
   );
 }
 
-function getConflictLevel(conflicts: EventConflict[]) {
-  if (conflicts.some((conflict) => conflict.severity === "hard")) {
-    return "hard" as const;
+function ConflictList({
+  title,
+  severity,
+  conflicts,
+}: {
+  title: string;
+  severity: ScheduleConflictSeverity;
+  conflicts: ScheduleConflict[];
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div
+        className={cn(
+          "text-[11px] font-semibold uppercase tracking-wide",
+          severity === "hard" ? "text-red-700" : "text-amber-700",
+        )}
+      >
+        {title}
+      </div>
+      <ul className="space-y-1">
+        {conflicts.map((conflict, index) => (
+          <li key={`${conflict.code}:${index}`} className="text-xs leading-snug text-foreground">
+            {conflict.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function getConflictTextTone(severity: ScheduleConflictSeverity | undefined) {
+  if (severity === "hard") {
+    return "text-red-700";
   }
-  if (conflicts.some((conflict) => conflict.severity === "warning")) {
-    return "warning" as const;
+
+  if (severity === "warning") {
+    return "text-amber-700";
   }
-  return "none" as const;
+
+  return null;
 }
 
 function getCardLayout(durationMinutes: number): AdminScheduleCardLayout {

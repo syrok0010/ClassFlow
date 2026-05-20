@@ -181,7 +181,6 @@ export function createScheduleEditorFormSchema(context: ScheduleEditorFormContex
 
     const rooms = getAvailableRoomOptions(
       context.roomOptions,
-      audienceSelection,
       selectedSubject,
     );
 
@@ -345,7 +344,6 @@ export function buildScheduleEditorDerivedState({
   const availableSubjectOptions = context.subjectOptions.filter((subject) => availableSubjectIdSet.has(subject.id));
   const availableRoomOptions = getAvailableRoomOptions(
     context.roomOptions,
-    audienceSelection,
     selectedSubject,
   );
   const availableTeacherOptions = getAvailableTeacherOptions(
@@ -436,7 +434,6 @@ export function normalizeScheduleEditorValue(
   );
   const availableRooms = getAvailableRoomOptions(
     context.roomOptions,
-    audienceSelection,
     context.subjectOptions.find((subject) => subject.id === subjectId) ?? null,
   );
   const availableTeachers = getAvailableTeacherOptions(context.teacherOptions, audienceSelection, subjectId);

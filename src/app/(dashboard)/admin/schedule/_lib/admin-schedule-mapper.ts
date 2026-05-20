@@ -6,14 +6,14 @@ import { getUserFullName } from "@/lib/auth-access";
 import type { AdminScheduleEvent } from "./admin-schedule-types";
 
 export const adminScheduleTemplateInclude = {
-  subject: { select: { id: true, name: true, type: true } },
+  subject: { select: { id: true, name: true, type: true, defaultAttendanceLoadMode: true } },
   teacher: {
     select: {
       id: true,
       user: { select: { surname: true, name: true, patronymicName: true } },
     },
   },
-  room: { select: { id: true, name: true } },
+  room: { select: { id: true, name: true, seatsCount: true } },
   deliveryGroup: {
     select: {
       id: true,
@@ -21,12 +21,14 @@ export const adminScheduleTemplateInclude = {
       type: true,
       grade: true,
       subjectId: true,
+      _count: { select: { studentGroups: true } },
       parentGroup: {
         select: {
           id: true,
           name: true,
           grade: true,
           type: true,
+          _count: { select: { studentGroups: true } },
         },
       },
     },
@@ -40,6 +42,7 @@ export const adminScheduleTemplateInclude = {
           name: true,
           grade: true,
           type: true,
+          _count: { select: { studentGroups: true } },
         },
       },
     },
@@ -53,6 +56,7 @@ export const adminScheduleTemplateInclude = {
           name: true,
           grade: true,
           type: true,
+          _count: { select: { studentGroups: true } },
         },
       },
     },
@@ -71,6 +75,20 @@ type ProjectedClass = {
   name: string;
   grade: number | null;
 };
+
+function mapClassInfo(group: {
+  id: string;
+  name: string;
+  grade: number | null;
+  _count?: { studentGroups: number };
+}) {
+  return {
+    id: group.id,
+    name: group.name,
+    grade: group.grade ?? null,
+    studentCount: group._count?.studentGroups ?? 0,
+  };
+}
 
 function mapDayOfWeekToDate(dayOfWeek: number) {
   return addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), dayOfWeek - 1);
@@ -150,6 +168,20 @@ export function mapWeeklyTemplateToAdminScheduleEvents(
   const timeLabel = detached ? "Без времени" : `${format(start, "HH:mm")}-${format(end, "HH:mm")}`;
   const groupName = getGroupLabel(entry);
   const projectedClasses = getProjectedClasses(entry);
+  const openClasses = entry.openClasses.map((item) => mapClassInfo(item.schoolClass));
+  const coveredClasses = entry.coveredClasses.map((item) => mapClassInfo(item.schoolClass));
+  const parentClass = entry.deliveryGroup?.type === "SUBJECT_SUBGROUP" && entry.deliveryGroup.parentGroup
+    ? mapClassInfo(entry.deliveryGroup.parentGroup)
+    : entry.deliveryGroup?.type === "CLASS"
+      ? {
+          id: entry.deliveryGroup.id,
+          name: entry.deliveryGroup.name,
+          grade: entry.deliveryGroup.grade ?? null,
+          studentCount: entry.deliveryGroup._count.studentGroups,
+        }
+      : null;
+  const deliveryGroupStudentCount = entry.deliveryGroup?._count.studentGroups ?? null;
+  const attendanceLoadMode = entry.attendanceLoadModeOverride ?? entry.subject.defaultAttendanceLoadMode;
 
   return projectedClasses.map((projectedClass) => ({
     id: `${entry.id}:${projectedClass.id}`,
@@ -160,6 +192,8 @@ export function mapWeeklyTemplateToAdminScheduleEvents(
     deliveryGroupType: entry.deliveryGroup?.type ?? null,
     openClassIds: entry.openClasses.map((item) => item.classGroupId),
     coveredClassIds: entry.coveredClasses.map((item) => item.classGroupId),
+    openClasses,
+    coveredClasses,
     start,
     end,
     dayOfWeek: entry.dayOfWeek,
@@ -167,16 +201,23 @@ export function mapWeeklyTemplateToAdminScheduleEvents(
     endMinutes: entry.endTime,
     detached,
     subjectId: entry.subject.id,
-    teacherId: entry.teacher?.id ?? null,
-    roomId: entry.room?.id ?? null,
-    classId: projectedClass.id,
-    className: projectedClass.name,
-    groupName,
-    groupType: entry.deliveryGroup?.type ?? "CLASS",
     subjectName: entry.subject.name,
     subjectType: entry.subject.type,
+    attendanceLoadMode,
+    teacherId: entry.teacher?.id ?? null,
     teacherName,
+    roomId: entry.room?.id ?? null,
     roomName,
+    roomSeatsCount: entry.room?.seatsCount ?? null,
+    groupName,
+    deliveryGroupStudentCount,
+    parentClassId: parentClass?.id ?? null,
+    parentClassName: parentClass?.name ?? null,
+    parentClassGrade: parentClass?.grade ?? null,
+    parentClassStudentCount: parentClass?.studentCount ?? null,
+    classId: projectedClass.id,
+    className: projectedClass.name,
+    groupType: entry.deliveryGroup?.type ?? "CLASS",
     timeLabel,
     metaLine: `${teacherName} • ${roomName}`,
   }));

@@ -9,8 +9,8 @@ import { TIME_SLOT_STEP_MINUTES } from "@/features/schedule/lib/date-utils";
 import { cn } from "@/lib/utils";
 
 import type { AdminScheduleEvent } from "../_lib/admin-schedule-types";
+import type { ScheduleConflict } from "../_lib/schedule-conflicts";
 import { AdminScheduleEventCard } from "./admin-schedule-event-card";
-import type { EventConflict } from "./admin-schedule-conflicts";
 
 export const PARKING_DROP_ID = "parking-drop-zone";
 
@@ -28,7 +28,7 @@ export function DraggableScheduleEventCard({
 }: {
   event: AdminScheduleEvent;
   isDimmed: boolean;
-  conflicts: EventConflict[];
+  conflicts: ScheduleConflict[];
 } & ScheduleEventHandlers) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: event.id });
 
@@ -55,6 +55,7 @@ export function DraggableScheduleEventCard({
 
 export function TemporaryScheduleArea({
   events,
+  conflictByEvent,
   shouldDimByMetaFilters,
   isEventHighlighted,
   onCreate,
@@ -62,6 +63,7 @@ export function TemporaryScheduleArea({
   onDelete,
 }: {
   events: AdminScheduleEvent[];
+  conflictByEvent: Map<string, ScheduleConflict[]>;
   shouldDimByMetaFilters: boolean;
   isEventHighlighted: (event: AdminScheduleEvent) => boolean;
   onCreate: () => void;
@@ -89,7 +91,7 @@ export function TemporaryScheduleArea({
             key={event.id}
             event={event}
             isDimmed={shouldDimByMetaFilters && !isEventHighlighted(event)}
-            conflicts={[]}
+            conflicts={conflictByEvent.get(event.id) ?? []}
             onEdit={onEdit}
             onDelete={onDelete}
           />

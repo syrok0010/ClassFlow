@@ -7,7 +7,6 @@ import type {
   AdminScheduleRoomOption,
   AdminScheduleTeacherOption,
 } from "./admin-schedule-types";
-import { getExpectedScheduleAudienceSize } from "./schedule-load-policy";
 import type { AdminScheduleTemplateMutationInput } from "./schedule-mutations-schema";
 
 export type ScheduleCardKind = "CLASS" | "SUBGROUP" | "ELECTIVE_GROUP" | "SHARED_CLASSES";
@@ -226,20 +225,14 @@ export function getAvailableSubjectIds(
 
 export function getAvailableRoomOptions(
   roomOptions: AdminScheduleRoomOption[],
-  audienceSelection: AudienceSelection | null,
   subject: Pick<ScheduleEditorSubject, "id" | "defaultAttendanceLoadMode"> | null,
 ) {
-  if (!audienceSelection || !subject) {
+  if (!subject) {
     return [] as AdminScheduleRoomOption[];
   }
 
-  const expectedSize = getExpectedScheduleAudienceSize(
-    audienceSelection,
-    subject.defaultAttendanceLoadMode,
-  );
-
   return roomOptions.filter(
-    (room) => room.subjectIds.includes(subject.id) && room.seatsCount >= expectedSize,
+    (room) => room.subjectIds.includes(subject.id),
   );
 }
 

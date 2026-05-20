@@ -1,30 +1,15 @@
 import type { BaseScheduleEvent } from "@/features/schedule";
-import type { AttendanceLoadMode, GroupType, ScheduleDeliveryMode, SubjectType } from "@/generated/prisma/enums";
+import type { AttendanceLoadMode, GroupType, SubjectType } from "@/generated/prisma/enums";
 
-export interface AdminScheduleEvent extends BaseScheduleEvent {
-  id: string;
-  templateId: string;
-  projectionClassId: string;
-  deliveryMode: ScheduleDeliveryMode;
-  deliveryGroupId: string | null;
-  deliveryGroupType: GroupType | null;
-  openClassIds: string[];
-  coveredClassIds: string[];
-  dayOfWeek: number | null;
-  startMinutes: number | null;
-  endMinutes: number | null;
-  detached: boolean;
-  subjectId: string;
-  teacherId: string | null;
-  roomId: string | null;
+import type {
+  ScheduleConflictLinkedClass,
+  ScheduleConflictProjectionInput,
+} from "./schedule-conflicts";
+
+export interface AdminScheduleEvent extends BaseScheduleEvent, ScheduleConflictProjectionInput {
   classId: string;
   className: string;
-  groupName: string;
   groupType: GroupType;
-  subjectName: string;
-  subjectType: SubjectType;
-  teacherName: string;
-  roomName: string;
   timeLabel: string;
   metaLine: string;
 }
@@ -62,6 +47,8 @@ export interface AdminScheduleRoomOption {
   seatsCount: number;
   subjectIds: string[];
 }
+
+export type { ScheduleConflictLinkedClass };
 
 export interface AdminScheduleTeacherOption {
   id: string;

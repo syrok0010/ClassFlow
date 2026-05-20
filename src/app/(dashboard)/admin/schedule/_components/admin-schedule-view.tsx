@@ -28,7 +28,7 @@ import {
   buildEmptyDraft,
   buildMoveTemplateInput,
 } from "../_lib/admin-schedule-template-commands";
-import { detectAdminScheduleConflicts } from "./admin-schedule-conflicts";
+import { analyzeScheduleTemplateConflicts } from "../_lib/schedule-conflicts";
 import {
   DraggableScheduleEventCard,
   GridDropOverlay,
@@ -139,10 +139,7 @@ export function AdminScheduleView({
     [classRows, visibleClassIds],
   );
 
-  const detachedEvents = useMemo(
-    () => events.filter((event) => event.detached),
-    [events],
-  );
+  const detachedEvents = useMemo(() => events.filter((event) => event.detached), [events]);
 
   const gridEvents = useMemo(
     () => events.filter((event) => !event.detached && (!visibleClassIds || visibleClassIds.has(event.classId))),
@@ -169,7 +166,8 @@ export function AdminScheduleView({
     return true;
   };
 
-  const conflictByEvent = useMemo(() => detectAdminScheduleConflicts(gridEvents), [gridEvents]);
+  const conflictAnalysis = useMemo(() => analyzeScheduleTemplateConflicts(events), [events]);
+  const conflictByEvent = conflictAnalysis.conflictsByProjectionId;
 
   const handleEdit = (event: AdminScheduleEvent) => {
     setEditingDraft(buildDraftFromEvent(event));
@@ -269,6 +267,7 @@ export function AdminScheduleView({
         <div className="grid grid-cols-[260px_minmax(0,1fr)] gap-3">
           <TemporaryScheduleArea
             events={detachedEvents}
+            conflictByEvent={conflictByEvent}
             shouldDimByMetaFilters={shouldDimByMetaFilters}
             isEventHighlighted={isEventHighlighted}
             onCreate={handleCreate}

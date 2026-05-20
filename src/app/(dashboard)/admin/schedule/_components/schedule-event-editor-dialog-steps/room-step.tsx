@@ -78,7 +78,7 @@ export function RoomStep({
           <FieldDescription>
             {roomOptions.length === 0
               ? "Для выбранной комбинации нет подходящих кабинетов."
-              : "Показываются только кабинеты, где можно вести предмет и хватает мест."}
+              : "Показываются кабинеты, где можно вести предмет. Конфликты по вместимости подсветятся в расписании."}
           </FieldDescription>
           {error ? <FieldError>{error}</FieldError> : null}
         </Field>

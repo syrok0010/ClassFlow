@@ -1,8 +1,6 @@
 import type { AttendanceLoadMode, GroupType, SubjectType } from "@/generated/prisma/enums";
 import { z } from "zod";
 
-import { getExpectedScheduleAudienceSize } from "./schedule-load-policy";
-
 type ScheduleValidationSubject = {
   type: SubjectType;
   defaultAttendanceLoadMode?: AttendanceLoadMode;
@@ -264,17 +262,6 @@ export function createAdminScheduleTemplateMutationSchema(
           path: ["roomId"],
           message: "В выбранном кабинете нельзя вести этот предмет",
         });
-      } else if (
-        room.seatsCount < getExpectedAudienceSize(
-          audience,
-          subject.defaultAttendanceLoadMode ?? "DELIVERY_GROUP_SIZE",
-        )
-      ) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["roomId"],
-          message: "В выбранном кабинете не хватает мест",
-        });
       }
     }
 
@@ -389,13 +376,6 @@ function resolveValidationAudience(
       max: group.grade ?? parentClass?.grade ?? null,
     },
   };
-}
-
-function getExpectedAudienceSize(
-  audience: NonNullable<ReturnType<typeof resolveValidationAudience>>,
-  loadMode: AttendanceLoadMode,
-) {
-  return getExpectedScheduleAudienceSize(audience, loadMode);
 }
 
 function teacherCanTeachSubject(
