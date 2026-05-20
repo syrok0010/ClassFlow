@@ -49,13 +49,13 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
   const visibleSubjects = useMemo(
     () =>
       filterAndSortSubjects(subjects, {
-        search: searchQuery,
+        search: searchInput,
         typeFilter: safeType as SubjectFilterType,
       }),
-    [safeType, searchQuery, subjects]
+    [safeType, searchInput, subjects]
   );
 
-  const hasActiveFilters = Boolean(searchQuery) || safeType !== "ALL";
+  const hasActiveFilters = Boolean(searchInput.trim()) || safeType !== "ALL";
 
   const handleDeleteRequest = async (subject: SubjectWithUsage) => {
     setDeleteSubject(subject);
@@ -78,6 +78,7 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
   };
 
   const resetFilters = () => {
+    setSearchInput("");
     void setSearchQuery(null);
     void setFilterType(null);
   };

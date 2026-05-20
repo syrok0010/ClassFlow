@@ -4,7 +4,7 @@ import { useForm } from "@tanstack/react-form";
 import { format, parse } from "date-fns";
 import { CalendarCheckIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import {
@@ -34,6 +34,7 @@ import { getFieldErrorMessages } from "@/lib/form-errors";
 
 import {
   applyWeeklyScheduleTemplateAction,
+  getWeeklyScheduleTemplateApplyValidationAction,
   getWeeklyScheduleTemplateApplyPreviewAction,
 } from "../_actions/apply-schedule-template-action";
 import {
@@ -61,14 +62,55 @@ type PreviewState =
       error: string;
     };
 
+type TemplateValidationState =
+  | {
+      status: "loading";
+    }
+  | {
+      status: "success";
+      isValid: boolean;
+      errorMessages: string[];
+    }
+  | {
+      status: "error";
+      error: string;
+    };
+
 export function ApplyTemplateDialogButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isApplying, setIsApplying] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [templateValidation, setTemplateValidation] = useState<TemplateValidationState | null>(null);
   const [pendingApplyInput, setPendingApplyInput] =
     useState<ApplyWeeklyScheduleTemplateInput | null>(null);
+  const templateValidationLoader = useLatestAsyncDebouncer(
+    async () => getWeeklyScheduleTemplateApplyValidationAction(),
+    {
+      onSuccess: (response) => {
+        if (response.result === null) {
+          setTemplateValidation({
+            status: "error",
+            error: response.error ?? "Не удалось проверить недельный шаблон",
+          });
+          return;
+        }
+
+        setTemplateValidation({
+          status: "success",
+          isValid: response.result.isValid,
+          errorMessages: response.result.errorMessages,
+        });
+      },
+      onError: () => {
+        setTemplateValidation({
+          status: "error",
+          error: "Не удалось проверить недельный шаблон",
+        });
+      },
+    },
+  );
   const previewLoader = useLatestAsyncDebouncer(
     async (input: ApplyWeeklyScheduleTemplateInput, key: string) => {
       void key;
@@ -109,6 +151,16 @@ export function ApplyTemplateDialogButton() {
       onSubmit: applyWeeklyScheduleTemplateEditorSchema,
     },
     onSubmit: ({ value }) => {
+      if (!isTemplateValidationReady(templateValidation)) {
+        toast.error("Дождитесь проверки недельного шаблона");
+        return;
+      }
+
+      if (!templateValidation.isValid) {
+        toast.error("Недельный шаблон содержит ошибки и не может быть применен");
+        return;
+      }
+
       if (!isPreviewReady(value, preview)) {
         toast.error("Дождитесь проверки периода расписания");
         return;
@@ -127,22 +179,26 @@ export function ApplyTemplateDialogButton() {
     },
   });
 
-  function resetState() {
-    form.reset(getDefaultValues());
-  }
-
   function handleOpenChange(nextOpen: boolean) {
-    setOpen(nextOpen);
-
     if (nextOpen) {
-      requestPreview(form.state.values);
+      const defaultValues = getDefaultValues();
+
+      previewLoader.cancel();
+      templateValidationLoader.cancel();
+      setPendingApplyInput(null);
+      form.reset(defaultValues);
+      setPreview(null);
+      setTemplateValidation(null);
+      setOpen(true);
+      requestTemplateValidation();
+      requestPreview(defaultValues);
       return;
     }
 
+    setOpen(false);
+    templateValidationLoader.cancel();
     previewLoader.cancel();
-    setPreview(null);
     setPendingApplyInput(null);
-    resetState();
   }
 
   function handleDateChange(
@@ -171,6 +227,11 @@ export function ApplyTemplateDialogButton() {
     const key = getPreviewKey(parsed.data);
     setPreview({ key, status: "loading" });
     previewLoader.execute(mapApplyTemplateEditorToActionInput(parsed.data), key);
+  }
+
+  function requestTemplateValidation() {
+    setTemplateValidation({ status: "loading" });
+    templateValidationLoader.execute();
   }
 
   function submit(input: ApplyWeeklyScheduleTemplateInput) {
@@ -271,6 +332,8 @@ export function ApplyTemplateDialogButton() {
               {(values) => <ApplyTemplatePreview values={values} preview={preview} />}
             </form.Subscribe>
 
+            <ApplyTemplateValidationNotice validation={templateValidation} />
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={disabled}>
                 Отмена
@@ -289,7 +352,8 @@ export function ApplyTemplateDialogButton() {
                       disabled ||
                       isSubmitting ||
                       !canSubmit ||
-                      !isPreviewReady(values, preview)
+                      !isPreviewReady(values, preview) ||
+                      !isTemplateValidationReadyForApply(templateValidation)
                     }
                   >
                     {disabled || isSubmitting ? (
@@ -394,6 +458,95 @@ function ApplyTemplatePreview({
   );
 }
 
+function ApplyTemplateValidationNotice({
+  validation,
+}: {
+  validation: TemplateValidationState | null;
+}) {
+  return (
+    <AnimatedNoticeHeight>
+      {renderTemplateValidationNotice(validation)}
+    </AnimatedNoticeHeight>
+  );
+}
+
+function renderTemplateValidationNotice(validation: TemplateValidationState | null) {
+  if (!validation || validation.status === "loading") {
+    return (
+      <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+        Проверка недельного шаблона...
+      </p>
+    );
+  }
+
+  if (validation.status === "error") {
+    return (
+      <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        {validation.error}
+      </p>
+    );
+  }
+
+  if (validation.isValid) {
+    return (
+      <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-900 dark:text-emerald-200">
+        Недельный шаблон прошел проверку и готов к применению.
+      </p>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <p className="font-medium">Недельный шаблон содержит ошибки и не может быть применен:</p>
+      <ul className="mt-2 list-disc pl-5">
+        {validation.errorMessages.map((message) => (
+          <li key={message}>{message}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AnimatedNoticeHeight({ children }: { children: ReactNode }) {
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [height, setHeight] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const element = contentRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    const updateHeight = () => {
+      setHeight(element.getBoundingClientRect().height);
+    };
+
+    updateHeight();
+
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [children]);
+
+  return (
+    <div
+      className="overflow-hidden transition-[height] duration-200 ease-out motion-reduce:transition-none"
+      style={height === null ? undefined : { height }}
+    >
+      <div ref={contentRef}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function getPreviewKey(value: ApplyWeeklyScheduleTemplateEditorInput) {
   return `${value.startDate}:${value.endDate}`;
 }
@@ -414,6 +567,16 @@ function getCurrentPreview(
   return preview?.key === getPreviewKey(values) && preview.status === "success"
     ? preview
     : null;
+}
+
+function isTemplateValidationReady(
+  validation: TemplateValidationState | null,
+): validation is Extract<TemplateValidationState, { status: "success" }> {
+  return validation?.status === "success";
+}
+
+function isTemplateValidationReadyForApply(validation: TemplateValidationState | null) {
+  return isTemplateValidationReady(validation) && validation.isValid;
 }
 
 function getPendingOverwriteCount(

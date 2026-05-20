@@ -3,7 +3,6 @@
 import {addDays, addMinutes, eachDayOfInterval, format, getISODay, startOfDay} from "date-fns";
 import { revalidatePath } from "next/cache";
 
-import { Prisma } from "@/generated/prisma/client";
 import type { AttendanceLoadMode, ScheduleDeliveryMode } from "@/generated/prisma/enums";
 import { getActionErrorMessage } from "@/lib/action-error";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +13,11 @@ import {
   applyWeeklyScheduleTemplateActionSchema,
   type ApplyWeeklyScheduleTemplateInput,
 } from "../_lib/apply-schedule-template-schema";
+import {
+  applyScheduleTemplateValidationInclude,
+  validateApplyScheduleTemplateState,
+  type ApplyScheduleTemplateValidationResult,
+} from "../_lib/apply-schedule-template-validation";
 
 const ADMIN_SCHEDULE_PATH = "/admin/schedule";
 const DATE_FORMAT = "yyyy-MM-dd";
@@ -32,6 +36,9 @@ export interface ApplyWeeklyScheduleTemplateResult {
   endDate: string;
   affectedDates: string[];
 }
+
+export type ApplyWeeklyScheduleTemplateValidationPreview =
+  ApplyScheduleTemplateValidationResult;
 
 type WeeklyScheduleTemplateRow = {
   id: string;
@@ -96,6 +103,17 @@ export async function getWeeklyScheduleTemplateApplyPreviewAction(
   }
 }
 
+export async function getWeeklyScheduleTemplateApplyValidationAction():
+Promise<Result<ApplyWeeklyScheduleTemplateValidationPreview>> {
+  await requireAdminContext();
+
+  try {
+    return ok(await loadApplyScheduleTemplateValidation());
+  } catch (error) {
+    return err(getActionErrorMessage(error, "Не удалось проверить недельный шаблон"));
+  }
+}
+
 export async function applyWeeklyScheduleTemplateAction(
   input: ApplyWeeklyScheduleTemplateInput,
 ): Promise<Result<ApplyWeeklyScheduleTemplateResult>> {
@@ -103,6 +121,15 @@ export async function applyWeeklyScheduleTemplateAction(
 
   try {
     const validated = applyWeeklyScheduleTemplateActionSchema.parse(input);
+    const validation = await loadApplyScheduleTemplateValidation();
+
+    if (!validation.isValid) {
+      return err(
+        validation.errorMessages[0]
+        ?? "Недельный шаблон содержит ошибки и не может быть применен",
+      );
+    }
+
     const startDate = startOfDay(validated.startDate);
     const endDate = startOfDay(validated.endDate);
     const rangeEndExclusive = addDays(endDate, 1);
@@ -247,5 +274,71 @@ function buildScheduleEntriesFromTemplates(
       subjectId: template.subjectId,
       coveredClassIds: template.coveredClasses.map((coveredClass) => coveredClass.classGroupId),
     }));
+  });
+}
+
+async function loadApplyScheduleTemplateValidation() {
+  const [templates, subjects, groups, rooms, teachers, requirements] = await Promise.all([
+    prisma.weeklyScheduleTemplate.findMany({
+      include: applyScheduleTemplateValidationInclude,
+      orderBy: [
+        { dayOfWeek: "asc" },
+        { startTime: "asc" },
+        { endTime: "asc" },
+        { id: "asc" },
+      ],
+    }),
+    prisma.subject.findMany({
+      select: { id: true, type: true, defaultAttendanceLoadMode: true },
+    }),
+    prisma.group.findMany({
+      select: {
+        id: true,
+        type: true,
+        subjectId: true,
+        parentId: true,
+        grade: true,
+        _count: { select: { studentGroups: true } },
+      },
+    }),
+    prisma.room.findMany({
+      select: {
+        id: true,
+        seatsCount: true,
+        roomSubjects: {
+          select: {
+            subjectId: true,
+          },
+        },
+      },
+    }),
+    prisma.teacher.findMany({
+      select: {
+        id: true,
+        teacherSubjects: {
+          select: {
+            subjectId: true,
+            minGrade: true,
+            maxGrade: true,
+          },
+        },
+      },
+    }),
+    prisma.groupSubjectRequirement.findMany({
+      select: {
+        groupId: true,
+        subjectId: true,
+        durationInMinutes: true,
+      },
+    }),
+  ]);
+
+  return validateApplyScheduleTemplateState({
+    templates,
+    subjects,
+    groups,
+    rooms,
+    teachers,
+    requirements,
   });
 }

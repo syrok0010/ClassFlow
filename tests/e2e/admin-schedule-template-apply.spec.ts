@@ -14,6 +14,8 @@ test.describe("Admin schedule template apply", () => {
     await page.getByLabel("Дата окончания").fill(endDate);
 
     await expect(page.getByText("В выбранном периоде нет записей для перезаписи.")).toBeVisible();
+    await expect(page.getByText("Недельный шаблон прошел проверку и готов к применению.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Применить", exact: true })).toBeEnabled();
 
     await page.getByRole("button", { name: "Применить", exact: true }).click();
     await expect(page.getByText(/Расписание создано:/)).toBeVisible();
@@ -23,6 +25,8 @@ test.describe("Admin schedule template apply", () => {
     await page.getByLabel("Дата окончания").fill(endDate);
 
     await expect(page.getByText(/Будет перезаписано записей: [1-9]\d*/)).toBeVisible();
+    await expect(page.getByText("Недельный шаблон прошел проверку и готов к применению.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Применить", exact: true })).toBeEnabled();
 
     await page.getByRole("button", { name: "Применить", exact: true }).click();
     const overwriteDialog = page.getByRole("alertdialog");
