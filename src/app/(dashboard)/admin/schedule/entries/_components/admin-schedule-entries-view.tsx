@@ -41,18 +41,12 @@ export function AdminScheduleEntriesView({
     defaultValue: targetId ?? "",
     shallow: false,
   });
-  const [targetInputValue, setTargetInputValue] = useState(
-    selectedTarget?.label ?? "",
-  );
+  const [targetInputValue, setTargetInputValue] = useState<string | null>(null);
 
   const optimisticScope = parseScope(currentScope);
   const targetOptions = useMemo(
     () => buildTargetOptions(options),
     [options],
-  );
-  const filteredTargetOptions = useMemo(
-    () => filterTargetOptions(targetOptions, targetInputValue),
-    [targetInputValue, targetOptions],
   );
   const optimisticSelectedTarget = useMemo(
     () =>
@@ -70,8 +64,14 @@ export function AdminScheduleEntriesView({
     [scope, targetId, targetOptions],
   );
   const visibleSelectedTarget = optimisticSelectedTarget ?? confirmedSelectedTarget;
+  const effectiveTargetInputValue =
+    targetInputValue ?? visibleSelectedTarget?.label ?? "";
+  const filteredTargetOptions = useMemo(
+    () => filterTargetOptions(targetOptions, effectiveTargetInputValue),
+    [effectiveTargetInputValue, targetOptions],
+  );
   const comboboxValue =
-    visibleSelectedTarget && targetInputValue === visibleSelectedTarget.label
+    visibleSelectedTarget && effectiveTargetInputValue === visibleSelectedTarget.label
       ? visibleSelectedTarget
       : null;
 
@@ -85,12 +85,20 @@ export function AdminScheduleEntriesView({
             filteredItems={filteredTargetOptions}
             itemToStringLabel={(item) => item.label}
             itemToStringValue={(item) => item.id}
-            inputValue={targetInputValue}
-            onInputValueChange={setTargetInputValue}
+            inputValue={effectiveTargetInputValue}
+            onInputValueChange={(inputValue, eventDetails) => {
+              if (
+                eventDetails.reason === "input-change" ||
+                eventDetails.reason === "input-clear" ||
+                eventDetails.reason === "clear-press"
+              ) {
+                setTargetInputValue(inputValue);
+              }
+            }}
             value={comboboxValue}
             onValueChange={(value) => {
               const nextValue = normalizeComboboxValue(value);
-              setTargetInputValue(nextValue?.label ?? "");
+              setTargetInputValue(nextValue ? null : "");
               void setCurrentScope(
                 nextValue && nextValue.scope !== "group" ? nextValue.scope : null,
               );

@@ -16,6 +16,7 @@ test.describe("Admin schedule entries", () => {
     await page.locator('[data-slot="combobox-content"]').getByText("5 А").click();
     await expect(page.getByTestId("admin-schedule-card").filter({ hasText: "Математика" })).toBeVisible();
     await expect(targetCombobox).toBeEnabled();
+    await expect(targetCombobox).toHaveValue("5 А");
 
     const groupUrl = new URL(page.url());
     expect(groupUrl.searchParams.get("targetId")).toBeTruthy();
@@ -25,6 +26,7 @@ test.describe("Admin schedule entries", () => {
     await page.locator('[data-slot="combobox-content"]').getByText("Иванов Иван Иванович").click();
     await expect(page.getByTestId("admin-schedule-card").filter({ hasText: "Математика" })).toBeVisible();
     await expect(targetCombobox).toBeEnabled();
+    await expect(targetCombobox).toHaveValue("Иванов Иван Иванович");
 
     const teacherUrl = new URL(page.url());
     expect(teacherUrl.searchParams.get("targetId")).toBeTruthy();
@@ -32,19 +34,21 @@ test.describe("Admin schedule entries", () => {
 
     await targetCombobox.fill("Кабинет 5А");
     await page.locator('[data-slot="combobox-content"]').getByText("Кабинет 5А").click();
+    await expect(page).toHaveURL(/scope=room/);
     await expect(page.getByTestId("admin-schedule-card").filter({ hasText: "Математика" })).toBeVisible();
     await expect(targetCombobox).toBeEnabled();
+    await expect(targetCombobox).toHaveValue("Кабинет 5А");
 
-    const targetId = new URL(page.url()).searchParams.get("targetId");
-    expect(targetId).toBeTruthy();
+    const roomTargetId = new URL(page.url()).searchParams.get("targetId");
+    expect(roomTargetId).toBeTruthy();
 
     await page.getByRole("radio", { name: "День" }).click();
     await expect(page).toHaveURL(/view=day/);
     await expect(page).toHaveURL(/scope=room/);
-    await expect(page).toHaveURL(new RegExp(`targetId=${targetId}`));
+    await expect(page).toHaveURL(new RegExp(`targetId=${roomTargetId}`));
 
     await page.getByRole("radio", { name: "Неделя" }).click();
     await expect(page).toHaveURL(/scope=room/);
-    await expect(page).toHaveURL(new RegExp(`targetId=${targetId}`));
+    await expect(page).toHaveURL(new RegExp(`targetId=${roomTargetId}`));
   });
 });
