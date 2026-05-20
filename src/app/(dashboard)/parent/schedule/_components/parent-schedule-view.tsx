@@ -40,7 +40,7 @@ export function ParentScheduleView({ data }: ParentScheduleViewProps) {
   const isRefreshing = isPending || currentStudentId !== data.selectedStudentId;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col">
       <div className="overflow-x-auto pb-1">
         <SegmentedControl
           value={data.selectedStudentId}
