@@ -39,6 +39,13 @@ const adminScheduleTemplateMutationSchemaBase = z.object({
   teacherId: z.string().nullable(),
 });
 
+const adminScheduleTemplateTimeMoveSchemaBase = z.object({
+  templateId: z.string().min(1, "Не передан ID шаблона"),
+  dayOfWeek: z.number().int().min(1).max(5).nullable(),
+  startMinutes: z.number().int().min(0).max(24 * 60 - 1).nullable(),
+  endMinutes: z.number().int().min(1).max(24 * 60).nullable(),
+});
+
 export function createAdminScheduleTemplateMutationSchema(
   context: AdminScheduleTemplateValidationContext = {},
 ) {
@@ -424,6 +431,38 @@ function getGradeRange(grades: Array<number | null>) {
 
 export const adminScheduleTemplateMutationSchema = createAdminScheduleTemplateMutationSchema();
 
+export const adminScheduleTemplateTimeMoveSchema = adminScheduleTemplateTimeMoveSchemaBase.superRefine((value, ctx) => {
+  const hasScheduledFields =
+    value.dayOfWeek !== null
+    || value.startMinutes !== null
+    || value.endMinutes !== null;
+  const hasFullScheduledFields =
+    value.dayOfWeek !== null
+    && value.startMinutes !== null
+    && value.endMinutes !== null;
+
+  if (hasScheduledFields && !hasFullScheduledFields) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["dayOfWeek"],
+      message: "Для карточки в расписании нужно указать день, время начала и время окончания",
+    });
+  }
+
+  if (
+    hasFullScheduledFields
+    && value.startMinutes !== null
+    && value.endMinutes !== null
+    && value.endMinutes <= value.startMinutes
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["endMinutes"],
+      message: "Время окончания должно быть позже времени начала",
+    });
+  }
+});
+
 export function getAdminScheduleTemplateValidationError(
   input: unknown,
   context?: AdminScheduleTemplateValidationContext,
@@ -433,4 +472,5 @@ export function getAdminScheduleTemplateValidationError(
 }
 
 export type AdminScheduleTemplateMutationInput = z.infer<typeof adminScheduleTemplateMutationSchemaBase>;
+export type AdminScheduleTemplateTimeMoveInput = z.infer<typeof adminScheduleTemplateTimeMoveSchemaBase>;
 export type { AdminScheduleTemplateValidationContext, ScheduleValidationGroup, ScheduleValidationSubject };

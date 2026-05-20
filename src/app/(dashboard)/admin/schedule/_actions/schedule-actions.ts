@@ -9,8 +9,10 @@ import { requireAdminContext } from "@/lib/server-action-auth";
 
 import {
   adminScheduleTemplateMutationSchema,
+  adminScheduleTemplateTimeMoveSchema,
   createAdminScheduleTemplateMutationSchema,
   type AdminScheduleTemplateMutationInput,
+  type AdminScheduleTemplateTimeMoveInput,
 } from "../_lib/schedule-mutations-schema";
 import { buildLessonDurationByGroupSubject } from "../_lib/schedule-duration-map";
 
@@ -241,6 +243,32 @@ export async function createOrUpdateAdminScheduleTemplateAction(input: AdminSche
 
     await prisma.weeklyScheduleTemplate.create({ data: createData });
   }
+
+  revalidatePath(SCHEDULE_PATH);
+  return { error: null };
+}
+
+export async function moveAdminScheduleTemplateAction(input: AdminScheduleTemplateTimeMoveInput) {
+  await requireAdminContext();
+  const parsed = adminScheduleTemplateTimeMoveSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Некорректные данные" };
+  }
+
+  const isDetached =
+    parsed.data.dayOfWeek === null
+    || parsed.data.startMinutes === null
+    || parsed.data.endMinutes === null;
+
+  await prisma.weeklyScheduleTemplate.update({
+    where: { id: parsed.data.templateId },
+    data: {
+      dayOfWeek: isDetached ? null : parsed.data.dayOfWeek,
+      startTime: isDetached ? null : parsed.data.startMinutes,
+      endTime: isDetached ? null : parsed.data.endMinutes,
+    },
+  });
 
   revalidatePath(SCHEDULE_PATH);
   return { error: null };

@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import {
   DndContext,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type CollisionDetection,
 } from "@dnd-kit/core";
 import { BookOpen } from "lucide-react";
 
@@ -16,6 +19,7 @@ import { ReadonlySchedule } from "@/features/schedule";
 import {
   createOrUpdateAdminScheduleTemplateAction,
   deleteAdminScheduleTemplateAction,
+  moveAdminScheduleTemplateAction,
 } from "../_actions/schedule-actions";
 import type { AdminScheduleEvent, AdminSchedulePageData } from "../_lib/admin-schedule-types";
 import {
@@ -46,6 +50,15 @@ const DAY_CODE_TO_NUMBER: Record<string, number> = {
   wed: 3,
   thu: 4,
   fri: 5,
+};
+
+const scheduleCollisionDetection: CollisionDetection = (args) => {
+  const collisions = pointerWithin(args);
+  if (collisions.length > 0) {
+    return collisions;
+  }
+
+  return rectIntersection(args);
 };
 
 export function AdminScheduleView({
@@ -181,7 +194,7 @@ export function AdminScheduleView({
     }
 
     if (overId === PARKING_DROP_ID) {
-      const result = await createOrUpdateAdminScheduleTemplateAction(
+      const result = await moveAdminScheduleTemplateAction(
         buildDetachTemplateInput(activeEvent),
       );
       if (result.error) {
@@ -212,8 +225,8 @@ export function AdminScheduleView({
       return;
     }
 
-    const result = await createOrUpdateAdminScheduleTemplateAction(moveInput);
-    if (result.error) {
+    const moveResult = await moveAdminScheduleTemplateAction(moveInput);
+    if (moveResult.error) {
       return;
     }
     router.refresh();
@@ -248,7 +261,11 @@ export function AdminScheduleView({
         />
       </div>
 
-      <DndContext sensors={sensors} onDragEnd={(event) => void handleDragEnd(event)}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={scheduleCollisionDetection}
+        onDragEnd={(event) => void handleDragEnd(event)}
+      >
         <div className="grid grid-cols-[260px_minmax(0,1fr)] gap-3">
           <TemporaryScheduleArea
             events={detachedEvents}

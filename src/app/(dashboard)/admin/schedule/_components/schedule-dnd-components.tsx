@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { TIME_SLOT_STEP_MINUTES } from "@/features/schedule/lib/date-utils";
 import { cn } from "@/lib/utils";
 
 import type { AdminScheduleEvent } from "../_lib/admin-schedule-types";
@@ -121,7 +122,7 @@ export function GridDropOverlay({
   const dayCode = dayMap[dayIndex] ?? "mon";
 
   const slots: { id: string; top: number; height: number }[] = [];
-  const step = 15;
+  const step = TIME_SLOT_STEP_MINUTES;
   const minutesSpan = endMinutes - startMinutes;
   const pxPerMinute = heightPx / Math.max(minutesSpan, 1);
 
@@ -129,7 +130,7 @@ export function GridDropOverlay({
     slots.push({
       id: `slot:${dayCode}:${rowId}:${minutes}`,
       top: (minutes - startMinutes) * pxPerMinute,
-      height: Math.max(step * pxPerMinute, 20),
+      height: step * pxPerMinute,
     });
   }
 
