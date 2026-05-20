@@ -178,8 +178,8 @@ function AdminScheduleEventInlineCard({
         "group/schedule-card flex h-full w-full flex-col overflow-hidden rounded-lg border p-1 text-left shadow-sm",
         SUBJECT_CARD_TONES[event.subjectType],
         layout === "title-only" ? "justify-center" : "justify-start",
-        conflictLevel === "hard" && "border-red-500 border-2",
-        conflictLevel === "warning" && "border-amber-500 border-2",
+        conflictLevel === "hard" && "border-transparent ring-2 ring-inset ring-red-500",
+        conflictLevel === "warning" && "border-transparent ring-2 ring-inset ring-amber-500",
         isDimmed && "opacity-35 saturate-50",
       )}
     >

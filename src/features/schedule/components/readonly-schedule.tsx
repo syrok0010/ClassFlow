@@ -290,7 +290,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
                         <div
                           key={event.id}
                           data-slot="schedule-event"
-                          className="absolute box-border overflow-hidden"
+                          className="absolute box-border"
                           style={{
                             top: `${event.topPx}px`,
                             height: `${event.heightPx}px`,
@@ -298,7 +298,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
                             width: `${event.widthPercent}%`,
                           }}
                         >
-                          <div className="h-full w-full overflow-hidden">
+                          <div className="h-full w-full">
                             {renderEvent(event.source)}
                           </div>
                         </div>
