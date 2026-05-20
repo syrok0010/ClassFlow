@@ -13,6 +13,7 @@ export type ScheduleConflictField = "time" | "subject" | "group" | "room" | "tea
 export type ScheduleConflictCode =
   | "TEACHER_TIME_OVERLAP"
   | "ROOM_TIME_OVERLAP"
+  | "ACADEMIC_ELECTIVE_OVERLAP"
   | "AUDIENCE_DIRECT_CLASS_OVERLAP"
   | "AUDIENCE_DIRECT_SUBGROUP_OVERLAP"
   | "AUDIENCE_SUBGROUP_PARENT_CLASS_OVERLAP"
@@ -21,7 +22,7 @@ export type ScheduleConflictCode =
   | "AUDIENCE_SHARED_DIRECT_SUBGROUP_OVERLAP"
   | "AUDIENCE_ELECTIVE_GROUP_OVERLAP"
   | "ROOM_CAPACITY_OVERFLOW"
-  | "PREFERRED_TEACHER_MISMATCH";
+  | "MULTIPLE_SUBJECT_TEACHERS_ASSIGNED";
 
 export type ScheduleConflictLinkedClass = {
   id: string;
@@ -112,7 +113,7 @@ export function analyzeScheduleTemplateConflicts(
     }
   }
 
-  conflicts.push(...analyzePreferredTeacherWarnings(items));
+  conflicts.push(...analyzeSubjectTeacherConsistencyWarnings(items));
 
   return buildScheduleConflictAnalysis(conflicts);
 }
@@ -250,6 +251,12 @@ function analyzePairConflicts(left: ScheduleConflictItem, right: ScheduleConflic
     }));
   }
 
+  const academicElectiveConflict = analyzeAcademicElectiveConflict(left, right);
+
+  if (academicElectiveConflict) {
+    conflicts.push(academicElectiveConflict);
+  }
+
   const audienceConflict = analyzeAudienceConflict(left, right);
 
   if (audienceConflict) {
@@ -340,6 +347,36 @@ function analyzeAudienceConflict(
   }
 
   return null;
+}
+
+function analyzeAcademicElectiveConflict(
+  left: ScheduleConflictItem,
+  right: ScheduleConflictItem,
+) {
+  if (!isAcademicElectivePair(left, right)) {
+    return null;
+  }
+
+  const overlappingClasses = intersectClasses(
+    getAudienceScopeClasses(left),
+    getAudienceScopeClasses(right),
+  );
+
+  if (overlappingClasses.length === 0) {
+    return null;
+  }
+
+  const classNames = overlappingClasses.map((classItem) => classItem.name).join(", ");
+
+  return createConflict({
+    code: "ACADEMIC_ELECTIVE_OVERLAP",
+    severity: "hard",
+    message: `Основной предмет и доп не могут идти одновременно для ${classNames}: ${formatConflictCardLabel(left)} и ${formatConflictCardLabel(right)}.`,
+    fields: ["time", "subject", "group"],
+    affectedItems: [left, right],
+    relatedItems: [left, right],
+    classIds: overlappingClasses.map((classItem) => classItem.id),
+  });
 }
 
 function analyzeSubgroupParentClassConflict(
@@ -464,15 +501,11 @@ function analyzeSharedDirectSubgroupConflict(
   });
 }
 
-function analyzePreferredTeacherWarnings(items: readonly ScheduleConflictItem[]) {
+function analyzeSubjectTeacherConsistencyWarnings(items: readonly ScheduleConflictItem[]) {
   const groups = new Map<string, ScheduleConflictItem[]>();
 
   for (const item of items) {
-    if (!item.teacherId) {
-      continue;
-    }
-
-    const key = getPreferredTeacherKey(item);
+    const key = getSubjectTeacherConsistencyKey(item);
 
     if (!key) {
       continue;
@@ -486,55 +519,24 @@ function analyzePreferredTeacherWarnings(items: readonly ScheduleConflictItem[])
   const warnings: ScheduleConflict[] = [];
 
   for (const groupItems of groups.values()) {
-    const teacherCounts = new Map<string, number>();
+    const distinctTeacherIds = toSortedUnique(
+      groupItems
+        .map((item) => item.teacherId)
+        .filter((teacherId): teacherId is string => Boolean(teacherId)),
+    );
 
-    for (const item of groupItems) {
-      if (!item.teacherId) {
-        continue;
-      }
-
-      teacherCounts.set(item.teacherId, (teacherCounts.get(item.teacherId) ?? 0) + 1);
-    }
-
-    if (teacherCounts.size < 2) {
-      continue;
-    }
-
-    const rankedTeachers = Array.from(teacherCounts.entries()).sort((left, right) => {
-      if (right[1] !== left[1]) {
-        return right[1] - left[1];
-      }
-
-      return left[0].localeCompare(right[0], "ru");
-    });
-    const preferredTeacher = rankedTeachers[0];
-    const secondTeacher = rankedTeachers[1];
-
-    if (!preferredTeacher || !secondTeacher || preferredTeacher[1] === secondTeacher[1]) {
-      continue;
-    }
-
-    const preferredTeacherId = preferredTeacher[0];
-    const preferredTeacherName = groupItems.find((item) => item.teacherId === preferredTeacherId)?.teacherName;
-    const relatedItems = groupItems.filter((item) => item.teacherId === preferredTeacherId);
-
-    if (!preferredTeacherName || relatedItems.length === 0) {
+    if (distinctTeacherIds.length < 2) {
       continue;
     }
 
     for (const item of groupItems) {
-      if (!item.teacherId || item.teacherId === preferredTeacherId) {
-        continue;
-      }
-
       warnings.push(createConflict({
-        code: "PREFERRED_TEACHER_MISMATCH",
+        code: "MULTIPLE_SUBJECT_TEACHERS_ASSIGNED",
         severity: "warning",
-        message: `Для ${item.groupName} предмет обычно ведет ${preferredTeacherName}.`,
+        message: `Для ${item.groupName} предмет ${item.subjectName} ведут разные учителя в разных слотах шаблона.`,
         fields: ["subject", "teacher"],
         affectedItems: [item],
-        relatedItems: [item, ...relatedItems],
-        teacherId: preferredTeacherId,
+        relatedItems: groupItems,
         deliveryGroupId: item.deliveryGroupId,
         classIds: getConflictClassIds(item),
       }));
@@ -648,7 +650,7 @@ function getExpectedAudienceForConflict(item: ScheduleConflictItem) {
   );
 }
 
-function getPreferredTeacherKey(item: ScheduleConflictItem) {
+function getSubjectTeacherConsistencyKey(item: ScheduleConflictItem) {
   if (item.deliveryMode === "SHARED_CLASSES") {
     if (item.coveredClassIds.length === 0) {
       return null;
@@ -740,6 +742,42 @@ function getConflictClassIds(item: ScheduleConflictItem) {
   }
 
   return [];
+}
+
+function getAudienceScopeClasses(item: ScheduleConflictItem): ScheduleConflictLinkedClass[] {
+  if (item.deliveryMode === "SHARED_CLASSES") {
+    return item.coveredClasses;
+  }
+
+  if (item.deliveryMode === "ELECTIVE_GROUP") {
+    return item.openClasses;
+  }
+
+  if (
+    item.parentClassId
+    && item.parentClassName
+    && item.parentClassStudentCount !== null
+  ) {
+    return [{
+      id: item.parentClassId,
+      name: item.parentClassName,
+      grade: item.parentClassGrade,
+      studentCount: item.parentClassStudentCount,
+    }];
+  }
+
+  return [];
+}
+
+function isAcademicElectivePair(left: ScheduleConflictItem, right: ScheduleConflictItem) {
+  return (
+    (left.subjectType === "ACADEMIC" && isElectiveSubjectType(right.subjectType))
+    || (right.subjectType === "ACADEMIC" && isElectiveSubjectType(left.subjectType))
+  );
+}
+
+function isElectiveSubjectType(subjectType: SubjectType) {
+  return subjectType === "ELECTIVE_OPTIONAL" || subjectType === "ELECTIVE_REQUIRED";
 }
 
 function intersectClasses(

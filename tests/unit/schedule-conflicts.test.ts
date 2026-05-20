@@ -190,6 +190,39 @@ test("optional cards opened for the same class do not create a hard conflict by 
   assert.equal(analysis.hardConflicts.length, 0);
 });
 
+test("academic and optional elective in the same class slot are a hard conflict", () => {
+  const analysis = analyzeScheduleTemplateConflicts([
+    makeDirectClassProjection({
+      id: "event-1",
+      templateId: "template-1",
+      classInfo: CLASS_3A,
+      subjectId: "subject-math",
+      subjectName: "Математика",
+      subjectType: "ACADEMIC",
+      teacherId: "teacher-1",
+      roomId: "room-101",
+      roomName: "101",
+    }),
+    makeElectiveProjection({
+      id: "event-2",
+      templateId: "template-2",
+      projectionClassId: CLASS_3A.id,
+      deliveryGroupId: "elective-group-1",
+      groupName: "Шахматы",
+      openClasses: [CLASS_3A],
+      subjectId: "subject-chess",
+      subjectName: "Шахматы",
+      subjectType: "ELECTIVE_OPTIONAL",
+      teacherId: "teacher-2",
+      teacherName: "Петров",
+      roomId: "room-102",
+      roomName: "102",
+    }),
+  ]);
+
+  assert.ok(hasConflictCode(analysis.hardConflicts, "ACADEMIC_ELECTIVE_OVERLAP"));
+});
+
 test("subgroup vs whole class is a hard conflict", () => {
   const analysis = analyzeScheduleTemplateConflicts([
     makeSubgroupProjection({
@@ -256,6 +289,42 @@ test("sibling subgroups are not a hard conflict", () => {
   assert.equal(analysis.hardConflicts.length, 0);
 });
 
+test("academic and required elective on sibling subgroups are a hard conflict", () => {
+  const analysis = analyzeScheduleTemplateConflicts([
+    makeSubgroupProjection({
+      id: "event-1",
+      templateId: "template-1",
+      subgroupId: "subgroup-1",
+      subgroupName: "3А / Математика 1",
+      parentClass: CLASS_3A,
+      deliveryGroupStudentCount: 12,
+      subjectId: "subject-math",
+      subjectName: "Математика",
+      subjectType: "ACADEMIC",
+      teacherId: "teacher-1",
+      roomId: "room-101",
+      roomName: "101",
+    }),
+    makeSubgroupProjection({
+      id: "event-2",
+      templateId: "template-2",
+      subgroupId: "subgroup-2",
+      subgroupName: "3А / Архитектура",
+      parentClass: CLASS_3A,
+      deliveryGroupStudentCount: 12,
+      subjectId: "subject-arch",
+      subjectName: "Архитектура",
+      subjectType: "ELECTIVE_REQUIRED",
+      teacherId: "teacher-2",
+      teacherName: "Петров",
+      roomId: "room-102",
+      roomName: "102",
+    }),
+  ]);
+
+  assert.ok(hasConflictCode(analysis.hardConflicts, "ACADEMIC_ELECTIVE_OVERLAP"));
+});
+
 test("room capacity overflow is a hard conflict", () => {
   const analysis = analyzeScheduleTemplateConflicts([
     makeSharedProjection({
@@ -312,7 +381,7 @@ test("the same template projected into multiple class rows does not conflict wit
   assert.equal(analysis.conflicts.length, 0);
 });
 
-test("preferred-teacher warning is deterministic and affects only non-preferred templates", () => {
+test("multiple teachers for the same audience and subject warn on all related lessons", () => {
   const analysis = analyzeScheduleTemplateConflicts([
     makeDirectClassProjection({
       id: "event-1",
@@ -348,11 +417,14 @@ test("preferred-teacher warning is deterministic and affects only non-preferred 
     }),
   ]);
 
-  const warning = analysis.conflicts.find((conflict) => conflict.code === "PREFERRED_TEACHER_MISMATCH");
+  const warnings = analysis.conflicts.filter((conflict) => conflict.code === "MULTIPLE_SUBJECT_TEACHERS_ASSIGNED");
 
-  assert.ok(warning);
-  assert.equal(warning?.severity, "warning");
-  assert.deepEqual(warning?.affectedTemplateIds, ["template-3"]);
+  assert.equal(warnings.length, 3);
+  assert.deepEqual(
+    warnings.map((warning) => warning.affectedTemplateIds[0]).sort(),
+    ["template-1", "template-2", "template-3"],
+  );
+  assert.ok(warnings.every((warning) => warning.severity === "warning"));
   assert.equal(analysis.hasHardConflicts, false);
 });
 
