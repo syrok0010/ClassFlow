@@ -4,7 +4,7 @@ import { useForm } from "@tanstack/react-form";
 import { format, parse } from "date-fns";
 import { CalendarCheckIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import {
@@ -179,25 +179,26 @@ export function ApplyTemplateDialogButton() {
     },
   });
 
-  function resetState() {
-    form.reset(getDefaultValues());
-  }
-
   function handleOpenChange(nextOpen: boolean) {
-    setOpen(nextOpen);
-
     if (nextOpen) {
+      const defaultValues = getDefaultValues();
+
+      previewLoader.cancel();
+      templateValidationLoader.cancel();
+      setPendingApplyInput(null);
+      form.reset(defaultValues);
+      setPreview(null);
+      setTemplateValidation(null);
+      setOpen(true);
       requestTemplateValidation();
-      requestPreview(form.state.values);
+      requestPreview(defaultValues);
       return;
     }
 
+    setOpen(false);
     templateValidationLoader.cancel();
     previewLoader.cancel();
-    setTemplateValidation(null);
-    setPreview(null);
     setPendingApplyInput(null);
-    resetState();
   }
 
   function handleDateChange(
@@ -462,6 +463,14 @@ function ApplyTemplateValidationNotice({
 }: {
   validation: TemplateValidationState | null;
 }) {
+  return (
+    <AnimatedNoticeHeight>
+      {renderTemplateValidationNotice(validation)}
+    </AnimatedNoticeHeight>
+  );
+}
+
+function renderTemplateValidationNotice(validation: TemplateValidationState | null) {
   if (!validation || validation.status === "loading") {
     return (
       <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
@@ -494,6 +503,46 @@ function ApplyTemplateValidationNotice({
           <li key={message}>{message}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function AnimatedNoticeHeight({ children }: { children: ReactNode }) {
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [height, setHeight] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const element = contentRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    const updateHeight = () => {
+      setHeight(element.getBoundingClientRect().height);
+    };
+
+    updateHeight();
+
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [children]);
+
+  return (
+    <div
+      className="overflow-hidden transition-[height] duration-200 ease-out motion-reduce:transition-none"
+      style={height === null ? undefined : { height }}
+    >
+      <div ref={contentRef}>
+        {children}
+      </div>
     </div>
   );
 }
