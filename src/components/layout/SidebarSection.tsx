@@ -16,6 +16,11 @@ export function SidebarSection({
   pathname,
   section,
 }: SidebarSectionProps) {
+  const activeHref =
+    section.items
+      .filter((link) => isPathActive(pathname, link.href))
+      .sort((left, right) => right.href.length - left.href.length)[0]?.href ?? null;
+
   return (
     <div
       className="relative"
@@ -36,10 +41,7 @@ export function SidebarSection({
         )}
       >
         {section.items.map((link) => {
-          const isActive =
-            link.href === "/admin"
-              ? pathname === "/admin"
-              : pathname === link.href || pathname?.startsWith(`${link.href}/`);
+          const isActive = link.href === activeHref;
 
           return (
             <Link
@@ -78,4 +80,12 @@ export function SidebarSection({
       </div>
     </div>
   );
+}
+
+function isPathActive(pathname: string | null, href: string): boolean {
+  if (href === "/admin") {
+    return pathname === "/admin";
+  }
+
+  return pathname === href || Boolean(pathname?.startsWith(`${href}/`));
 }

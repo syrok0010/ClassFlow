@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import {LucideIcon, NotebookPen} from "lucide-react";
 import {
   BarChart,
   BookOpen,
@@ -30,7 +30,8 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     label: "Администрирование",
     items: [
       { name: "Дашборд", href: "/admin", icon: LayoutDashboard },
-      { name: "Расписание", href: "/admin/schedule", icon: CalendarDays },
+      { name: "Шаблон расписания", href: "/admin/schedule", icon: NotebookPen },
+      { name: "Фактическое расписание", href: "/admin/schedule/entries", icon: CalendarDays },
       { name: "Доступность", href: "/admin/availability", icon: UserSquare2 },
       { name: "Помещения", href: "/admin/rooms", icon: Building2 },
       { name: "Предметы", href: "/admin/subjects", icon: BarChart },
