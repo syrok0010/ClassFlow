@@ -18,6 +18,12 @@ import {
   deleteAdminScheduleTemplateAction,
 } from "../_actions/schedule-actions";
 import type { AdminScheduleEvent, AdminSchedulePageData } from "../_lib/admin-schedule-types";
+import {
+  buildDetachTemplateInput,
+  buildDraftFromEvent,
+  buildEmptyDraft,
+  buildMoveTemplateInput,
+} from "../_lib/admin-schedule-template-commands";
 import { detectAdminScheduleConflicts } from "./admin-schedule-conflicts";
 import {
   DraggableScheduleEventCard,
@@ -153,35 +159,12 @@ export function AdminScheduleView({
   const conflictByEvent = useMemo(() => detectAdminScheduleConflicts(gridEvents), [gridEvents]);
 
   const handleEdit = (event: AdminScheduleEvent) => {
-    setEditingDraft({
-      templateId: event.templateId,
-      dayOfWeek: event.dayOfWeek,
-      startMinutes: event.startMinutes,
-      endMinutes: event.endMinutes,
-      subjectId: event.subjectId,
-      deliveryMode: event.deliveryMode,
-      deliveryGroupId: event.deliveryGroupId,
-      roomId: event.roomId,
-      teacherId: event.teacherId,
-      openClassIds: event.openClassIds,
-      coveredClassIds: event.coveredClassIds,
-    });
+    setEditingDraft(buildDraftFromEvent(event));
     setIsEditorOpen(true);
   };
 
   const handleCreate = () => {
-    setEditingDraft({
-      dayOfWeek: null,
-      startMinutes: null,
-      endMinutes: null,
-      subjectId: "",
-      deliveryMode: "DIRECT_GROUP",
-      deliveryGroupId: null,
-      roomId: null,
-      teacherId: null,
-      openClassIds: [],
-      coveredClassIds: [],
-    });
+    setEditingDraft(buildEmptyDraft());
     setIsEditorOpen(true);
   };
 
@@ -198,19 +181,9 @@ export function AdminScheduleView({
     }
 
     if (overId === PARKING_DROP_ID) {
-      const result = await createOrUpdateAdminScheduleTemplateAction({
-        templateId: activeEvent.templateId,
-        dayOfWeek: null,
-        startMinutes: null,
-        endMinutes: null,
-        deliveryMode: activeEvent.deliveryMode,
-        deliveryGroupId: activeEvent.deliveryGroupId,
-        openClassIds: activeEvent.openClassIds,
-        coveredClassIds: activeEvent.coveredClassIds,
-        subjectId: activeEvent.subjectId,
-        roomId: activeEvent.roomId,
-        teacherId: activeEvent.teacherId,
-      });
+      const result = await createOrUpdateAdminScheduleTemplateAction(
+        buildDetachTemplateInput(activeEvent),
+      );
       if (result.error) {
         return;
       }
@@ -225,45 +198,21 @@ export function AdminScheduleView({
     const [, dayKey, rowId, startMinutesRaw] = overId.split(":");
     const dayOfWeek = DAY_CODE_TO_NUMBER[dayKey];
     const startMinutes = Number(startMinutesRaw);
-    const duration =
-      activeEvent.startMinutes !== null && activeEvent.endMinutes !== null
-        ? Math.max(1, activeEvent.endMinutes - activeEvent.startMinutes)
-        : 45;
 
     if (!dayOfWeek || Number.isNaN(startMinutes) || !rowId) {
       return;
     }
 
-    if (activeEvent.deliveryMode === "DIRECT_GROUP"
-      && activeEvent.deliveryGroupType === "SUBJECT_SUBGROUP"
-      && rowId !== activeEvent.projectionClassId) {
+    const moveInput = buildMoveTemplateInput(activeEvent, {
+      dayOfWeek,
+      rowId,
+      startMinutes,
+    });
+    if (!moveInput) {
       return;
     }
 
-    const nextDeliveryGroupId = activeEvent.deliveryMode === "DIRECT_GROUP"
-      && activeEvent.deliveryGroupType === "CLASS"
-      ? rowId
-      : activeEvent.deliveryGroupId;
-    const nextOpenClassIds = activeEvent.deliveryMode === "ELECTIVE_GROUP"
-      ? replaceProjectionClassId(activeEvent.openClassIds, activeEvent.projectionClassId, rowId)
-      : activeEvent.openClassIds;
-    const nextCoveredClassIds = activeEvent.deliveryMode === "SHARED_CLASSES"
-      ? replaceProjectionClassId(activeEvent.coveredClassIds, activeEvent.projectionClassId, rowId)
-      : activeEvent.coveredClassIds;
-
-    const result = await createOrUpdateAdminScheduleTemplateAction({
-      templateId: activeEvent.templateId,
-      dayOfWeek,
-      startMinutes,
-      endMinutes: startMinutes + duration,
-      deliveryMode: activeEvent.deliveryMode,
-      deliveryGroupId: nextDeliveryGroupId,
-      openClassIds: nextOpenClassIds,
-      coveredClassIds: nextCoveredClassIds,
-      subjectId: activeEvent.subjectId,
-      roomId: activeEvent.roomId,
-      teacherId: activeEvent.teacherId,
-    });
+    const result = await createOrUpdateAdminScheduleTemplateAction(moveInput);
     if (result.error) {
       return;
     }
@@ -388,13 +337,4 @@ export function AdminScheduleView({
       />
     </div>
   );
-}
-
-function replaceProjectionClassId(classIds: string[], sourceClassId: string, targetClassId: string) {
-  if (sourceClassId === targetClassId || classIds.includes(targetClassId)) {
-    return classIds;
-  }
-
-  const next = classIds.map((classId) => (classId === sourceClassId ? targetClassId : classId));
-  return Array.from(new Set(next));
 }

@@ -11,8 +11,7 @@ import {
 } from "@/components/ui/select";
 
 import type { AdminScheduleTeacherOption } from "../../_lib/admin-schedule-types";
-import type { ScheduleEditorSubject } from "../../_lib/schedule-editor-form";
-import type { ScheduleStepperFormValue } from "../../_lib/schedule-editor-flow";
+import type { ScheduleEditorSubject, ScheduleStepperFormValue } from "../../_lib/schedule-editor-flow";
 import { NONE_VALUE } from "./constants";
 import { SelectEmptyState } from "./select-empty-state";
 import type { ScheduleEditorFieldRenderer, ScheduleEditorPatchHandler } from "./types";

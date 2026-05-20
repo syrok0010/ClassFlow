@@ -1,4 +1,4 @@
-import type { AttendanceLoadMode, GroupType, ScheduleDeliveryMode } from "@/generated/prisma/enums";
+import type { AttendanceLoadMode, GroupType, ScheduleDeliveryMode, SubjectType } from "@/generated/prisma/enums";
 
 import type {
   AdminScheduleClassRow,
@@ -37,10 +37,10 @@ type AudienceSelection = {
   subjectIds: string[];
 };
 
-export type ScheduleEditorSubjectOption = {
+export type ScheduleEditorSubject = {
   id: string;
   name: string;
-  type: string;
+  type: SubjectType;
   defaultAttendanceLoadMode: AttendanceLoadMode;
 };
 
@@ -76,6 +76,20 @@ export const SCHEDULE_EDITOR_STEPS: ScheduleEditorStep[] = [
     description: "Выберите день недели и время начала. Конец посчитается автоматически.",
   },
 ];
+
+export const GROUP_TYPE_LABELS: Record<GroupType, string> = {
+  CLASS: "Класс",
+  KINDERGARTEN_GROUP: "Группа",
+  SUBJECT_SUBGROUP: "Подгруппа",
+  ELECTIVE_GROUP: "Группа по выбору",
+};
+
+export const CARD_KIND_LABELS: Record<ScheduleCardKind, string> = {
+  CLASS: "Класс",
+  SUBGROUP: "Подгруппа",
+  ELECTIVE_GROUP: "Группа по выбору",
+  SHARED_CLASSES: "Объединенная группа",
+};
 
 export function getInitialCardKind(
   draft: Pick<AdminScheduleTemplateMutationInput, "deliveryMode" | "deliveryGroupId"> | null,
@@ -213,13 +227,13 @@ export function getAvailableSubjectIds(
 export function getAvailableRoomOptions(
   roomOptions: AdminScheduleRoomOption[],
   audienceSelection: AudienceSelection | null,
-  subject: Pick<ScheduleEditorSubjectOption, "id" | "defaultAttendanceLoadMode"> | null,
+  subject: Pick<ScheduleEditorSubject, "id" | "defaultAttendanceLoadMode"> | null,
 ) {
   if (!audienceSelection || !subject) {
     return [] as AdminScheduleRoomOption[];
   }
 
-  const expectedSize = getExpectedAttendanceSize(
+  const expectedSize = getExpectedScheduleAudienceSize(
     audienceSelection,
     subject.defaultAttendanceLoadMode,
   );
@@ -227,13 +241,6 @@ export function getAvailableRoomOptions(
   return roomOptions.filter(
     (room) => room.subjectIds.includes(subject.id) && room.seatsCount >= expectedSize,
   );
-}
-
-export function getExpectedAttendanceSize(
-  audienceSelection: AudienceSelection,
-  loadMode: AttendanceLoadMode,
-) {
-  return getExpectedScheduleAudienceSize(audienceSelection, loadMode);
 }
 
 export function getAvailableTeacherOptions(
@@ -354,30 +361,4 @@ function getMinNumber(values: Array<number | null>) {
 function getMaxNumber(values: Array<number | null>) {
   const numbers = values.filter((value): value is number => typeof value === "number");
   return numbers.length > 0 ? Math.max(...numbers) : null;
-}
-
-export function getCardKindLabel(kind: ScheduleCardKind | null) {
-  if (!kind) {
-    return null;
-  }
-
-  const labels: Record<ScheduleCardKind, string> = {
-    CLASS: "Класс",
-    SUBGROUP: "Подгруппа",
-    ELECTIVE_GROUP: "Группа по выбору",
-    SHARED_CLASSES: "Объединенная группа",
-  };
-
-  return labels[kind];
-}
-
-export function getGroupTypeLabel(type: GroupType) {
-  const labels: Record<GroupType, string> = {
-    CLASS: "Класс",
-    KINDERGARTEN_GROUP: "Группа",
-    SUBJECT_SUBGROUP: "Подгруппа",
-    ELECTIVE_GROUP: "Группа по выбору",
-  };
-
-  return labels[type];
 }

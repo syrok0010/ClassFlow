@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useForm } from "@tanstack/react-form";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,22 +21,14 @@ import type {
 } from "../_lib/admin-schedule-types";
 import {
   buildDefaultScheduleEditorValues,
-  createScheduleEditorFormSchema,
-  getInitialScheduleEditorStepId,
-  getScheduleEditorStepErrors,
   minutesToTime,
-  normalizeScheduleEditorValue,
   type ScheduleEditorDraft,
-  type ScheduleEditorSubject,
+  type ScheduleEditorFormContext,
 } from "../_lib/schedule-editor-form";
 import {
-  getAudienceSelection,
+  CARD_KIND_LABELS,
   getAudienceSummaryLabel,
-  getAvailableRoomOptions,
-  getAvailableSubjectIds,
-  getAvailableTeacherOptions,
-  getCardKindLabel,
-  getDurationMinutes,
+  type ScheduleEditorSubject,
   type ScheduleEditorStepId,
   type ScheduleStepperFormValue,
   SCHEDULE_EDITOR_STEPS,
@@ -51,6 +42,7 @@ import { TeacherStep } from "./schedule-event-editor-dialog-steps/teacher-step";
 import { TimeStep } from "./schedule-event-editor-dialog-steps/time-step";
 import type { ScheduleEditorFieldRenderer } from "./schedule-event-editor-dialog-steps/types";
 import type { FilterOption } from "./schedule-multi-select";
+import { useScheduleEditorController } from "./use-schedule-editor-controller";
 
 export type { ScheduleEditorDraft } from "../_lib/schedule-editor-form";
 
@@ -71,38 +63,6 @@ interface ScheduleEventEditorDialogProps {
   onSave: (draft: ScheduleEditorDraft) => Promise<string | null>;
 }
 
-const STEP_FIELDS: Record<ScheduleEditorStepId, Array<keyof ScheduleStepperFormValue>> = {
-  kind: ["cardKind"],
-  audience: ["deliveryGroupId", "openClassIds", "coveredClassIds"],
-  subject: ["subjectId"],
-  room: ["roomId"],
-  teacher: ["teacherId"],
-  time: ["dayOfWeek", "startMinutes", "endMinutes"],
-};
-
-const STEP_RESET_VALUES: Record<ScheduleEditorStepId, Partial<ScheduleStepperFormValue>> = {
-  kind: {},
-  audience: {
-    deliveryGroupId: null,
-    openClassIds: [],
-    coveredClassIds: [],
-  },
-  subject: {
-    subjectId: "",
-  },
-  room: {
-    roomId: null,
-  },
-  teacher: {
-    teacherId: null,
-  },
-  time: {
-    dayOfWeek: null,
-    startMinutes: null,
-    endMinutes: null,
-  },
-};
-
 export function ScheduleEventEditorDialog({
   open,
   title,
@@ -119,16 +79,16 @@ export function ScheduleEventEditorDialog({
   onOpenChange,
   onSave,
 }: ScheduleEventEditorDialogProps) {
-  const formContext = useMemo(
+  const formContext = useMemo<ScheduleEditorFormContext>(
     () => ({
-        subjectOptions,
-        classRows,
-        directGroupOptions,
-        electiveGroupOptions,
-        roomOptions,
-        teacherOptions,
-        lessonDurationByGroupSubject,
-      }),
+      subjectOptions,
+      classRows,
+      directGroupOptions,
+      electiveGroupOptions,
+      roomOptions,
+      teacherOptions,
+      lessonDurationByGroupSubject,
+    }),
     [
       classRows,
       directGroupOptions,
@@ -156,14 +116,8 @@ export function ScheduleEventEditorDialog({
           title={title}
           description={description}
           initialValues={initialValues}
-          subjectOptions={subjectOptions}
+          formContext={formContext}
           classOptions={classOptions}
-          directGroupOptions={directGroupOptions}
-          electiveGroupOptions={electiveGroupOptions}
-          roomOptions={roomOptions}
-          teacherOptions={teacherOptions}
-          classRows={classRows}
-          lessonDurationByGroupSubject={lessonDurationByGroupSubject}
           onOpenChange={onOpenChange}
           onSave={onSave}
         />
@@ -172,145 +126,30 @@ export function ScheduleEventEditorDialog({
   );
 }
 
-type ScheduleEventEditorDialogContentProps = Omit<ScheduleEventEditorDialogProps, "open" | "draft"> & {
+type ScheduleEventEditorDialogContentProps = Pick<
+  ScheduleEventEditorDialogProps,
+  "title" | "description" | "classOptions" | "onOpenChange" | "onSave"
+> & {
   initialValues: ScheduleStepperFormValue;
+  formContext: ScheduleEditorFormContext;
 };
 
 function ScheduleEventEditorDialogContent({
   title,
   description,
   initialValues,
-  subjectOptions,
+  formContext,
   classOptions,
-  directGroupOptions,
-  electiveGroupOptions,
-  roomOptions,
-  teacherOptions,
-  classRows,
-  lessonDurationByGroupSubject,
   onOpenChange,
   onSave,
 }: ScheduleEventEditorDialogContentProps) {
-  const formContext = useMemo(
-    () => ({
-      subjectOptions,
-      classRows,
-      directGroupOptions,
-      electiveGroupOptions,
-      roomOptions,
-      teacherOptions,
-      lessonDurationByGroupSubject,
-    }),
-    [
-      classRows,
-      directGroupOptions,
-      electiveGroupOptions,
-      lessonDurationByGroupSubject,
-      roomOptions,
-      subjectOptions,
-      teacherOptions,
-    ],
-  );
-  const validationSchema = useMemo(
-    () => createScheduleEditorFormSchema(formContext),
-    [formContext],
-  );
-  const [currentStepId, setCurrentStepId] = useState<ScheduleEditorStepId>(
-    initialValues.templateId
-      ? getInitialScheduleEditorStepId(
-          initialValues,
-          formContext,
-        )
-      : "kind",
-  );
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [attemptedStepIds, setAttemptedStepIds] = useState<Set<ScheduleEditorStepId>>(() => new Set());
-
-  const form = useForm({
-    defaultValues: initialValues satisfies ScheduleStepperFormValue,
-    validators: {
-      onChange: validationSchema,
-      onBlur: validationSchema,
-      onSubmit: validationSchema,
-    },
-    onSubmit: async ({ value }) => {
-      const isScheduled = value.startMinutes !== null && value.dayOfWeek !== null;
-      const error = await onSave({
-        templateId: value.templateId,
-        dayOfWeek: isScheduled ? value.dayOfWeek : null,
-        startMinutes: isScheduled ? value.startMinutes : null,
-        endMinutes: isScheduled ? value.endMinutes : null,
-        subjectId: value.subjectId,
-        deliveryMode: value.deliveryMode,
-        deliveryGroupId: value.deliveryGroupId,
-        roomId: value.roomId,
-        teacherId: value.teacherId,
-        openClassIds: value.openClassIds,
-        coveredClassIds: value.coveredClassIds,
-      });
-
-      if (error) {
-        setSubmitError(error);
-        return;
-      }
-
-      onOpenChange(false);
-    },
+  const controller = useScheduleEditorController({
+    initialValues,
+    formContext,
+    onOpenChange,
+    onSave,
   });
-
-  const setScheduleFieldValue = <K extends keyof ScheduleStepperFormValue>(
-    field: K,
-    value: ScheduleStepperFormValue[K],
-  ) => {
-    form.setFieldValue(field as never, value as never);
-  };
-
-  const applyPatch = (
-    values: ScheduleStepperFormValue,
-    patch: Partial<ScheduleStepperFormValue>,
-  ) => {
-    const changedStepId = getChangedStepId(patch);
-    const resetPatch = changedStepId ? getResetPatchAfterStep(changedStepId) : {};
-
-    setSubmitError(null);
-    setAttemptedStepIds((previous) => {
-      const next = new Set(previous);
-
-      if (!changedStepId) {
-        next.delete(currentStepId);
-        return next;
-      }
-
-      const changedStepIndex = SCHEDULE_EDITOR_STEPS.findIndex((step) => step.id === changedStepId);
-      for (const step of SCHEDULE_EDITOR_STEPS.slice(changedStepIndex)) {
-        next.delete(step.id);
-      }
-
-      return next;
-    });
-
-    const nextValues = normalizeScheduleEditorValue(
-      {
-        ...values,
-        ...patch,
-        ...resetPatch,
-      },
-      formContext,
-    );
-
-    const changedKeys = new Set<keyof ScheduleStepperFormValue>([
-      ...Object.keys(patch),
-      ...Object.keys(resetPatch),
-      "deliveryMode",
-      "endMinutes",
-      "roomId",
-      "teacherId",
-    ] as Array<keyof ScheduleStepperFormValue>);
-
-    for (const key of changedKeys) {
-      setScheduleFieldValue(key, nextValues[key]);
-    }
-  };
+  const { currentStepId, form, submitError } = controller;
 
   return (
     <DialogContent className="sm:max-w-3xl">
@@ -326,37 +165,21 @@ function ScheduleEventEditorDialogContent({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        <form.Subscribe selector={(state) => ({ values: state.values })}>
-          {({ values }) => {
-            const audienceSelection = getAudienceSelection(values, classRows, directGroupOptions, electiveGroupOptions);
-            const availableSubjectIds = getAvailableSubjectIds(
-              values,
-              classRows,
-              directGroupOptions,
-              electiveGroupOptions,
-            );
-            const availableSubjectOptions = subjectOptions.filter((option) => availableSubjectIds.includes(option.id));
-            const availableRoomOptions = getAvailableRoomOptions(
-              roomOptions,
-              audienceSelection,
-              subjectOptions.find((subject) => subject.id === values.subjectId) ?? null,
-            );
-            const availableTeacherOptions = getAvailableTeacherOptions(
-              teacherOptions,
-              audienceSelection,
-              values.subjectId,
-            );
-            const durationMinutes = getDurationMinutes(values, lessonDurationByGroupSubject);
-            const stepErrors = getScheduleEditorStepErrors(values, formContext);
-            const currentStepIndex = SCHEDULE_EDITOR_STEPS.findIndex((step) => step.id === currentStepId);
-            const currentStepError = stepErrors[currentStepId];
-            const visibleCurrentStepError =
-              attemptedStepIds.has(currentStepId) || currentStepId === "time"
-                ? currentStepError
-                : null;
-            const canGoPrev = currentStepIndex > 0;
-            const nextStepId = SCHEDULE_EDITOR_STEPS[currentStepIndex + 1]?.id ?? null;
-            const hasBlockingErrors = Object.values(stepErrors).some((error) => error !== null);
+        <form.Subscribe selector={(state) => state.values}>
+          {(values) => {
+            const {
+              availableSubjectOptions,
+              availableRoomOptions,
+              availableTeacherOptions,
+              durationMinutes,
+              stepErrors,
+              currentStepError,
+              visibleCurrentStepError,
+              currentStepIndex,
+              canGoPrev,
+              nextStepId,
+              hasBlockingErrors,
+            } = controller.getDerivedState(values);
 
             return (
               <>
@@ -367,12 +190,12 @@ function ScheduleEventEditorDialogContent({
 
                 <EditorSummaryStrip
                   values={values}
-                  classRows={classRows}
-                  directGroupOptions={directGroupOptions}
-                  electiveGroupOptions={electiveGroupOptions}
-                  roomOptions={roomOptions}
-                  teacherOptions={teacherOptions}
-                  subjectOptions={subjectOptions}
+                  classRows={formContext.classRows}
+                  directGroupOptions={formContext.directGroupOptions}
+                  electiveGroupOptions={formContext.electiveGroupOptions}
+                  roomOptions={formContext.roomOptions}
+                  teacherOptions={formContext.teacherOptions}
+                  subjectOptions={formContext.subjectOptions}
                   durationMinutes={durationMinutes}
                 />
 
@@ -380,17 +203,17 @@ function ScheduleEventEditorDialogContent({
                   stepId={currentStepId}
                   FormField={form.Field as unknown as ScheduleEditorFieldRenderer}
                   values={values}
-                  classRows={classRows}
+                  classRows={formContext.classRows}
                   classOptions={classOptions}
-                  directGroupOptions={directGroupOptions}
-                  electiveGroupOptions={electiveGroupOptions}
-                  subjectOptions={subjectOptions}
+                  directGroupOptions={formContext.directGroupOptions}
+                  electiveGroupOptions={formContext.electiveGroupOptions}
+                  subjectOptions={formContext.subjectOptions}
                   availableSubjectOptions={availableSubjectOptions}
                   availableRoomOptions={availableRoomOptions}
                   availableTeacherOptions={availableTeacherOptions}
                   durationMinutes={durationMinutes}
                   stepError={visibleCurrentStepError}
-                  onPatch={(patch) => applyPatch(values, patch)}
+                  onPatch={(patch) => controller.applyPatch(values, patch)}
                 />
 
                 {currentStepId === "time" ? (
@@ -401,14 +224,14 @@ function ScheduleEventEditorDialogContent({
 
                 <DialogFooter className="justify-between">
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} type="button">
+                    <Button variant="outline" onClick={controller.closeDialog} type="button">
                       Отмена
                     </Button>
                     {canGoPrev ? (
                       <Button
                         variant="outline"
                         type="button"
-                        onClick={() => setCurrentStepId(SCHEDULE_EDITOR_STEPS[currentStepIndex - 1].id)}
+                        onClick={() => controller.goToPreviousStep(currentStepIndex)}
                       >
                         Назад
                       </Button>
@@ -418,16 +241,7 @@ function ScheduleEventEditorDialogContent({
                   {currentStepIndex < SCHEDULE_EDITOR_STEPS.length - 1 ? (
                     <Button
                       type="button"
-                      onClick={() => {
-                        if (currentStepError !== null) {
-                          setAttemptedStepIds((previous) => new Set(previous).add(currentStepId));
-                          return;
-                        }
-
-                        if (nextStepId) {
-                          setCurrentStepId(nextStepId);
-                        }
-                      }}
+                      onClick={() => controller.goToNextStep({ currentStepError, nextStepId })}
                     >
                       Далее
                     </Button>
@@ -550,25 +364,6 @@ function CurrentStepContent({
   );
 }
 
-function getChangedStepId(patch: Partial<ScheduleStepperFormValue>) {
-  return SCHEDULE_EDITOR_STEPS.find((step) =>
-    STEP_FIELDS[step.id].some((field) => field in patch),
-  )?.id ?? null;
-}
-
-function getResetPatchAfterStep(stepId: ScheduleEditorStepId) {
-  const stepIndex = SCHEDULE_EDITOR_STEPS.findIndex((step) => step.id === stepId);
-
-  return SCHEDULE_EDITOR_STEPS
-    .slice(stepIndex + 1)
-    .reduce<Partial<ScheduleStepperFormValue>>((result, step) => {
-      return {
-        ...result,
-        ...STEP_RESET_VALUES[step.id],
-      };
-    }, {});
-}
-
 function FinalStepErrors({
   stepErrors,
 }: {
@@ -664,7 +459,7 @@ function EditorSummaryStrip({
   const teacherName = teacherOptions.find((option) => option.id === values.teacherId)?.name ?? null;
   const timeLabel = getTimeSummaryLabel(values);
   const summaryItems = [
-    getCardKindLabel(values.cardKind),
+    values.cardKind ? CARD_KIND_LABELS[values.cardKind] : null,
     audienceLabel,
     subjectName,
     durationMinutes === null ? null : `${durationMinutes} мин`,

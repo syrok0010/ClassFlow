@@ -16,8 +16,8 @@ import type {
   AdminScheduleGroupOption,
 } from "../../_lib/admin-schedule-types";
 import {
+  GROUP_TYPE_LABELS,
   getGroupOptionsByKind,
-  getGroupTypeLabel,
   type ScheduleCardKind,
   type ScheduleStepperFormValue,
 } from "../../_lib/schedule-editor-flow";
@@ -180,5 +180,5 @@ function getGroupSelectionDescription(
     return `${group.studentCount} чел.`;
   }
 
-  return `${getGroupTypeLabel((group as AdminScheduleGroupOption).type)} • ${group.studentCount} чел.`;
+  return `${GROUP_TYPE_LABELS[(group as AdminScheduleGroupOption).type]} • ${group.studentCount} чел.`;
 }

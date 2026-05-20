@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import type { SubjectType } from "@/generated/prisma/enums";
-
 import type {
   AdminScheduleClassRow,
   AdminScheduleElectiveGroupOption,
@@ -21,30 +19,16 @@ import {
   getInitialCardKind,
   SCHEDULE_EDITOR_STEPS,
   type ScheduleEditorStepId,
-  type ScheduleEditorSubjectOption,
+  type ScheduleEditorSubject,
   type ScheduleStepperFormValue,
 } from "./schedule-editor-flow";
 import {
-  createAdminScheduleTemplateMutationSchema,
   type AdminScheduleTemplateMutationInput,
   type AdminScheduleTemplateValidationContext,
+  createAdminScheduleTemplateMutationSchema,
 } from "./schedule-mutations-schema";
 
-export type ScheduleEditorSubject = ScheduleEditorSubjectOption & { type: SubjectType };
-
-export type ScheduleEditorDraft = {
-  templateId?: string;
-  dayOfWeek: number | null;
-  startMinutes: number | null;
-  endMinutes: number | null;
-  subjectId: string;
-  deliveryMode: ScheduleStepperFormValue["deliveryMode"];
-  deliveryGroupId: string | null;
-  roomId: string | null;
-  teacherId: string | null;
-  openClassIds: string[];
-  coveredClassIds: string[];
-};
+export type ScheduleEditorDraft = AdminScheduleTemplateMutationInput;
 
 export type ScheduleEditorFormContext = {
   subjectOptions: ScheduleEditorSubject[];
@@ -54,6 +38,20 @@ export type ScheduleEditorFormContext = {
   roomOptions: AdminScheduleRoomOption[];
   teacherOptions: AdminScheduleTeacherOption[];
   lessonDurationByGroupSubject: Record<string, number>;
+};
+
+export type ScheduleEditorDerivedState = {
+  availableSubjectOptions: ScheduleEditorSubject[];
+  availableRoomOptions: AdminScheduleRoomOption[];
+  availableTeacherOptions: AdminScheduleTeacherOption[];
+  durationMinutes: number | null;
+  stepErrors: Record<ScheduleEditorStepId, string | null>;
+  currentStepError: string | null;
+  visibleCurrentStepError: string | null;
+  currentStepIndex: number;
+  canGoPrev: boolean;
+  nextStepId: ScheduleEditorStepId | null;
+  hasBlockingErrors: boolean;
 };
 
 export function buildDefaultScheduleEditorValues({
@@ -66,7 +64,7 @@ export function buildDefaultScheduleEditorValues({
   const cardKind = draft?.templateId
     ? getInitialCardKind(draft, context.directGroupOptions)
     : null;
-  const initialValue = normalizeScheduleEditorValue(
+  return normalizeScheduleEditorValue(
     {
       templateId: draft?.templateId,
       cardKind,
@@ -83,8 +81,6 @@ export function buildDefaultScheduleEditorValues({
     },
     context,
   );
-
-  return initialValue;
 }
 
 export function createScheduleEditorFormSchema(context: ScheduleEditorFormContext) {
@@ -320,6 +316,69 @@ export function getScheduleEditorStepErrors(
   ) as Record<ScheduleEditorStepId, string | null>;
 }
 
+export function buildScheduleEditorDerivedState({
+  value,
+  context,
+  currentStepId,
+  attemptedStepIds,
+}: {
+  value: ScheduleStepperFormValue;
+  context: ScheduleEditorFormContext;
+  currentStepId: ScheduleEditorStepId;
+  attemptedStepIds: ReadonlySet<ScheduleEditorStepId>;
+}): ScheduleEditorDerivedState {
+  const audienceSelection = getAudienceSelection(
+    value,
+    context.classRows,
+    context.directGroupOptions,
+    context.electiveGroupOptions,
+  );
+  const availableSubjectIdSet = new Set(
+    getAvailableSubjectIds(
+      value,
+      context.classRows,
+      context.directGroupOptions,
+      context.electiveGroupOptions,
+    ),
+  );
+  const selectedSubject = context.subjectOptions.find((subject) => subject.id === value.subjectId) ?? null;
+  const availableSubjectOptions = context.subjectOptions.filter((subject) => availableSubjectIdSet.has(subject.id));
+  const availableRoomOptions = getAvailableRoomOptions(
+    context.roomOptions,
+    audienceSelection,
+    selectedSubject,
+  );
+  const availableTeacherOptions = getAvailableTeacherOptions(
+    context.teacherOptions,
+    audienceSelection,
+    value.subjectId,
+  );
+  const durationMinutes = getDurationMinutes(value, context.lessonDurationByGroupSubject);
+  const stepErrors = getScheduleEditorStepErrors(value, context);
+  const currentStepIndex = Math.max(
+    0,
+    SCHEDULE_EDITOR_STEPS.findIndex((step) => step.id === currentStepId),
+  );
+  const currentStepError = stepErrors[currentStepId];
+
+  return {
+    availableSubjectOptions,
+    availableRoomOptions,
+    availableTeacherOptions,
+    durationMinutes,
+    stepErrors,
+    currentStepError,
+    visibleCurrentStepError:
+      attemptedStepIds.has(currentStepId) || currentStepId === "time"
+        ? currentStepError
+        : null,
+    currentStepIndex,
+    canGoPrev: currentStepIndex > 0,
+    nextStepId: SCHEDULE_EDITOR_STEPS[currentStepIndex + 1]?.id ?? null,
+    hasBlockingErrors: Object.values(stepErrors).some((error) => error !== null),
+  };
+}
+
 export function getScheduleEditorStepError(
   stepId: ScheduleEditorStepId,
   value: ScheduleStepperFormValue,
@@ -407,7 +466,7 @@ export function minutesToTime(totalMinutes: number | null) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
-function toTemplateMutationInput(value: ScheduleStepperFormValue): AdminScheduleTemplateMutationInput {
+export function toTemplateMutationInput(value: ScheduleStepperFormValue): AdminScheduleTemplateMutationInput {
   const isScheduled = value.startMinutes !== null && value.dayOfWeek !== null;
 
   return {
