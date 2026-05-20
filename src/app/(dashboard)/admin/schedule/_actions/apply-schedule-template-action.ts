@@ -3,7 +3,6 @@
 import {addDays, addMinutes, eachDayOfInterval, format, getISODay, startOfDay} from "date-fns";
 import { revalidatePath } from "next/cache";
 
-import { Prisma } from "@/generated/prisma/client";
 import type { AttendanceLoadMode, ScheduleDeliveryMode } from "@/generated/prisma/enums";
 import { getActionErrorMessage } from "@/lib/action-error";
 import { prisma } from "@/lib/prisma";
