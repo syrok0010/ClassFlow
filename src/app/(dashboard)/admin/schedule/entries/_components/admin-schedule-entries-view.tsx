@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CalendarDays } from "lucide-react";
-import { useQueryState } from "nuqs";
+import { parseAsString, parseAsStringLiteral, useQueryStates } from "nuqs";
 
 import {
   Combobox,
@@ -13,7 +13,6 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
-import { Label } from "@/components/ui/label";
 import { DEFAULT_SCHEDULE_VIEW, ReadonlyScheduleBrowser } from "@/features/schedule";
 
 import { AdminScheduleEventCard } from "../../_components/admin-schedule-event-card";
@@ -33,14 +32,16 @@ export function AdminScheduleEntriesView({
   targetId,
   viewMode,
 }: AdminScheduleEntriesPageData) {
-  const [currentScope, setCurrentScope] = useQueryState("scope", {
-    defaultValue: scope,
-    shallow: false,
-  });
-  const [currentTargetId, setCurrentTargetId] = useQueryState("targetId", {
-    defaultValue: targetId ?? "",
-    shallow: false,
-  });
+  const [{ scope: currentScope, targetId: currentTargetId }, setTargetQuery] =
+      useQueryStates(
+          {
+            scope: parseAsStringLiteral(["group", "teacher", "room"]).withDefault("group"),
+            targetId: parseAsString.withDefault(""),
+          },
+          {
+            shallow: false,
+          },
+      );
   const [targetInputValue, setTargetInputValue] = useState<string | null>(null);
 
   const optimisticScope = parseScope(currentScope);
@@ -77,59 +78,57 @@ export function AdminScheduleEntriesView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-3 text-card-foreground shadow-sm">
-        <div className="grid gap-1.5 sm:max-w-md">
-          <Label htmlFor="admin-schedule-entries-target">Объект расписания</Label>
-          <Combobox
-            items={targetOptions}
-            filteredItems={filteredTargetOptions}
-            itemToStringLabel={(item) => item.label}
-            itemToStringValue={(item) => item.id}
-            inputValue={effectiveTargetInputValue}
-            onInputValueChange={(inputValue, eventDetails) => {
-              if (
-                eventDetails.reason === "input-change" ||
-                eventDetails.reason === "input-clear" ||
-                eventDetails.reason === "clear-press"
-              ) {
-                setTargetInputValue(inputValue);
-              }
-            }}
-            value={comboboxValue}
-            onValueChange={(value) => {
-              const nextValue = normalizeComboboxValue(value);
-              setTargetInputValue(nextValue ? null : "");
-              void setCurrentScope(
-                nextValue && nextValue.scope !== "group" ? nextValue.scope : null,
-              );
-              void setCurrentTargetId(nextValue?.targetId ?? null);
-            }}
-          >
-            <ComboboxInput
-              id="admin-schedule-entries-target"
-              placeholder="Выберите группу, преподавателя или кабинет"
-              onFocus={(event) => event.currentTarget.select()}
-              showClear
-            />
-            <ComboboxContent className="w-80 bg-white p-0">
-              <ComboboxEmpty className="py-3">Ничего не найдено</ComboboxEmpty>
-              <ComboboxList>
-                <ComboboxCollection>
-                  {(option: ScheduleTargetOption) => (
-                    <ComboboxItem key={option.id} value={option}>
-                      <div className="min-w-0">
-                        <div className="truncate">{option.label}</div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {option.description}
-                        </div>
+      <div className="grid w-full gap-1.5 sm:mx-auto sm:max-w-md">
+        <Combobox
+          items={targetOptions}
+          filteredItems={filteredTargetOptions}
+          itemToStringLabel={(item) => item.label}
+          itemToStringValue={(item) => item.id}
+          inputValue={effectiveTargetInputValue}
+          onInputValueChange={(inputValue, eventDetails) => {
+            if (
+              eventDetails.reason === "input-change" ||
+              eventDetails.reason === "input-clear" ||
+              eventDetails.reason === "clear-press"
+            ) {
+              setTargetInputValue(inputValue);
+            }
+          }}
+          value={comboboxValue}
+          onValueChange={(value) => {
+            const nextValue = normalizeComboboxValue(value);
+            setTargetInputValue(nextValue ? null : "");
+
+            void setTargetQuery({
+              scope: nextValue && nextValue.scope !== "group" ? nextValue.scope : null,
+              targetId: nextValue?.targetId ?? null,
+            });
+          }}
+        >
+          <ComboboxInput
+            id="admin-schedule-entries-target"
+            placeholder="Выберите группу, преподавателя или кабинет"
+            onFocus={(event) => event.currentTarget.select()}
+            showClear
+          />
+          <ComboboxContent className="w-80 bg-white p-0">
+            <ComboboxEmpty className="py-3">Ничего не найдено</ComboboxEmpty>
+            <ComboboxList>
+              <ComboboxCollection>
+                {(option: ScheduleTargetOption) => (
+                  <ComboboxItem key={option.id} value={option}>
+                    <div className="min-w-0">
+                      <div className="truncate">{option.label}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {option.description}
                       </div>
-                    </ComboboxItem>
-                  )}
-                </ComboboxCollection>
-              </ComboboxList>
-            </ComboboxContent>
-          </Combobox>
-        </div>
+                    </div>
+                  </ComboboxItem>
+                )}
+              </ComboboxCollection>
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
       </div>
 
       <ReadonlyScheduleBrowser
