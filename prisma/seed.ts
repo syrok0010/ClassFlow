@@ -1176,36 +1176,20 @@ async function main() {
 
   console.log("Creating teacher availability data...");
 
-  const teacher1Id = teacherByKey["C3_MATH"];
-  const teacher2Id = teacherByKey["C3_PE"];
-  const teacher3Id = teacherByKey["C3_ENGLISH"];
+  const fetGenerationTeacherIds = Array.from(
+    new Set(Array.from(teacherSubjectRows.values()).map((row) => row.teacherId)),
+  );
 
   await prisma.teacherAvailability.createMany({
-    data: [
-      { teacherId: teacher1Id, dayOfWeek: 1, startTime: toMinutes("08:00"), endTime: toMinutes("14:00"), type: "AVAILABLE" },
-      { teacherId: teacher1Id, dayOfWeek: 2, startTime: toMinutes("09:00"), endTime: toMinutes("15:00"), type: "AVAILABLE" },
-      { teacherId: teacher1Id, dayOfWeek: 3, startTime: toMinutes("08:00"), endTime: toMinutes("12:00"), type: "PREFERRED" },
-      { teacherId: teacher1Id, dayOfWeek: 4, startTime: toMinutes("10:00"), endTime: toMinutes("16:00"), type: "AVAILABLE" },
-      { teacherId: teacher1Id, dayOfWeek: 5, startTime: toMinutes("08:00"), endTime: toMinutes("13:00"), type: "AVAILABLE" },
-    ],
-  });
-
-  await prisma.teacherAvailability.createMany({
-    data: [
-      { teacherId: teacher2Id, dayOfWeek: 1, startTime: toMinutes("08:00"), endTime: toMinutes("16:00"), type: "AVAILABLE" },
-      { teacherId: teacher2Id, dayOfWeek: 2, startTime: toMinutes("08:00"), endTime: toMinutes("16:00"), type: "AVAILABLE" },
-      { teacherId: teacher2Id, dayOfWeek: 3, startTime: toMinutes("08:00"), endTime: toMinutes("16:00"), type: "AVAILABLE" },
-      { teacherId: teacher2Id, dayOfWeek: 4, startTime: toMinutes("08:00"), endTime: toMinutes("16:00"), type: "AVAILABLE" },
-      { teacherId: teacher2Id, dayOfWeek: 5, startTime: toMinutes("08:00"), endTime: toMinutes("16:00"), type: "AVAILABLE" },
-    ],
-  });
-
-  await prisma.teacherAvailability.createMany({
-    data: [
-      { teacherId: teacher3Id, dayOfWeek: 1, startTime: toMinutes("08:00"), endTime: toMinutes("18:00"), type: "AVAILABLE" },
-      { teacherId: teacher3Id, dayOfWeek: 3, startTime: toMinutes("08:00"), endTime: toMinutes("18:00"), type: "AVAILABLE" },
-      { teacherId: teacher3Id, dayOfWeek: 5, startTime: toMinutes("08:00"), endTime: toMinutes("18:00"), type: "AVAILABLE" },
-    ],
+    data: fetGenerationTeacherIds.flatMap((teacherId) =>
+      [1, 2, 3, 4, 5].map((dayOfWeek) => ({
+        teacherId,
+        dayOfWeek,
+        startTime: toMinutes("08:20"),
+        endTime: toMinutes("18:00"),
+        type: "AVAILABLE" as const,
+      })),
+    ),
   });
 
   console.log("Creating teacher availability overrides...");
@@ -1220,13 +1204,13 @@ async function main() {
   await prisma.teacherAvailabilityOverride.createMany({
     data: [
       {
-        teacherId: teacher1Id,
+        teacherId: teacherByKey["C3_MATH"],
         type: "UNAVAILABLE",
         startTime: dateAtMinutes(nextMonday, toMinutes("08:00")),
         endTime: dateAtMinutes(nextMonday, toMinutes("12:00")),
       },
       {
-        teacherId: teacher3Id,
+        teacherId: teacherByKey["C3_ENGLISH"],
         type: "AVAILABLE",
         startTime: dateAtMinutes(wednesdayNextWeek, toMinutes("14:00")),
         endTime: dateAtMinutes(wednesdayNextWeek, toMinutes("16:00")),

@@ -25,6 +25,12 @@ function unique<T>(items: T[]): T[] {
   return Array.from(new Set(items));
 }
 
+function getActivityStudentSetIds(activity: FetActivity): string[] {
+  return activity.studentSetIds && activity.studentSetIds.length > 0
+    ? activity.studentSetIds
+    : [activity.groupId];
+}
+
 function getHours(): string[] {
   const hours: string[] = [];
   for (let minute = FET_DAY_START_MINUTES; minute < FET_DAY_END_MINUTES; minute += FET_PERIOD_MINUTES) {
@@ -77,39 +83,58 @@ function getActivityRoomConstraints(activity: FetActivity) {
   };
 }
 
-function getTeacherNotAvailableConstraints(input: FetInput) {
-  const normalizeTime = (value: number | Date) => {
-    if (typeof value === "number") return value;
-    return value.getHours() * 60 + value.getMinutes();
-  };
+function normalizeAvailabilityTime(value: number | Date) {
+  if (typeof value === "number") return value;
+  return value.getHours() * 60 + value.getMinutes();
+}
 
-  return input.teacherAvailabilities
-    .filter((availability) => availability.type === "UNAVAILABLE" && availability.dayOfWeek >= 1 && availability.dayOfWeek <= 5)
-    .map((availability) => {
-      const slots: FetTimeSlot[] = [];
-      const startMinutes = normalizeTime(availability.startTime);
-      const endMinutes = normalizeTime(availability.endTime);
+function isSlotInsideAvailability(
+  slot: FetTimeSlot,
+  availability: FetInput["teacherAvailabilities"][number],
+) {
+  return availability.dayOfWeek === slot.dayOfWeek
+    && normalizeAvailabilityTime(availability.startTime) <= slot.startTime
+    && slot.startTime < normalizeAvailabilityTime(availability.endTime);
+}
 
-      for (
-        let startTime = Math.max(startMinutes, FET_DAY_START_MINUTES);
-        startTime < Math.min(endMinutes, FET_DAY_END_MINUTES);
-        startTime += FET_PERIOD_MINUTES
-      ) {
-        slots.push({ dayOfWeek: availability.dayOfWeek as FetTimeSlot["dayOfWeek"], startTime });
-      }
+function getTeacherNotAvailableConstraints(input: FetInput, activeTeacherIds: string[]) {
+  const allSlots: FetTimeSlot[] = FET_DAYS.flatMap((day) => {
+    const slots: FetTimeSlot[] = [];
 
-      return {
-        Weight_Percentage: 100,
-        Teacher: availability.teacherId,
-        Number_of_Not_Available_Times: slots.length,
-        Not_Available_Time: slots.map((slot) => ({
-          Day: DAY_NAME_BY_NUMBER.get(slot.dayOfWeek),
-          Hour: minutesToFetHour(slot.startTime),
-        })),
-        Active: true,
-        Comments: "",
-      };
+    for (let startTime = FET_DAY_START_MINUTES; startTime < FET_DAY_END_MINUTES; startTime += FET_PERIOD_MINUTES) {
+      slots.push({ dayOfWeek: day.dayOfWeek, startTime });
+    }
+
+    return slots;
+  });
+
+  return activeTeacherIds.map((teacherId) => {
+    const teacherAvailabilities = input.teacherAvailabilities.filter((availability) =>
+      availability.teacherId === teacherId && availability.dayOfWeek >= 1 && availability.dayOfWeek <= 5,
+    );
+    const allowedAvailabilities = teacherAvailabilities.filter((availability) =>
+      availability.type === "AVAILABLE" || availability.type === "PREFERRED",
+    );
+    const unavailableAvailabilities = teacherAvailabilities.filter((availability) => availability.type === "UNAVAILABLE");
+    const notAvailableSlots = allSlots.filter((slot) => {
+      const insideAllowed = allowedAvailabilities.some((availability) => isSlotInsideAvailability(slot, availability));
+      const insideUnavailable = unavailableAvailabilities.some((availability) => isSlotInsideAvailability(slot, availability));
+
+      return !insideAllowed || insideUnavailable;
     });
+
+    return {
+      Weight_Percentage: 100,
+      Teacher: teacherId,
+      Number_of_Not_Available_Times: notAvailableSlots.length,
+      Not_Available_Time: notAvailableSlots.map((slot) => ({
+        Day: DAY_NAME_BY_NUMBER.get(slot.dayOfWeek),
+        Hour: minutesToFetHour(slot.startTime),
+      })),
+      Active: true,
+      Comments: "Teacher availability allowlist",
+    };
+  }).filter((constraint) => constraint.Number_of_Not_Available_Times > 0);
 }
 
 function getActiveStudentSetIds(input: FetInput, activeGroupIds: string[]): Set<string> {
@@ -148,7 +173,7 @@ function getStudentsStructure(input: FetInput, activeGroupIds: string[]) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: any = {
       Name: group.id,
-      Number_of_Students: 0,
+      Number_of_Students: group.studentCount ?? 0,
       Comments: group.name,
     };
 
@@ -168,7 +193,7 @@ export function buildFetXml(
   activities: FetActivity[],
   options: { includeStudentGapConstraints?: boolean } = {},
 ): string {
-  const activeGroupIds = unique(activities.map((activity) => activity.groupId));
+  const activeGroupIds = unique(activities.flatMap(getActivityStudentSetIds));
   const activeSubjectIds = unique(activities.map((activity) => activity.subjectId));
   const activeTeacherIds = unique(
     activities.map((activity) => activity.teacherId).filter((teacherId): teacherId is string => Boolean(teacherId)),
@@ -225,7 +250,7 @@ export function buildFetXml(
         Activity: activities.map((activity) => ({
           Teacher: activity.teacherId ? [activity.teacherId] : undefined,
           Subject: activity.subjectId,
-          Students: activity.groupId,
+          Students: getActivityStudentSetIds(activity),
           Duration: periodCount(activity.durationInMinutes),
           Total_Duration: periodCount(activity.durationInMinutes),
           Id: activity.id,
@@ -239,7 +264,7 @@ export function buildFetXml(
         Room: activeRoomIds.map((roomId) => ({
           Name: roomId,
           Building: "",
-          Capacity: 0,
+          Capacity: roomsById.get(roomId)?.seatsCount ?? 0,
           Virtual: false,
           Comments: roomsById.get(roomId)?.name ?? roomId,
         })),
@@ -251,7 +276,17 @@ export function buildFetXml(
           Comments: "",
         },
         ConstraintActivityPreferredStartingTimes: activities.map(getActivityStartingTimes),
-        ConstraintTeacherNotAvailableTimes: getTeacherNotAvailableConstraints(input),
+        ConstraintTeacherNotAvailableTimes: getTeacherNotAvailableConstraints(input, activeTeacherIds),
+        ...(options.includeStudentGapConstraints
+          ? {
+              ConstraintStudentsMaxGapsPerDay: {
+                Weight_Percentage: 100,
+                Max_Gaps: 0,
+                Active: true,
+                Comments: "Hard constraint: avoid gaps in student days",
+              },
+            }
+          : {}),
         ...(options.includeStudentGapConstraints && FET_STUDENTS_MAX_GAPS_WEIGHT > 0
           ? {
               ConstraintStudentsMaxGapsPerWeek: {

@@ -1,4 +1,10 @@
-import type { AvailabilityType, GroupType, SubjectType } from "@/generated/prisma/enums";
+import type {
+  AttendanceLoadMode,
+  AvailabilityType,
+  GroupType,
+  ScheduleDeliveryMode,
+  SubjectType,
+} from "@/generated/prisma/enums";
 
 export type FetDayOfWeek = 1 | 2 | 3 | 4 | 5;
 
@@ -13,6 +19,7 @@ export type FetActivity = {
   id: number;
   source: FetActivitySource;
   groupId: string;
+  studentSetIds?: string[];
   subjectId: string;
   teacherId: string | null;
   durationInMinutes: number;
@@ -21,6 +28,12 @@ export type FetActivity = {
   roomIds: string[];
   fixedSlot?: FetTimeSlot;
   fixedRoomId?: string | null;
+  deliveryMode?: ScheduleDeliveryMode;
+  deliveryGroupId?: string | null;
+  openClassIds?: string[];
+  coveredClassIds?: string[];
+  attendanceLoadModeOverride?: AttendanceLoadMode | null;
+  expectedAudienceSize?: number;
 };
 
 export type FetImportedActivity = {
@@ -38,6 +51,11 @@ export type FetTemplateRow = {
   roomId: string | null;
   teacherId: string | null;
   subjectId: string;
+  deliveryMode: ScheduleDeliveryMode;
+  deliveryGroupId: string | null;
+  openClassIds: string[];
+  coveredClassIds: string[];
+  attendanceLoadModeOverride: AttendanceLoadMode | null;
 };
 
 export type FetGroup = {
@@ -46,12 +64,14 @@ export type FetGroup = {
   type: GroupType;
   grade: number | null;
   parentId: string | null;
+  studentCount?: number;
 };
 
 export type FetSubject = {
   id: string;
   name: string;
   type: SubjectType;
+  defaultAttendanceLoadMode?: AttendanceLoadMode;
 };
 
 export type FetRequirement = {
@@ -82,6 +102,7 @@ export type FetTeacherAvailability = {
 export type FetRoom = {
   id: string;
   name: string;
+  seatsCount?: number;
 };
 
 export type FetRoomSubject = {
@@ -97,8 +118,10 @@ export type FetInput = {
   subjects: FetSubject[];
   teacherSubjects: FetTeacherSubject[];
   teacherAvailabilities: FetTeacherAvailability[];
+  teacherNamesById?: Record<string, string>;
   rooms: FetRoom[];
   roomSubjects: FetRoomSubject[];
+  electiveGroupOpenClassIdsByGroupId?: Record<string, string[]>;
 };
 
 export type GenerateWeeklyScheduleTemplateInput = {

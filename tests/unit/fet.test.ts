@@ -125,6 +125,22 @@ test("preflight fails when REGIME lessons exceed configured days", () => {
   assert.throws(() => preflightFetInput(input), /доступно только 5 дней/);
 });
 
+test("preflight fails when assigned teachers have no available slots", () => {
+  assert.throws(() => preflightFetInput(createInput()), /Недостаточно доступности преподавателей/);
+});
+
+test("preflight passes when assigned teachers have enough available slots", () => {
+  assert.doesNotThrow(() => preflightFetInput(createInput({
+    teacherAvailabilities: [
+      { teacherId: "teacher-1", dayOfWeek: 1, startTime: 8 * 60, endTime: 18 * 60, type: "AVAILABLE" },
+      { teacherId: "teacher-1", dayOfWeek: 2, startTime: 8 * 60, endTime: 18 * 60, type: "AVAILABLE" },
+      { teacherId: "teacher-1", dayOfWeek: 3, startTime: 8 * 60, endTime: 18 * 60, type: "AVAILABLE" },
+      { teacherId: "teacher-1", dayOfWeek: 4, startTime: 8 * 60, endTime: 18 * 60, type: "AVAILABLE" },
+      { teacherId: "teacher-1", dayOfWeek: 5, startTime: 8 * 60, endTime: 18 * 60, type: "AVAILABLE" },
+    ],
+  })));
+});
+
 test("breakfast activity slots stay inside configured breakfast window", () => {
   const activities = buildRegimeActivities(createInput());
 
@@ -148,6 +164,7 @@ test("ordinary builder schedules academics before electives window", () => {
   const academicActivity = activities.find((activity) => activity.subjectId === "math");
   assert.ok(academicActivity);
   assert.ok(academicActivity.allowedSlots.every((slot) => slot.startTime + academicActivity.durationInMinutes <= 14 * 60));
+  assert.equal(academicActivity.timeConstraintWeight, 100);
 
   const input = createInput({
     subjects: [
@@ -169,6 +186,7 @@ test("ordinary builder schedules academics before electives window", () => {
   });
   const { activities: electiveActivities } = buildFullActivities(input, []);
   assert.ok(electiveActivities[0].allowedSlots.every((slot) => slot.startTime >= 14 * 60));
+  assert.equal(electiveActivities[0].timeConstraintWeight, 100);
 });
 
 test("importer maps FET activities to WeeklyScheduleTemplate rows", () => {
@@ -184,7 +202,79 @@ test("importer maps FET activities to WeeklyScheduleTemplate rows", () => {
     roomId: "canteen",
     teacherId: null,
     subjectId: "breakfast",
+    deliveryMode: "DIRECT_GROUP",
+    deliveryGroupId: "group-1",
+    openClassIds: [],
+    coveredClassIds: [],
+    attendanceLoadModeOverride: null,
   });
+});
+
+test("REGIME builder groups nearby classes when a room has enough capacity", () => {
+  const input = createInput({
+    groups: [
+      { id: "group-1", name: "1А", type: "CLASS", grade: 1, parentId: null, studentCount: 12 },
+      { id: "group-2", name: "2А", type: "CLASS", grade: 2, parentId: null, studentCount: 13 },
+    ],
+    subjects: [
+      { id: "breakfast", name: "Завтрак", type: "REGIME", defaultAttendanceLoadMode: "FULL_CLASS_SIZE" },
+    ],
+    requirements: [
+      {
+        groupId: "group-1",
+        subjectId: "breakfast",
+        lessonsPerWeek: 1,
+        durationInMinutes: 30,
+        breakDuration: 0,
+        group: { id: "group-1", name: "1А", type: "CLASS", grade: 1, parentId: null, studentCount: 12 },
+        subject: { id: "breakfast", name: "Завтрак", type: "REGIME", defaultAttendanceLoadMode: "FULL_CLASS_SIZE" },
+      },
+      {
+        groupId: "group-2",
+        subjectId: "breakfast",
+        lessonsPerWeek: 1,
+        durationInMinutes: 30,
+        breakDuration: 0,
+        group: { id: "group-2", name: "2А", type: "CLASS", grade: 2, parentId: null, studentCount: 13 },
+        subject: { id: "breakfast", name: "Завтрак", type: "REGIME", defaultAttendanceLoadMode: "FULL_CLASS_SIZE" },
+      },
+    ],
+    rooms: [{ id: "canteen", name: "Столовая", seatsCount: 30 }],
+  });
+
+  const activities = buildRegimeActivities(input);
+
+  assert.equal(activities.length, 1);
+  assert.equal(activities[0].deliveryMode, "SHARED_CLASSES");
+  assert.deepEqual(activities[0].studentSetIds, ["group-1", "group-2"]);
+  assert.deepEqual(activities[0].coveredClassIds, ["group-1", "group-2"]);
+  assert.equal(activities[0].expectedAudienceSize, 25);
+});
+
+test("FET XML writes student and room capacities and multiple activity student sets", () => {
+  const input = createInput({
+    groups: [
+      { id: "group-1", name: "1А", type: "CLASS", grade: 1, parentId: null, studentCount: 12 },
+      { id: "group-2", name: "2А", type: "CLASS", grade: 2, parentId: null, studentCount: 13 },
+    ],
+    rooms: [{ id: "canteen", name: "Столовая", seatsCount: 30 }],
+  });
+  const xml = buildFetXml(input, [{
+    id: 1,
+    source: "REGIME",
+    groupId: "group-1",
+    studentSetIds: ["group-1", "group-2"],
+    subjectId: "breakfast",
+    teacherId: null,
+    durationInMinutes: 30,
+    allowedSlots: [{ dayOfWeek: 1, startTime: 8 * 60 + 30 }],
+    roomIds: ["canteen"],
+  }]);
+
+  assert.match(xml, /<Number_of_Students>12<\/Number_of_Students>/);
+  assert.match(xml, /<Number_of_Students>13<\/Number_of_Students>/);
+  assert.match(xml, /<Capacity>30<\/Capacity>/);
+  assert.match(xml, /<Students>group-1<\/Students>[\s\S]*<Students>group-2<\/Students>/);
 });
 
 test("FET XML omits empty teacher tags for teacherless regime activities", () => {
@@ -232,8 +322,20 @@ test("FET XML can include compact student day preference for full pass", () => {
     includeStudentGapConstraints: true,
   });
 
+  assert.match(xml, /<ConstraintStudentsMaxGapsPerDay>/);
+  assert.match(xml, /<ConstraintStudentsMaxGapsPerDay>[\s\S]*<Weight_Percentage>100<\/Weight_Percentage>/);
   assert.match(xml, /<ConstraintStudentsMaxGapsPerWeek>/);
   assert.match(xml, /<Max_Gaps>0<\/Max_Gaps>/);
+});
+
+test("FET XML treats missing teacher availability as unavailable time", () => {
+  const { activities } = buildFullActivities(createInput(), []);
+  const xml = buildFetXml(createInput(), activities.slice(0, 1));
+
+  assert.match(xml, /<ConstraintTeacherNotAvailableTimes>/);
+  assert.match(xml, /<Teacher>teacher-1<\/Teacher>/);
+  assert.match(xml, /<Day>Monday<\/Day>/);
+  assert.match(xml, /<Hour>08:00<\/Hour>/);
 });
 
 test("generation with mocked FET runner replaces templates after full pass", async () => {
@@ -249,6 +351,9 @@ test("generation with mocked FET runner replaces templates after full pass", asy
         },
         createMany: async ({ data }: { data: unknown[] }) => {
           insertedCount = data.length;
+        },
+        create: async () => {
+          insertedCount += 1;
         },
       },
     }),
