@@ -209,6 +209,23 @@ export async function deleteGroupAction(id: IdInput) {
     }
 
     await prisma.$transaction([
+      prisma.scheduleEntry.deleteMany({
+        where: {
+          OR: [
+            { deliveryGroupId: { in: allGroupIds } },
+            { coveredClasses: { some: { classGroupId: { in: allGroupIds } } } },
+          ],
+        },
+      }),
+      prisma.weeklyScheduleTemplate.deleteMany({
+        where: {
+          OR: [
+            { deliveryGroupId: { in: allGroupIds } },
+            { openClasses: { some: { classGroupId: { in: allGroupIds } } } },
+            { coveredClasses: { some: { classGroupId: { in: allGroupIds } } } },
+          ],
+        },
+      }),
       prisma.studentGroups.deleteMany({
         where: { groupId: { in: allGroupIds } },
       }),

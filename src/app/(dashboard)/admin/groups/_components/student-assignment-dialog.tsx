@@ -4,6 +4,7 @@ import {
   useEffect,
   useCallback,
 } from "react";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
 import { getStudentDisplayName } from "../_lib/utils";
 import {
@@ -69,6 +70,7 @@ export function StudentAssignmentDialog({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [initializedFrom, setInitializedFrom] = useState<string | null>(null);
   const [leftSearch, setLeftSearch] = useState("");
+  const [debouncedLeftSearch] = useDebouncedValue(leftSearch, { wait: 350 });
   const [leftClassFilter, setLeftClassFilter] = useState("ALL");
   const [saving, setSaving] = useState(false);
 
@@ -104,9 +106,9 @@ export function StudentAssignmentDialog({
 
   const filteredLeftStudents = useMemo(() => {
     return leftStudents.filter((s) => {
-      if (leftSearch) {
+      if (debouncedLeftSearch) {
         const name = getStudentDisplayName(s).toLowerCase();
-        if (!name.includes(leftSearch.toLowerCase())) return false;
+        if (!name.includes(debouncedLeftSearch.toLowerCase())) return false;
       }
       if (leftClassFilter !== "ALL") {
         const cls = getStudentClassInfo(s);
@@ -114,7 +116,7 @@ export function StudentAssignmentDialog({
       }
       return true;
     });
-  }, [leftStudents, leftSearch, leftClassFilter]);
+  }, [leftStudents, debouncedLeftSearch, leftClassFilter]);
 
   const availableClasses = useMemo(() => {
     const classes = new Set<string>();

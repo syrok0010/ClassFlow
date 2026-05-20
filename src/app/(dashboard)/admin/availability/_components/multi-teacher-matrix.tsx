@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { AvailabilityTeacher } from "../_lib/types";
+import type { AvailabilityTeacher } from "@/features/availability/lib/types";
 import {
   buildAvailabilityCountSegments,
   DAY_CONFIG,
@@ -20,12 +20,12 @@ import {
   minutesToTime,
   type AvailabilityCountSegment,
   type TeacherAvailabilityRef,
-} from "../_lib/utils";
+} from "@/features/availability/lib/utils";
 import {
   AvailabilityTimelineCanvas,
   AvailabilityTimelineRow,
   AvailabilityTimelineScale,
-} from "./availability-timeline-shared";
+} from "@/features/availability/components/availability-timeline-shared";
 import { MultiTeacherTooltipContent } from "./multi-teacher-tooltip-content";
 
 type MultiTeacherMatrixProps = {

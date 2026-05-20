@@ -1,12 +1,12 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import type { AvailabilityTeacher } from "../_lib/types";
+import type { AvailabilityTeacher } from "@/features/availability/lib/types";
 import {
   buildSlotLabels,
   getTemplateCoverageCount,
   hasWeekOverride,
-} from "../_lib/utils";
+} from "@/features/availability/lib/utils";
 
 export const SLOT_LABELS = buildSlotLabels();
 

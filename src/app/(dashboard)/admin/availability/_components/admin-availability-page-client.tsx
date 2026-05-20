@@ -1,5 +1,6 @@
 "use client";
 
+import { format } from "date-fns";
 import { Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -9,30 +10,47 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import type { AdminAvailabilityWeekData } from "../_lib/types";
+import { OverrideEntryFormDialog } from "@/features/availability/components/override-entry-form-dialog";
+import { TemplateEntryFormDialog } from "@/features/availability/components/template-entry-form-dialog";
+import { AvailabilityWeekToolbar } from "@/features/availability/components/availability-week-toolbar";
+import { useAvailabilityOverrideMutations } from "@/features/availability/hooks/use-availability-override-mutations";
+import { useAvailabilityTemplateMutations } from "@/features/availability/hooks/use-availability-template-mutations";
+import type {
+  CreateTeacherAvailabilityOverrideInput,
+  TeacherAvailabilityTemplateEditorInput,
+  UpdateTeacherAvailabilityOverrideInput,
+} from "@/features/availability/lib/schemas";
+import type { AvailabilityTeacher, AvailabilityWeekData } from "@/features/availability/lib/types";
+import {
+  createTeacherAvailabilityOverrideAction,
+  deleteTeacherAvailabilityOverrideAction,
+  updateTeacherAvailabilityOverrideAction,
+  upsertTeacherAvailabilityAction,
+} from "@/features/availability/actions/availability-actions";
 import { AvailabilityEditor } from "./availability-editor";
-import { AnalyzerToolbar } from "./analyzer-toolbar";
 import { DeleteOverrideDialog } from "./delete-override-dialog";
 import { MultiTeacherMatrix } from "./multi-teacher-matrix";
-import { OverrideEntryDialog } from "./override-entry-dialog";
 import { SingleTeacherMatrix } from "./single-teacher-matrix";
 import { TeacherSelectorPanel } from "./teacher-selector-panel";
-import { TemplateEntryDialog } from "./template-entry-dialog";
-import { useAvailabilityMutations } from "../_hooks/use-availability-mutations";
 import { useAvailabilityViewState } from "../_hooks/use-availability-view-state";
 import { useAvailabilityWeekUrlState } from "../_hooks/use-availability-week-url-state";
-import { format } from "date-fns";
+
+const EMPTY_TEACHER: AvailabilityTeacher = {
+  teacherId: "",
+  userId: "",
+  fullName: "",
+  email: null,
+  templateEntries: [],
+  overrides: [],
+};
 
 export function AdminAvailabilityPageClient({
   initialData,
 }: {
-  initialData: AdminAvailabilityWeekData;
+  initialData: AvailabilityWeekData;
 }) {
   const weekStart = initialData.weekStart;
-  const {
-    isWeekLoading,
-    shiftWeek,
-  } = useAvailabilityWeekUrlState(weekStart);
+  const { isWeekLoading, shiftWeek } = useAvailabilityWeekUrlState(weekStart);
   const {
     searchQuery,
     selectedTeacherIds,
@@ -51,43 +69,47 @@ export function AdminAvailabilityPageClient({
     closeOverrideDialog,
   } = useAvailabilityViewState(initialData.teachers);
   const selectedTeacher = selectedTeachers.length === 1 ? selectedTeachers[0] : null;
-  const { isMutating, ...mutations } = useAvailabilityMutations({
-    selectedTeacher,
+  const templateMutations = useAvailabilityTemplateMutations({
+    teacher: selectedTeacher ?? EMPTY_TEACHER,
+    upsertAction: upsertTeacherAvailabilityAction,
   });
+  const overrideMutations = useAvailabilityOverrideMutations({
+    teacherId: selectedTeacher?.teacherId ?? "",
+    createAction: createTeacherAvailabilityOverrideAction,
+    updateAction: updateTeacherAvailabilityOverrideAction,
+    deleteAction: deleteTeacherAvailabilityOverrideAction,
+  });
+  const isMutating = templateMutations.isMutating || overrideMutations.isMutating;
 
-  async function handleTemplateSave(...args: Parameters<typeof mutations.handleTemplateSave>) {
-    const success = await mutations.handleTemplateSave(...args);
-
+  async function handleTemplateSave(
+    nextEntry: TeacherAvailabilityTemplateEditorInput,
+    previousId?: string,
+  ) {
+    const success = await templateMutations.handleTemplateSave(nextEntry, previousId);
     if (success) {
       closeTemplateDialog(false);
     }
-
     return success;
   }
 
-  async function handleOverrideCreate(...args: Parameters<typeof mutations.handleOverrideCreate>) {
-    const success = await mutations.handleOverrideCreate(...args);
-
+  async function handleOverrideCreate(payload: CreateTeacherAvailabilityOverrideInput) {
+    const success = await overrideMutations.handleOverrideCreate(payload);
     if (success) {
       closeOverrideDialog(false);
     }
-
     return success;
   }
 
-  async function handleOverrideUpdate(...args: Parameters<typeof mutations.handleOverrideUpdate>) {
-    const success = await mutations.handleOverrideUpdate(...args);
-
+  async function handleOverrideUpdate(payload: UpdateTeacherAvailabilityOverrideInput) {
+    const success = await overrideMutations.handleOverrideUpdate(payload);
     if (success) {
       closeOverrideDialog(false);
     }
-
     return success;
   }
 
   async function handleOverrideDelete() {
-    const success = await mutations.handleOverrideDelete(overrideToDelete);
-
+    const success = await overrideMutations.handleOverrideDelete(overrideToDelete);
     if (success) {
       setOverrideToDelete(null);
     }
@@ -115,7 +137,7 @@ export function AdminAvailabilityPageClient({
         />
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <AnalyzerToolbar
+          <AvailabilityWeekToolbar
             weekStart={weekStart}
             isWeekLoading={isWeekLoading}
             onPreviousWeek={() => shiftWeek(-1)}
@@ -147,7 +169,7 @@ export function AdminAvailabilityPageClient({
                 weekStart={weekStart}
                 isMutating={isMutating}
                 onOpenTemplateDialog={openTemplateDialog}
-                onDeleteTemplateEntry={mutations.handleTemplateDelete}
+                onDeleteTemplateEntry={templateMutations.handleTemplateDelete}
                 onOpenOverrideDialog={openOverrideDialog}
                 onDeleteOverride={setOverrideToDelete}
               />
@@ -160,20 +182,21 @@ export function AdminAvailabilityPageClient({
 
       {selectedTeacher ? (
         <>
-          <TemplateEntryDialog
+          <TemplateEntryFormDialog
             key={`template-${format(weekStart, "yyyy-MM-dd")}-${templateDialog.entry?.id ?? "new"}-${templateDialog.open ? "open" : "closed"}`}
             open={templateDialog.open}
-            teacher={selectedTeacher}
+            teacherName={selectedTeacher.fullName}
             entry={templateDialog.entry}
             isSaving={isMutating}
             onOpenChange={closeTemplateDialog}
             onSubmit={handleTemplateSave}
           />
 
-          <OverrideEntryDialog
+          <OverrideEntryFormDialog
             key={`override-${format(weekStart, "yyyy-MM-dd")}-${overrideDialog.entry?.id ?? "new"}-${overrideDialog.open ? "open" : "closed"}`}
             open={overrideDialog.open}
-            teacher={selectedTeacher}
+            teacherId={selectedTeacher.teacherId}
+            teacherName={selectedTeacher.fullName}
             entry={overrideDialog.entry}
             isSaving={isMutating}
             onOpenChange={closeOverrideDialog}

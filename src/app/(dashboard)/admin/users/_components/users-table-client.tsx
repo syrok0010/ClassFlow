@@ -12,6 +12,7 @@ import { useQueryState } from "nuqs";
 import { Search, UserPlus, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
+import { useDebouncedQueryState } from "@/hooks/use-debounced-query-state";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { getUserFullName } from "@/lib/auth-access";
@@ -50,6 +51,7 @@ const STATUS_OPTIONS = [
 
 export function UsersTableClient({ users }: UsersTableClientProps) {
   const [search, setSearch] = useQueryState("search", { defaultValue: "", shallow: false });
+  const [searchInput, setSearchInput] = useDebouncedQueryState(search, setSearch);
   const [domainRoleFilter, setDomainRoleFilter] = useQueryState("role", { defaultValue: "all", shallow: false });
   const [statusFilter, setStatusFilter] = useQueryState("status", { defaultValue: "all", shallow: false });
   const [inviteId, setInviteId] = useState<string | null>(null);
@@ -107,8 +109,8 @@ export function UsersTableClient({ users }: UsersTableClientProps) {
         <div className="relative flex-1 min-w-60 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Поиск по имени или E-mail..."
             className="pl-9"
           />

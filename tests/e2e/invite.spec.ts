@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { loginAsTeacher } from "./helpers/auth";
+
 test.describe("Invite activation", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -54,6 +56,14 @@ test.describe("Invite activation", () => {
     await page.getByLabel("Электронная почта").fill(retryEmail);
     await page.getByLabel("Пароль").fill("invite1234");
     await page.getByRole("button", { name: "Войти" }).click();
+
+    await expect(page).toHaveURL(/\/teacher$/);
+    await expect(page.getByRole("heading", { name: "Кабинет преподавателя" })).toBeVisible();
+  });
+
+  test("redirects authenticated teacher away from invite activation", async ({ page }) => {
+    await loginAsTeacher(page);
+    await page.goto("/invite/E2E-HAPPY-INVITE");
 
     await expect(page).toHaveURL(/\/teacher$/);
     await expect(page.getByRole("heading", { name: "Кабинет преподавателя" })).toBeVisible();

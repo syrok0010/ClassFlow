@@ -2,7 +2,7 @@ import { parseISO, startOfWeek } from "date-fns";
 import { AlertTriangle } from "lucide-react";
 import {
   getAdminAvailabilityWeekDataAction,
-} from "./_actions/availability-actions";
+} from "@/features/availability/actions/availability-actions";
 import { AdminAvailabilityPageClient } from "./_components/admin-availability-page-client";
 
 export const dynamic = "force-dynamic";

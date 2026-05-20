@@ -10,8 +10,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import { Input } from "@/components/ui/input";
-import type { AvailabilityTeacher } from "../_lib/types";
-import { getWeekRangeLabel } from "../_lib/utils";
+import type { AvailabilityTeacher } from "@/features/availability/lib/types";
+import { getWeekRangeLabel } from "@/features/availability/lib/utils";
 import { getTeacherStatusBadges } from "./availability-view-helpers";
 
 type TeacherSelectorPanelProps = {

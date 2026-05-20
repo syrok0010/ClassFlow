@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Loader2 } from "lucide-react";
 import {
   Popover,
@@ -15,30 +15,60 @@ interface SubjectUsageCellProps {
   usage: SubjectUsage;
 }
 
-type SubjectUsageStatus = "idle" | "loading" | "success" | "error";
-
-const PREVIEW_LIMIT = 6;
+const usageDetailsCache = new Map<string, SubjectUsageDetails>();
+const usageDetailsRequests = new Map<string, Promise<SubjectUsageDetails>>();
 
 function renderPreviewList(items: string[]) {
-  const visible = items.slice(0, PREVIEW_LIMIT);
-  const hidden = items.length - visible.length;
-
-  if (visible.length === 0) {
-    return <span className="text-muted-foreground">Нет</span>;
+  if (items.length === 0) {
+    return <span className="block text-muted-foreground">Нет</span>;
   }
 
   return (
-    <>
-      {visible.join(", ")}
-      {hidden > 0 ? ` и еще ${hidden}` : ""}
-    </>
+      <span className="mt-1 block space-y-0.5">
+      {items.map((item) => (
+          <span key={item} className="block">
+          {item}
+        </span>
+      ))}
+    </span>
   );
+}
+
+async function loadSubjectUsageDetails(subjectId: string): Promise<SubjectUsageDetails> {
+  const cached = usageDetailsCache.get(subjectId);
+  if (cached) {
+    return cached;
+  }
+
+  const existingRequest = usageDetailsRequests.get(subjectId);
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = getSubjectUsageDetailsAction(subjectId).then((response) => {
+    if (response.error || !response.result) {
+      throw new Error(response.error ?? "Не удалось загрузить детали");
+    }
+
+    usageDetailsCache.set(subjectId, response.result);
+    return response.result;
+  });
+
+  usageDetailsRequests.set(subjectId, request);
+
+  try {
+    return await request;
+  } finally {
+    usageDetailsRequests.delete(subjectId);
+  }
 }
 
 export function SubjectUsageCell({ subjectId, usage }: SubjectUsageCellProps) {
   const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState<SubjectUsageStatus>("idle");
-  const [details, setDetails] = useState<SubjectUsageDetails | null>(null);
+  const [details, setDetails] = useState<SubjectUsageDetails | null>(
+    () => usageDetailsCache.get(subjectId) ?? null
+  );
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const total =
@@ -48,25 +78,27 @@ export function SubjectUsageCell({ subjectId, usage }: SubjectUsageCellProps) {
     usage.scheduleTemplatesCount +
     usage.scheduleEntriesCount;
 
-  const loadDetails = async () => {
-    if (total === 0 || status === "loading" || status === "success") {
+  const loadDetails = useCallback(async () => {
+    if (total === 0 || details || isLoading) {
       return;
     }
 
-    setStatus("loading");
+    setIsLoading(true);
     setError(null);
 
-    const response = await getSubjectUsageDetailsAction(subjectId);
-    if (response.error || !response.result) {
-      setDetails(null);
-      setError(response.error ?? "Не удалось загрузить детали");
-      setStatus("error");
-      return;
+    try {
+      const nextDetails = await loadSubjectUsageDetails(subjectId);
+      setDetails(nextDetails);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Не удалось загрузить детали"
+      );
+    } finally {
+      setIsLoading(false);
     }
-
-    setDetails(response.result);
-    setStatus("success");
-  };
+  }, [details, isLoading, subjectId, total]);
 
   if (total === 0) {
     return <span className="text-sm text-muted-foreground">Не используется</span>;
@@ -88,23 +120,27 @@ export function SubjectUsageCell({ subjectId, usage }: SubjectUsageCellProps) {
         Кабинеты: {usage.roomsCount} · Требования: {usage.requirementsCount} · Учителя: {usage.teachersCount}
       </PopoverTrigger>
       <PopoverContent align="start" side="top" className="w-96 gap-2">
-        {status === "loading" || status === "idle" ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            Загружаем связи...
-          </div>
-        ) : error ? (
+        {error ? (
           <p className="text-sm text-destructive">{error}</p>
-        ) : (
+        ) : details ? (
           <div className="space-y-1.5 text-sm">
             <p>
               <span className="font-medium">Кабинеты: </span>
-              {renderPreviewList(details?.rooms ?? [])}
+              {renderPreviewList(details.rooms)}
             </p>
             <p>
               <span className="font-medium">Учителя: </span>
-              {renderPreviewList(details?.teachers ?? [])}
+              {renderPreviewList(details.teachers)}
             </p>
+            <p>
+              <span className="font-medium">Требования: </span>
+              {renderPreviewList(details.requirements)}
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            Загружаем связи...
           </div>
         )}
       </PopoverContent>

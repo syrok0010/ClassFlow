@@ -10,14 +10,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import { Input } from "@/components/ui/input";
+import { useLatestAsyncDebouncer } from "@/hooks/use-latest-async-debouncer";
+import { getUserFullName } from "@/lib/auth-access";
 import { toast } from "sonner";
 import { copyInviteUrl } from "@/lib/invite";
 import {
@@ -26,6 +22,7 @@ import {
   searchParentsAction,
 } from "../_actions/user-actions";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Spinner } from "@/components/ui/spinner";
 
 type ParentSearchResult = Awaited<ReturnType<typeof searchParentsAction>>[number];
 
@@ -52,7 +49,6 @@ export function ParentInviteDialog({
   const [isGenerating, setIsGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ParentSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
 
   const handleGenerate = async () => {
@@ -82,24 +78,27 @@ export function ParentInviteDialog({
     }
   };
 
-  const handleSearch = useCallback(
-    async (query: string) => {
+  const parentSearch = useLatestAsyncDebouncer(
+    searchParentsAction,
+    {
+      wait: 350,
+      onSuccess: (results) => setSearchResults(results),
+      onError: () => toast.error("Ошибка поиска"),
+    },
+  );
+
+  const handleSearch = useCallback((query: string) => {
       setSearchQuery(query);
+
       if (query.length < 2) {
+        parentSearch.cancel();
         setSearchResults([]);
         return;
       }
-      setIsSearching(true);
-      try {
-        const results = await searchParentsAction(query);
-        setSearchResults(results);
-      } catch {
-        toast.error("Ошибка поиска");
-      } finally {
-        setIsSearching(false);
-      }
+
+      parentSearch.execute(query);
     },
-    []
+    [parentSearch]
   );
 
   const handleLink = async (parentId: string) => {
@@ -124,6 +123,7 @@ export function ParentInviteDialog({
       setGeneratedCode(null);
       setSearchQuery("");
       setSearchResults([]);
+      parentSearch.cancel();
       setActiveTab("new");
     }
     onOpenChange(nextOpen);
@@ -188,28 +188,26 @@ export function ParentInviteDialog({
               />
             </div>
             <div className="max-h-48 space-y-1 overflow-y-auto">
-              {isSearching && (
-                <p className="py-4 text-center text-sm text-muted-foreground">Поиск...</p>
+              {parentSearch.isRunning && (
+                <>
+                  <Spinner/>
+                  <p className="py-4 text-center text-sm text-muted-foreground">Поиск...</p>
+                </>
               )}
-              {!isSearching && searchQuery.length >= 2 && searchResults.length === 0 && (
-                <Empty className="py-4">
-                  <EmptyHeader className="gap-2">
-                    <EmptyMedia variant="icon" className="size-10 bg-muted/60">
-                      <Search className="size-4" />
-                    </EmptyMedia>
-                    <EmptyTitle>Ничего не найдено</EmptyTitle>
-                    <EmptyDescription className="text-xs">
-                      Попробуйте уточнить ФИО родителя.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
+              {!parentSearch.isRunning && searchQuery.length >= 2 && searchResults.length === 0 && (
+                <FilterableEmptyState
+                  hasFilters
+                  empty={{
+                    title: "Родители пока не найдены",
+                    description: "Начните вводить ФИО родителя.",
+                    className: "py-4",
+                  }}
+                />
               )}
               {searchResults.map((parent) => {
-                const fullName = [parent.user.surname, parent.user.name, parent.user.patronymicName]
-                  .filter(Boolean)
-                  .join(" ");
+                const fullName = getUserFullName(parent.user);
                 const childrenNames = parent.studentParents
-                  .map((sp) => [sp.student.user.surname, sp.student.user.name].filter(Boolean).join(" "))
+                  .map((sp) => getUserFullName(sp.student.user))
                   .join(", ");
 
                 return (

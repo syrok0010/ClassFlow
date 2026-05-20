@@ -1,12 +1,13 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
+import { useState } from "react";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQueryState } from "nuqs";
 import type {
   AvailabilityOverrideEntry,
   AvailabilityTeacher,
   AvailabilityTemplateEntry,
-} from "../_lib/types";
+} from "@/features/availability/lib/types";
 import { filterTeachers } from "../_components/availability-view-helpers";
 
 export type TemplateDialogState = {
@@ -37,14 +38,14 @@ export function useAvailabilityViewState(
   });
   const [overrideToDelete, setOverrideToDelete] = useState<AvailabilityOverrideEntry | null>(null);
 
-  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [debouncedSearchQuery] = useDebouncedValue(searchQuery, { wait: 350 });
   const selectedTeacherIds = selectedTeacherIdsParam
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
   const visibleTeachers = filterTeachers(
     teachers,
-    deferredSearchQuery,
+    debouncedSearchQuery,
   );
   const selectedTeachers = teachers.filter((teacher) =>
     selectedTeacherIds.includes(teacher.teacherId),

@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
+
 import {
   loginAsAdmin,
   loginAsParent,
   loginAsStudent,
   loginAsTeacher,
+  loginAsTeacherParent,
 } from "./helpers/auth";
 
 test.describe("Auth smoke", () => {
@@ -31,6 +33,7 @@ test.describe("Auth smoke", () => {
   test("allows admin login and opens users page", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto("/admin/users");
+
     await expect(page).toHaveURL(/\/admin\/users$/);
     await expect(page.getByRole("heading", { name: "Пользователи" })).toBeVisible();
   });
@@ -54,5 +57,40 @@ test.describe("Auth smoke", () => {
 
     await expect(page).toHaveURL(/\/student$/);
     await expect(page.getByRole("heading", { name: "Кабинет ученика" })).toBeVisible();
+  });
+
+  test("redirects teacher-parent user to teacher dashboard after login", async ({ page }) => {
+    await loginAsTeacherParent(page);
+
+    await expect(page).toHaveURL(/\/teacher$/);
+    await expect(page.getByRole("heading", { name: "Кабинет преподавателя" })).toBeVisible();
+  });
+
+  test("redirects authenticated admin away from /login", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto("/login");
+
+    await expect(page).toHaveURL(/\/admin$/);
+  });
+
+  test("redirects authenticated teacher away from /login", async ({ page }) => {
+    await loginAsTeacher(page);
+    await page.goto("/login");
+
+    await expect(page).toHaveURL(/\/teacher$/);
+  });
+
+  test("redirects authenticated parent away from /login", async ({ page }) => {
+    await loginAsParent(page);
+    await page.goto("/login");
+
+    await expect(page).toHaveURL(/\/parent$/);
+  });
+
+  test("redirects authenticated student away from /login", async ({ page }) => {
+    await loginAsStudent(page);
+    await page.goto("/login");
+
+    await expect(page).toHaveURL(/\/student$/);
   });
 });

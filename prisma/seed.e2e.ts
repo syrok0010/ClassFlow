@@ -1,7 +1,8 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../src/generated/prisma/client.js";
+import { PrismaClient } from "@/generated/prisma/client";
 import { hashPassword } from "better-auth/crypto";
+import { set, startOfWeek } from "date-fns";
 
 const databaseUrl = process.env.DATABASE_URL_E2E;
 
@@ -108,10 +109,98 @@ async function seedAuthAndUsers() {
   await createCredentialAccount(studentPortalUser.id, "student1234");
   const studentPortalProfile = await prisma.student.create({ data: { userId: studentPortalUser.id } });
 
-  await prisma.studentParents.create({
+  const duplicateStudentUsers = await Promise.all([
+    prisma.user.create({
+      data: {
+        email: "parent-child-duplicate-1@classflow.local",
+        role: "USER",
+        status: "ACTIVE",
+        name: "Иван",
+        surname: "Петров",
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: "parent-child-duplicate-2@classflow.local",
+        role: "USER",
+        status: "ACTIVE",
+        name: "Иван",
+        surname: "Петров",
+      },
+    }),
+  ]);
+  const duplicateStudentProfiles = await Promise.all(
+    duplicateStudentUsers.map((user) => prisma.student.create({ data: { userId: user.id } }))
+  );
+
+  const parentScheduleSubject = await prisma.subject.create({
     data: {
+      name: "Математика",
+      type: "ACADEMIC",
+    },
+  });
+  const parentScheduleGroup = await prisma.group.create({
+    data: {
+      name: "5 А",
+      type: "CLASS",
+      grade: 5,
+    },
+  });
+  const parentScheduleBuilding = await prisma.building.create({
+    data: {
+      name: "Учебный корпус",
+      address: "ул. Тестовая, 1",
+    },
+  });
+  const parentScheduleRoom = await prisma.room.create({
+    data: {
+      name: "Кабинет 5А",
+      seatsCount: 24,
+      buildingId: parentScheduleBuilding.id,
+    },
+  });
+  await prisma.weeklyScheduleTemplate.create({
+    data: {
+      dayOfWeek: 1,
+      startTime: 9 * 60,
+      endTime: 9 * 60 + 45,
+      deliveryMode: "DIRECT_GROUP",
+      deliveryGroupId: parentScheduleGroup.id,
+      subjectId: parentScheduleSubject.id,
+      teacherId: teacher.id,
+      roomId: parentScheduleRoom.id,
+    },
+  });
+  const parentChildrenIds = [
+    studentPortalProfile.id,
+    ...duplicateStudentProfiles.map((student) => student.id),
+  ];
+
+  await prisma.studentParents.createMany({
+    data: parentChildrenIds.map((studentId) => ({
       parentId: parent.id,
-      studentId: studentPortalProfile.id,
+      studentId,
+    })),
+  });
+  await prisma.studentGroups.createMany({
+    data: parentChildrenIds.map((studentId) => ({
+      studentId,
+      groupId: parentScheduleGroup.id,
+    })),
+  });
+
+  const scheduleDate = startOfWeek(new Date(), { weekStartsOn: 1 });
+  await prisma.scheduleEntry.create({
+    data: {
+      date: scheduleDate,
+      startTime: set(scheduleDate, {hours: 9, minutes: 0, seconds: 0, milliseconds: 0}),
+      endTime: set(scheduleDate, {hours: 9, minutes: 45, seconds: 0, milliseconds: 0}),
+      deliveryMode: "DIRECT_GROUP",
+      deliveryGroupId: parentScheduleGroup.id,
+      attendanceLoadMode: "DELIVERY_GROUP_SIZE",
+      roomId: parentScheduleRoom.id,
+      teacherId: teacher.id,
+      subjectId: parentScheduleSubject.id,
     },
   });
 

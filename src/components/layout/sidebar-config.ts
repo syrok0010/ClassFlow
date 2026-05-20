@@ -51,7 +51,9 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
   {
     id: "parent",
     label: "Мои дети",
-    items: [{ name: "Дневники детей", href: "/parent/children", icon: Users }],
+    items: [
+      { name: "Расписание детей", href: "/parent/schedule", icon: CalendarDays },
+    ],
   },
   {
     id: "student",

@@ -422,6 +422,9 @@ export function GroupsTreeTable({
                     Также будут удалены <span className="font-semibold">{deleteSubGroupsCount} подгрупп</span>.
                   </span>
                 )}
+                <span className="block">
+                  Связанные записи расписания и недельного шаблона также будут удалены.
+                </span>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

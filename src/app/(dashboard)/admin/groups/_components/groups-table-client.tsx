@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useQueryState } from "nuqs";
+import { useDebouncedQueryState } from "@/hooks/use-debounced-query-state";
 import type { GroupWithDetails, StudentForAssignment, SubjectOption } from "../_lib/types";
 import { GroupsToolbar } from "./groups-toolbar";
 import { GroupsTreeTable } from "./groups-tree-table";
@@ -34,6 +35,7 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
     defaultValue: "",
     shallow: false,
   });
+  const [searchInput, setSearchInput] = useDebouncedQueryState(searchQuery, setSearchQuery);
   const [filterType, setFilterType] = useQueryState("type", {
     defaultValue: "all",
     shallow: false,
@@ -154,10 +156,8 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
         onFilterTypeChange={(value) => {
           void setFilterType(value === "all" ? null : value);
         }}
-        searchQuery={searchQuery}
-        onSearchQueryChange={(value) => {
-          void setSearchQuery(value || null);
-        }}
+        searchQuery={searchInput}
+        onSearchQueryChange={setSearchInput}
         onAddGroup={() => setIsAddingRow(true)}
         isAddingRow={isAddingRow}
       />
