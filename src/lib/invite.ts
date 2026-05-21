@@ -34,6 +34,14 @@ export function buildInviteUrl(token: string, origin?: string) {
   return `${getInviteOrigin(origin)}/invite/${trimmedToken}`;
 }
 
+export function isPlaceholderInviteEmail(email: string | null | undefined) {
+  return (
+    typeof email === "string" &&
+    (/^pending-.+@classflow\.local$/.test(email) ||
+      /^parent-pending-.+@classflow\.local$/.test(email))
+  );
+}
+
 export async function copyInviteUrl(
   token: string,
   options?: {
