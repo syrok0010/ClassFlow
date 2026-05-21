@@ -27,8 +27,8 @@ test.describe("Invite activation", () => {
     await page.getByLabel("Пароль").fill(password);
     await page.getByRole("button", { name: "Войти" }).click();
 
-    await expect(page).toHaveURL(/\/teacher$/);
-    await expect(page.getByRole("heading", { name: "Кабинет преподавателя" })).toBeVisible();
+    await expect(page).toHaveURL(/\/teacher\/schedule$/);
+    await expect(page.getByRole("heading", { name: "Мое расписание" })).toBeVisible();
   });
 
   test("keeps invite usable after failed activation attempt", async ({ page }) => {
@@ -57,15 +57,15 @@ test.describe("Invite activation", () => {
     await page.getByLabel("Пароль").fill("invite1234");
     await page.getByRole("button", { name: "Войти" }).click();
 
-    await expect(page).toHaveURL(/\/teacher$/);
-    await expect(page.getByRole("heading", { name: "Кабинет преподавателя" })).toBeVisible();
+    await expect(page).toHaveURL(/\/teacher\/schedule$/);
+    await expect(page.getByRole("heading", { name: "Мое расписание" })).toBeVisible();
   });
 
   test("redirects authenticated teacher away from invite activation", async ({ page }) => {
     await loginAsTeacher(page);
     await page.goto("/invite/E2E-HAPPY-INVITE");
 
-    await expect(page).toHaveURL(/\/teacher$/);
-    await expect(page.getByRole("heading", { name: "Кабинет преподавателя" })).toBeVisible();
+    await expect(page).toHaveURL(/\/teacher\/schedule$/);
+    await expect(page.getByRole("heading", { name: "Мое расписание" })).toBeVisible();
   });
 });
