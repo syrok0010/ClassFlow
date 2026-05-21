@@ -13,18 +13,24 @@ import { FormField } from "@/components/ui/form-field";
 
 type InviteFormProps = {
   token: string;
+  initialValues?: {
+    name: string;
+    surname: string;
+    patronymicName: string;
+    email: string;
+  };
 };
 
-export function InviteForm({ token }: InviteFormProps) {
+export function InviteForm({ token, initialValues }: InviteFormProps) {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const form = useForm({
     defaultValues: {
-      name: "",
-      surname: "",
-      patronymicName: "",
-      email: "",
+      name: initialValues?.name ?? "",
+      surname: initialValues?.surname ?? "",
+      patronymicName: initialValues?.patronymicName ?? "",
+      email: initialValues?.email ?? "",
       password: "",
       confirmPassword: "",
     },

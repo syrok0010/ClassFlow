@@ -12,6 +12,10 @@ test.describe("Invite activation", () => {
     await page.goto("/invite/E2E-HAPPY-INVITE");
 
     await expect(page.getByText("Активация аккаунта")).toBeVisible();
+    await expect(page.getByLabel("Фамилия")).toHaveValue("Активации");
+    await expect(page.getByLabel("Имя")).toHaveValue("Ожидает");
+    await expect(page.getByLabel("Email (для входа)")).toHaveValue("");
+
     await page.getByLabel("Фамилия").fill("Активированный");
     await page.getByLabel("Имя").fill("Учитель");
     await page.getByLabel("Отчество (если есть)").fill("Е2Е");
@@ -36,6 +40,10 @@ test.describe("Invite activation", () => {
 
     await page.goto("/invite/E2E-ROLLBACK-INVITE");
 
+    await expect(page.getByLabel("Фамилия")).toHaveValue("Активация");
+    await expect(page.getByLabel("Имя")).toHaveValue("Повторная");
+    await expect(page.getByLabel("Email (для входа)")).toHaveValue("");
+
     await page.getByLabel("Фамилия").fill("Повторная");
     await page.getByLabel("Имя").fill("Проверка");
     await page.getByLabel("Отчество (если есть)").fill("Е2Е");
@@ -59,6 +67,36 @@ test.describe("Invite activation", () => {
 
     await expect(page).toHaveURL(/\/teacher\/schedule$/);
     await expect(page.getByRole("heading", { name: "Мое расписание" })).toBeVisible();
+  });
+
+  test("opens parent invite activation with empty editable user fields", async ({ page }) => {
+    const email = `activated-parent-${Date.now()}@classflow.local`;
+    const password = "invite1234";
+
+    await page.goto("/invite/E2E-PARENT-INVITE");
+
+    await expect(page.getByText("Активация аккаунта")).toBeVisible();
+    await expect(page.getByLabel("Фамилия")).toHaveValue("");
+    await expect(page.getByLabel("Имя")).toHaveValue("");
+    await expect(page.getByLabel("Отчество (если есть)")).toHaveValue("");
+    await expect(page.getByLabel("Email (для входа)")).toHaveValue("");
+
+    await page.getByLabel("Фамилия").fill("Родитель");
+    await page.getByLabel("Имя").fill("Активированный");
+    await page.getByLabel("Email (для входа)").fill(email);
+    await page.getByLabel("Пароль").fill(password);
+    await page.getByLabel("Подтверждение").fill(password);
+
+    await page.getByRole("button", { name: "Активировать аккаунт" }).click();
+
+    await expect(page).toHaveURL(/\/login\?activated=true$/);
+
+    await page.getByLabel("Электронная почта").fill(email);
+    await page.getByLabel("Пароль").fill(password);
+    await page.getByRole("button", { name: "Войти" }).click();
+
+    await expect(page).toHaveURL(/\/parent\/schedule\/?$/);
+    await expect(page.getByRole("heading", { name: "Расписание детей" })).toBeVisible();
   });
 
   test("redirects authenticated teacher away from invite activation", async ({ page }) => {

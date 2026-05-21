@@ -282,6 +282,29 @@ async function seedAuthAndUsers() {
     },
   });
 
+  const pendingParentUser = await prisma.user.create({
+    data: {
+      id: "e2e-invite-parent-user",
+      email: "parent-pending-invite@classflow.local",
+      role: "USER",
+      status: "PENDING_INVITE",
+    },
+  });
+  const pendingParent = await prisma.parent.create({ data: { userId: pendingParentUser.id } });
+  await prisma.studentParents.create({
+    data: {
+      parentId: pendingParent.id,
+      studentId: studentPortalProfile.id,
+    },
+  });
+  await prisma.verification.create({
+    data: {
+      identifier: pendingParentUser.id,
+      value: "E2E-PARENT-INVITE",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  });
+
   return {
     teacherId: teacher.id,
     teacherUserId: teacherUser.id,
