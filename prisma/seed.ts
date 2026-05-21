@@ -3,55 +3,861 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 import { hashPassword } from "better-auth/crypto";
 
-const connectionString = `${process.env.DATABASE_URL}`;
-const adapter = new PrismaPg({ connectionString });
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required for the development seed");
+}
+
+const adapter = new PrismaPg({ connectionString: databaseUrl });
 const prisma = new PrismaClient({ adapter });
 
-async function createCredentialAccount(userId: string, password: string) {
-  const hashedPassword = await hashPassword(password);
+type Gender = "MALE" | "FEMALE";
+type DayOfWeek = 1 | 2 | 3 | 4 | 5;
+type AvailabilityType = "AVAILABLE" | "PREFERRED" | "UNAVAILABLE";
+type SubjectType = "ACADEMIC" | "ELECTIVE_REQUIRED" | "ELECTIVE_OPTIONAL" | "REGIME";
+type AttendanceLoadMode = "DELIVERY_GROUP_SIZE" | "FULL_CLASS_SIZE" | "AFTERSCHOOL_COEFFICIENT";
+type UserStatus = "ACTIVE" | "PENDING_INVITE";
 
+type SubjectSeed = {
+  name: string;
+  type: SubjectType;
+};
+
+type BuildingSeed = {
+  key: string;
+  name: string;
+  address: string;
+};
+
+type RoomSeed = {
+  key: string;
+  name: string;
+  seatsCount: number;
+  buildingKey: string;
+  subjectNames: string[];
+};
+
+type AvailabilitySeed = {
+  dayOfWeek: DayOfWeek;
+  start: string;
+  end: string;
+  type?: AvailabilityType;
+};
+
+type TeacherCapability = {
+  subjectName: string;
+  minGrade: number | null;
+  maxGrade: number | null;
+};
+
+type TeacherSeed = {
+  key: string;
+  firstName: string;
+  lastName: string;
+  patronymic: string;
+  capabilities: TeacherCapability[];
+  availability: AvailabilitySeed[];
+};
+
+type ClassSeed = {
+  key: string;
+  name: string;
+  grade: number;
+};
+
+type StudentSeed = {
+  key: string;
+  firstName: string;
+  gender: Gender;
+  familyKey: string;
+  surnameMale: string;
+  classKey: string;
+  portalAccess?: boolean;
+};
+
+type SubgroupSeed = {
+  key: string;
+  name: string;
+  classKey: string;
+  subjectName: string;
+  studentKeys: string[];
+};
+
+type ElectiveGroupSeed = {
+  key: string;
+  name: string;
+  subjectName: string;
+  lessonsPerWeek: number;
+  durationInMinutes: number;
+  breakDuration: number;
+  studentKeys: string[];
+};
+
+type RequirementSeed = {
+  groupKey: string;
+  subjectName: string;
+  lessonsPerWeek: number;
+  durationInMinutes: number;
+  breakDuration: number;
+};
+
+const WEEKDAYS: DayOfWeek[] = [1, 2, 3, 4, 5];
+
+const SUBJECTS: SubjectSeed[] = [
+  { name: "Математика", type: "ACADEMIC" },
+  { name: "Русский язык", type: "ACADEMIC" },
+  { name: "Литература", type: "ACADEMIC" },
+  { name: "Окружающий мир", type: "ACADEMIC" },
+  { name: "Английский язык", type: "ACADEMIC" },
+  { name: "История", type: "ACADEMIC" },
+  { name: "География", type: "ACADEMIC" },
+  { name: "Биология", type: "ACADEMIC" },
+  { name: "Информатика", type: "ACADEMIC" },
+  { name: "Музыка", type: "ACADEMIC" },
+  { name: "ИЗО", type: "ACADEMIC" },
+  { name: "Физическая культура", type: "ACADEMIC" },
+  { name: "Каллиграфия", type: "ACADEMIC" },
+  { name: "Эксперименты", type: "ELECTIVE_REQUIRED" },
+  { name: "Архитектура", type: "ELECTIVE_REQUIRED" },
+  { name: "Хореография", type: "ELECTIVE_REQUIRED" },
+  { name: "Шахматы", type: "ELECTIVE_OPTIONAL" },
+  { name: "Робототехника", type: "ELECTIVE_OPTIONAL" },
+  { name: "Театр", type: "ELECTIVE_OPTIONAL" },
+  { name: "Кулинария", type: "ELECTIVE_OPTIONAL" },
+  { name: "Йога", type: "ELECTIVE_OPTIONAL" },
+  { name: "Завтрак", type: "REGIME" },
+  { name: "Обед", type: "REGIME" },
+  { name: "Полдник", type: "REGIME" },
+  { name: "Прогулка", type: "REGIME" },
+];
+
+const BUILDINGS: BuildingSeed[] = [
+  {
+    key: "MAIN",
+    name: "Школьный корпус",
+    address: "Москва, ул. Лесная, 12",
+  },
+  {
+    key: "CREATIVE",
+    name: "Творческий корпус",
+    address: "Москва, ул. Лесная, 14",
+  },
+  {
+    key: "SPORT",
+    name: "Спортивный корпус",
+    address: "Москва, ул. Лесная, 16",
+  },
+];
+
+const ROOMS: RoomSeed[] = [
+  {
+    key: "CLASS_2A",
+    name: "Кабинет 2А",
+    seatsCount: 14,
+    buildingKey: "MAIN",
+    subjectNames: ["Математика", "Русский язык", "Литература", "Окружающий мир", "Каллиграфия"],
+  },
+  {
+    key: "CLASS_2B",
+    name: "Кабинет 2Б",
+    seatsCount: 14,
+    buildingKey: "MAIN",
+    subjectNames: ["Математика", "Русский язык", "Литература", "Окружающий мир", "Каллиграфия"],
+  },
+  {
+    key: "CLASS_3A",
+    name: "Кабинет 3А",
+    seatsCount: 14,
+    buildingKey: "MAIN",
+    subjectNames: ["Математика", "Русский язык", "Литература", "Окружающий мир", "Каллиграфия"],
+  },
+  {
+    key: "CLASS_5A",
+    name: "Кабинет 5А",
+    seatsCount: 16,
+    buildingKey: "MAIN",
+    subjectNames: ["Математика", "Русский язык", "Литература", "История", "География"],
+  },
+  {
+    key: "CLASS_6A",
+    name: "Кабинет 6А",
+    seatsCount: 16,
+    buildingKey: "MAIN",
+    subjectNames: ["Математика", "Русский язык", "Литература", "История", "География"],
+  },
+  {
+    key: "ENGLISH_1",
+    name: "Лингафонный кабинет 1",
+    seatsCount: 10,
+    buildingKey: "MAIN",
+    subjectNames: ["Английский язык"],
+  },
+  {
+    key: "ENGLISH_2",
+    name: "Лингафонный кабинет 2",
+    seatsCount: 10,
+    buildingKey: "MAIN",
+    subjectNames: ["Английский язык"],
+  },
+  {
+    key: "SCIENCE",
+    name: "Лаборатория естествознания",
+    seatsCount: 16,
+    buildingKey: "MAIN",
+    subjectNames: ["Биология", "Эксперименты"],
+  },
+  {
+    key: "MEDIA",
+    name: "Медиакабинет",
+    seatsCount: 18,
+    buildingKey: "MAIN",
+    subjectNames: ["Музыка", "Шахматы"],
+  },
+  {
+    key: "DINING",
+    name: "Столовая",
+    seatsCount: 36,
+    buildingKey: "MAIN",
+    subjectNames: ["Завтрак", "Обед", "Полдник"],
+  },
+  {
+    key: "YARD",
+    name: "Школьный двор",
+    seatsCount: 80,
+    buildingKey: "MAIN",
+    subjectNames: ["Прогулка"],
+  },
+  {
+    key: "ART",
+    name: "Арт-мастерская",
+    seatsCount: 16,
+    buildingKey: "CREATIVE",
+    subjectNames: ["ИЗО", "Архитектура"],
+  },
+  {
+    key: "ARCH",
+    name: "Архитектурная студия",
+    seatsCount: 14,
+    buildingKey: "CREATIVE",
+    subjectNames: ["Архитектура"],
+  },
+  {
+    key: "COOK",
+    name: "Кулинарная студия",
+    seatsCount: 12,
+    buildingKey: "CREATIVE",
+    subjectNames: ["Кулинария"],
+  },
+  {
+    key: "ROBO",
+    name: "Роболаборатория",
+    seatsCount: 14,
+    buildingKey: "CREATIVE",
+    subjectNames: ["Информатика", "Робототехника"],
+  },
+  {
+    key: "STAGE",
+    name: "Сцена-лекторий",
+    seatsCount: 20,
+    buildingKey: "CREATIVE",
+    subjectNames: ["Театр", "Музыка"],
+  },
+  {
+    key: "GYM",
+    name: "Спортзал",
+    seatsCount: 30,
+    buildingKey: "SPORT",
+    subjectNames: ["Физическая культура", "Йога"],
+  },
+  {
+    key: "DANCE",
+    name: "Зал хореографии",
+    seatsCount: 24,
+    buildingKey: "SPORT",
+    subjectNames: ["Хореография", "Йога", "Театр"],
+  },
+];
+
+function onDays(
+  days: DayOfWeek[],
+  start: string,
+  end: string,
+  type: AvailabilityType = "AVAILABLE",
+): AvailabilitySeed[] {
+  return days.map((dayOfWeek) => ({ dayOfWeek, start, end, type }));
+}
+
+const TEACHERS: TeacherSeed[] = [
+  {
+    key: "PRIMARY_GRADE_2",
+    firstName: "Мария",
+    lastName: "Савельева",
+    patronymic: "Ильинична",
+    capabilities: [
+      { subjectName: "Математика", minGrade: 2, maxGrade: 2 },
+      { subjectName: "Русский язык", minGrade: 2, maxGrade: 2 },
+      { subjectName: "Литература", minGrade: 2, maxGrade: 2 },
+      { subjectName: "Окружающий мир", minGrade: 2, maxGrade: 2 },
+      { subjectName: "Каллиграфия", minGrade: 2, maxGrade: 2 },
+    ],
+    availability: onDays(WEEKDAYS, "08:00", "16:00"),
+  },
+  {
+    key: "PRIMARY_GRADE_3",
+    firstName: "Ольга",
+    lastName: "Трофимова",
+    patronymic: "Николаевна",
+    capabilities: [
+      { subjectName: "Математика", minGrade: 3, maxGrade: 3 },
+      { subjectName: "Русский язык", minGrade: 3, maxGrade: 3 },
+      { subjectName: "Литература", minGrade: 3, maxGrade: 3 },
+      { subjectName: "Окружающий мир", minGrade: 3, maxGrade: 3 },
+    ],
+    availability: onDays(WEEKDAYS, "08:00", "16:00"),
+  },
+  {
+    key: "MATH_MIDDLE",
+    firstName: "Дмитрий",
+    lastName: "Орлов",
+    patronymic: "Сергеевич",
+    capabilities: [{ subjectName: "Математика", minGrade: 5, maxGrade: 6 }],
+    availability: onDays(WEEKDAYS, "08:30", "16:30"),
+  },
+  {
+    key: "HUMANITIES_MIDDLE",
+    firstName: "Татьяна",
+    lastName: "Киреева",
+    patronymic: "Павловна",
+    capabilities: [
+      { subjectName: "Русский язык", minGrade: 5, maxGrade: 6 },
+      { subjectName: "Литература", minGrade: 5, maxGrade: 6 },
+    ],
+    availability: onDays(WEEKDAYS, "08:30", "16:30"),
+  },
+  {
+    key: "ENGLISH_PRIMARY",
+    firstName: "Анна",
+    lastName: "Петрова",
+    patronymic: "Игоревна",
+    capabilities: [{ subjectName: "Английский язык", minGrade: 2, maxGrade: 3 }],
+    availability: onDays([1, 2, 3, 4], "08:30", "15:00"),
+  },
+  {
+    key: "ENGLISH_MIDDLE",
+    firstName: "Маргарита",
+    lastName: "Осипова",
+    patronymic: "Олеговна",
+    capabilities: [{ subjectName: "Английский язык", minGrade: 5, maxGrade: 6 }],
+    availability: onDays(WEEKDAYS, "09:00", "16:00"),
+  },
+  {
+    key: "SOCIAL_SCIENCE",
+    firstName: "Светлана",
+    lastName: "Денисова",
+    patronymic: "Юрьевна",
+    capabilities: [
+      { subjectName: "История", minGrade: 5, maxGrade: 6 },
+      { subjectName: "География", minGrade: 5, maxGrade: 6 },
+    ],
+    availability: onDays([1, 2, 3, 4, 5], "09:00", "15:30"),
+  },
+  {
+    key: "SCIENCE",
+    firstName: "Виктор",
+    lastName: "Андреев",
+    patronymic: "Аркадьевич",
+    capabilities: [
+      { subjectName: "Биология", minGrade: 5, maxGrade: 6 },
+      { subjectName: "Эксперименты", minGrade: 2, maxGrade: 6 },
+    ],
+    availability: onDays([2, 3, 4, 5], "09:00", "16:00"),
+  },
+  {
+    key: "MUSIC",
+    firstName: "Ирина",
+    lastName: "Миронова",
+    patronymic: "Юрьевна",
+    capabilities: [{ subjectName: "Музыка", minGrade: 2, maxGrade: 6 }],
+    availability: onDays([1, 2, 3, 4], "10:00", "16:30"),
+  },
+  {
+    key: "ART_ARCH",
+    firstName: "Лилия",
+    lastName: "Егорова",
+    patronymic: "Романовна",
+    capabilities: [
+      { subjectName: "ИЗО", minGrade: 2, maxGrade: 6 },
+      { subjectName: "Архитектура", minGrade: 2, maxGrade: 6 },
+    ],
+    availability: onDays([2, 3, 4, 5], "09:30", "17:00"),
+  },
+  {
+    key: "SPORT",
+    firstName: "Пётр",
+    lastName: "Кузьмин",
+    patronymic: "Олегович",
+    capabilities: [
+      { subjectName: "Физическая культура", minGrade: 2, maxGrade: 6 },
+      { subjectName: "Йога", minGrade: 2, maxGrade: 6 },
+    ],
+    availability: onDays(WEEKDAYS, "08:30", "17:30"),
+  },
+  {
+    key: "STAGE",
+    firstName: "Дарья",
+    lastName: "Артемьева",
+    patronymic: "Станиславовна",
+    capabilities: [
+      { subjectName: "Хореография", minGrade: 2, maxGrade: 6 },
+      { subjectName: "Театр", minGrade: 2, maxGrade: 6 },
+    ],
+    availability: onDays([1, 2, 3, 4], "12:00", "18:00"),
+  },
+  {
+    key: "CHESS",
+    firstName: "Сергей",
+    lastName: "Носов",
+    patronymic: "Валерьевич",
+    capabilities: [{ subjectName: "Шахматы", minGrade: 2, maxGrade: 6 }],
+    availability: [
+      ...onDays([1, 3], "15:00", "18:00"),
+      ...onDays([5], "14:00", "18:00"),
+    ],
+  },
+  {
+    key: "ROBOTICS",
+    firstName: "Роман",
+    lastName: "Давыдов",
+    patronymic: "Алексеевич",
+    capabilities: [
+      { subjectName: "Информатика", minGrade: 5, maxGrade: 6 },
+      { subjectName: "Робототехника", minGrade: 5, maxGrade: 6 },
+    ],
+    availability: onDays([2, 4], "14:00", "18:00"),
+  },
+  {
+    key: "COOKING",
+    firstName: "Тамара",
+    lastName: "Молчанова",
+    patronymic: "Ильинична",
+    capabilities: [{ subjectName: "Кулинария", minGrade: 3, maxGrade: 6 }],
+    availability: onDays([3, 5], "14:00", "18:00"),
+  },
+];
+
+const CLASSES: ClassSeed[] = [
+  { key: "2A", name: "2 А", grade: 2 },
+  { key: "2B", name: "2 Б", grade: 2 },
+  { key: "3A", name: "3 А", grade: 3 },
+  { key: "5A", name: "5 А", grade: 5 },
+  { key: "6A", name: "6 А", grade: 6 },
+];
+
+const STUDENTS: StudentSeed[] = [
+  { key: "ilya-morozov", firstName: "Илья", gender: "MALE", familyKey: "morozov", surnameMale: "Морозов", classKey: "2A", portalAccess: true },
+  { key: "polina-sokolova", firstName: "Полина", gender: "FEMALE", familyKey: "sokolov", surnameMale: "Соколов", classKey: "2A" },
+  { key: "artem-nesterov", firstName: "Артём", gender: "MALE", familyKey: "nesterov", surnameMale: "Нестеров", classKey: "2A" },
+  { key: "varvara-belyaeva", firstName: "Варвара", gender: "FEMALE", familyKey: "belyaev", surnameMale: "Беляев", classKey: "2A" },
+  { key: "timofey-grachev", firstName: "Тимофей", gender: "MALE", familyKey: "grachev", surnameMale: "Грачёв", classKey: "2A" },
+  { key: "sofia-ershova", firstName: "София", gender: "FEMALE", familyKey: "ershov", surnameMale: "Ершов", classKey: "2A" },
+  { key: "matvey-kolesnikov", firstName: "Матвей", gender: "MALE", familyKey: "kolesnikov", surnameMale: "Колесников", classKey: "2A" },
+  { key: "kseniya-ryabova", firstName: "Ксения", gender: "FEMALE", familyKey: "ryabov", surnameMale: "Рябов", classKey: "2A" },
+  { key: "lev-maksimov", firstName: "Лев", gender: "MALE", familyKey: "maksimov", surnameMale: "Максимов", classKey: "2A" },
+  { key: "alisa-titova", firstName: "Алиса", gender: "FEMALE", familyKey: "titov", surnameMale: "Титов", classKey: "2A" },
+
+  { key: "maria-belova", firstName: "Мария", gender: "FEMALE", familyKey: "belov", surnameMale: "Белов", classKey: "2B" },
+  { key: "maksim-sokolov", firstName: "Максим", gender: "MALE", familyKey: "sokolov", surnameMale: "Соколов", classKey: "2B" },
+  { key: "daria-zhdanova", firstName: "Дарья", gender: "FEMALE", familyKey: "zhdanov", surnameMale: "Жданов", classKey: "2B" },
+  { key: "nikita-pavlov", firstName: "Никита", gender: "MALE", familyKey: "pavlov", surnameMale: "Павлов", classKey: "2B" },
+  { key: "eva-fomina", firstName: "Ева", gender: "FEMALE", familyKey: "fomin", surnameMale: "Фомин", classKey: "2B" },
+  { key: "miron-denisov", firstName: "Мирон", gender: "MALE", familyKey: "denisov", surnameMale: "Денисов", classKey: "2B" },
+  { key: "anna-kotova", firstName: "Анна", gender: "FEMALE", familyKey: "kotov", surnameMale: "Котов", classKey: "2B" },
+  { key: "roman-orekhov", firstName: "Роман", gender: "MALE", familyKey: "orekhov", surnameMale: "Орехов", classKey: "2B" },
+  { key: "vera-larina", firstName: "Вера", gender: "FEMALE", familyKey: "larin", surnameMale: "Ларин", classKey: "2B" },
+  { key: "platon-serov", firstName: "Платон", gender: "MALE", familyKey: "serov", surnameMale: "Серов", classKey: "2B" },
+
+  { key: "egor-belov", firstName: "Егор", gender: "MALE", familyKey: "belov", surnameMale: "Белов", classKey: "3A" },
+  { key: "anna-vinogradova", firstName: "Анна", gender: "FEMALE", familyKey: "vinogradov", surnameMale: "Виноградов", classKey: "3A" },
+  { key: "taisiya-lapina", firstName: "Таисия", gender: "FEMALE", familyKey: "lapin", surnameMale: "Лапин", classKey: "3A" },
+  { key: "gleb-titov", firstName: "Глеб", gender: "MALE", familyKey: "titov", surnameMale: "Титов", classKey: "3A" },
+  { key: "ulyana-novikova", firstName: "Ульяна", gender: "FEMALE", familyKey: "novikov", surnameMale: "Новиков", classKey: "3A" },
+  { key: "fyodor-alekseev", firstName: "Фёдор", gender: "MALE", familyKey: "alekseev", surnameMale: "Алексеев", classKey: "3A" },
+  { key: "mark-kiselev", firstName: "Марк", gender: "MALE", familyKey: "kiselev", surnameMale: "Киселёв", classKey: "3A" },
+  { key: "veronika-danilova", firstName: "Вероника", gender: "FEMALE", familyKey: "danilov", surnameMale: "Данилов", classKey: "3A" },
+  { key: "mihail-korneev", firstName: "Михаил", gender: "MALE", familyKey: "korneev", surnameMale: "Корнеев", classKey: "3A" },
+  { key: "alisa-burova", firstName: "Алиса", gender: "FEMALE", familyKey: "burov", surnameMale: "Буров", classKey: "3A" },
+  { key: "stepan-zotov", firstName: "Степан", gender: "MALE", familyKey: "zotov", surnameMale: "Зотов", classKey: "3A" },
+
+  { key: "sofia-morozova", firstName: "София", gender: "FEMALE", familyKey: "morozov", surnameMale: "Морозов", classKey: "5A", portalAccess: true },
+  { key: "elisey-abramov", firstName: "Елисей", gender: "MALE", familyKey: "abramov", surnameMale: "Абрамов", classKey: "5A" },
+  { key: "alina-kravtsova", firstName: "Алина", gender: "FEMALE", familyKey: "kravtsov", surnameMale: "Кравцов", classKey: "5A" },
+  { key: "denis-loginov", firstName: "Денис", gender: "MALE", familyKey: "loginov", surnameMale: "Логинов", classKey: "5A" },
+  { key: "varvara-terenteva", firstName: "Варвара", gender: "FEMALE", familyKey: "terentev", surnameMale: "Терентьев", classKey: "5A" },
+  { key: "grigoriy-samoylov", firstName: "Григорий", gender: "MALE", familyKey: "samoylov", surnameMale: "Самойлов", classKey: "5A" },
+  { key: "lada-kulikova", firstName: "Лада", gender: "FEMALE", familyKey: "kulikov", surnameMale: "Куликов", classKey: "5A" },
+  { key: "konstantin-osipov", firstName: "Константин", gender: "MALE", familyKey: "osipov", surnameMale: "Осипов", classKey: "5A" },
+  { key: "nika-rudneva", firstName: "Ника", gender: "FEMALE", familyKey: "rudnev", surnameMale: "Руднев", classKey: "5A" },
+  { key: "yaroslav-demin", firstName: "Ярослав", gender: "MALE", familyKey: "demin", surnameMale: "Дёмин", classKey: "5A" },
+
+  { key: "kirill-vinogradov", firstName: "Кирилл", gender: "MALE", familyKey: "vinogradov", surnameMale: "Виноградов", classKey: "6A", portalAccess: true },
+  { key: "daria-meshcheryakova", firstName: "Дарья", gender: "FEMALE", familyKey: "meshcheryakov", surnameMale: "Мещеряков", classKey: "6A" },
+  { key: "matvey-polyakov", firstName: "Матвей", gender: "MALE", familyKey: "polyakov", surnameMale: "Поляков", classKey: "6A" },
+  { key: "polina-zimina", firstName: "Полина", gender: "FEMALE", familyKey: "zimin", surnameMale: "Зимин", classKey: "6A" },
+  { key: "arseniy-korolev", firstName: "Арсений", gender: "MALE", familyKey: "korolev", surnameMale: "Королёв", classKey: "6A" },
+  { key: "margarita-egorova", firstName: "Маргарита", gender: "FEMALE", familyKey: "egorov", surnameMale: "Егоров", classKey: "6A" },
+  { key: "nikita-chernov", firstName: "Никита", gender: "MALE", familyKey: "chernov", surnameMale: "Чернов", classKey: "6A" },
+  { key: "olesya-safonova", firstName: "Олеся", gender: "FEMALE", familyKey: "safonov", surnameMale: "Сафонов", classKey: "6A" },
+  { key: "timur-shcherbakov", firstName: "Тимур", gender: "MALE", familyKey: "shcherbakov", surnameMale: "Щербаков", classKey: "6A" },
+  { key: "anastasia-markova", firstName: "Анастасия", gender: "FEMALE", familyKey: "markov", surnameMale: "Марков", classKey: "6A", portalAccess: true },
+];
+
+const SUBGROUPS: SubgroupSeed[] = [
+  {
+    key: "2A_ENG_1",
+    name: "2 А / Английский 1",
+    classKey: "2A",
+    subjectName: "Английский язык",
+    studentKeys: ["ilya-morozov", "artem-nesterov", "timofey-grachev", "matvey-kolesnikov", "lev-maksimov"],
+  },
+  {
+    key: "2A_ENG_2",
+    name: "2 А / Английский 2",
+    classKey: "2A",
+    subjectName: "Английский язык",
+    studentKeys: ["polina-sokolova", "varvara-belyaeva", "sofia-ershova", "kseniya-ryabova", "alisa-titova"],
+  },
+  {
+    key: "3A_ENG_1",
+    name: "3 А / Английский 1",
+    classKey: "3A",
+    subjectName: "Английский язык",
+    studentKeys: ["egor-belov", "gleb-titov", "fyodor-alekseev", "mark-kiselev", "mihail-korneev", "stepan-zotov"],
+  },
+  {
+    key: "3A_ENG_2",
+    name: "3 А / Английский 2",
+    classKey: "3A",
+    subjectName: "Английский язык",
+    studentKeys: ["anna-vinogradova", "taisiya-lapina", "ulyana-novikova", "veronika-danilova", "alisa-burova"],
+  },
+  {
+    key: "5A_ENG_1",
+    name: "5 А / Английский 1",
+    classKey: "5A",
+    subjectName: "Английский язык",
+    studentKeys: ["elisey-abramov", "denis-loginov", "grigoriy-samoylov", "konstantin-osipov", "yaroslav-demin"],
+  },
+  {
+    key: "5A_ENG_2",
+    name: "5 А / Английский 2",
+    classKey: "5A",
+    subjectName: "Английский язык",
+    studentKeys: ["sofia-morozova", "alina-kravtsova", "varvara-terenteva", "lada-kulikova", "nika-rudneva"],
+  },
+];
+
+const ELECTIVE_GROUPS: ElectiveGroupSeed[] = [
+  {
+    key: "CHESS_CLUB",
+    name: "Шахматный клуб 2-3 классов",
+    subjectName: "Шахматы",
+    lessonsPerWeek: 2,
+    durationInMinutes: 45,
+    breakDuration: 0,
+    studentKeys: [
+      "ilya-morozov",
+      "polina-sokolova",
+      "maria-belova",
+      "maksim-sokolov",
+      "egor-belov",
+      "mark-kiselev",
+      "alisa-burova",
+    ],
+  },
+  {
+    key: "ROBOTICS_LAB",
+    name: "Роболаборатория 5-6 классов",
+    subjectName: "Робототехника",
+    lessonsPerWeek: 2,
+    durationInMinutes: 60,
+    breakDuration: 0,
+    studentKeys: [
+      "elisey-abramov",
+      "denis-loginov",
+      "yaroslav-demin",
+      "kirill-vinogradov",
+      "nikita-chernov",
+      "timur-shcherbakov",
+    ],
+  },
+  {
+    key: "THEATER_STUDIO",
+    name: "Театральная студия",
+    subjectName: "Театр",
+    lessonsPerWeek: 2,
+    durationInMinutes: 60,
+    breakDuration: 0,
+    studentKeys: [
+      "anna-vinogradova",
+      "veronika-danilova",
+      "sofia-morozova",
+      "alina-kravtsova",
+      "kirill-vinogradov",
+      "olesya-safonova",
+      "anastasia-markova",
+    ],
+  },
+  {
+    key: "COOKING_WORKSHOP",
+    name: "Кулинарная мастерская",
+    subjectName: "Кулинария",
+    lessonsPerWeek: 1,
+    durationInMinutes: 90,
+    breakDuration: 0,
+    studentKeys: [
+      "sofia-morozova",
+      "lada-kulikova",
+      "polina-zimina",
+      "margarita-egorova",
+      "anastasia-markova",
+    ],
+  },
+  {
+    key: "YOGA_CLUB",
+    name: "Йога после уроков",
+    subjectName: "Йога",
+    lessonsPerWeek: 1,
+    durationInMinutes: 45,
+    breakDuration: 0,
+    studentKeys: [
+      "eva-fomina",
+      "vera-larina",
+      "taisiya-lapina",
+      "alisa-burova",
+      "grigoriy-samoylov",
+    ],
+  },
+];
+
+const MOTHER_FIRST_NAMES = [
+  "Елена", "Анна", "Ольга", "Наталья", "Марина", "Ирина", "Светлана", "Дарья", "Татьяна", "Юлия",
+  "Виктория", "Ксения", "Анастасия", "Екатерина", "Алёна", "Лариса", "Полина", "Вера", "Лилия", "Софья",
+];
+
+const FATHER_FIRST_NAMES = [
+  "Алексей", "Дмитрий", "Сергей", "Павел", "Игорь", "Виталий", "Роман", "Михаил", "Антон", "Евгений",
+  "Константин", "Андрей", "Виктор", "Олег", "Николай", "Юрий", "Степан", "Илья", "Григорий", "Артём",
+];
+
+const PATRONYMICS = [
+  "Андреевна", "Сергеевна", "Павловна", "Игоревна", "Викторовна", "Михайловна", "Олеговна", "Алексеевна",
+  "Дмитриевна", "Юрьевна", "Андреевич", "Сергеевич", "Павлович", "Игоревич", "Викторович", "Михайлович",
+  "Олегович", "Алексеевич", "Дмитриевич", "Юрьевич",
+];
+
+function toMinutes(time: string): number {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function dateAtMinutes(baseDate: Date, minutesFromMidnight: number): Date {
+  const result = new Date(baseDate);
+  result.setHours(Math.floor(minutesFromMidnight / 60), minutesFromMidnight % 60, 0, 0);
+  return result;
+}
+
+function nextWeekday(base: Date, weekday: DayOfWeek): Date {
+  const currentDay = base.getDay();
+  const targetDay = weekday % 7;
+  const delta = ((targetDay - currentDay + 7) % 7) || 7;
+  const result = new Date(base);
+  result.setDate(base.getDate() + delta);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function getDefaultAttendanceLoadMode(name: string, type: SubjectType): AttendanceLoadMode {
+  if (type === "ELECTIVE_REQUIRED") {
+    return "AFTERSCHOOL_COEFFICIENT";
+  }
+
+  if (type === "REGIME") {
+    if (name === "Завтрак" || name === "Обед" || name === "Полдник") {
+      return "FULL_CLASS_SIZE";
+    }
+
+    return "AFTERSCHOOL_COEFFICIENT";
+  }
+
+  return "DELIVERY_GROUP_SIZE";
+}
+
+function surnameForGender(surnameMale: string, gender: Gender): string {
+  if (gender === "MALE") {
+    return surnameMale;
+  }
+
+  if (surnameMale.endsWith("ский")) {
+    return `${surnameMale.slice(0, -4)}ская`;
+  }
+
+  if (surnameMale.endsWith("цкий")) {
+    return `${surnameMale.slice(0, -4)}цкая`;
+  }
+
+  if (surnameMale.endsWith("ёв")) {
+    return `${surnameMale}а`;
+  }
+
+  if (surnameMale.endsWith("ов") || surnameMale.endsWith("ев") || surnameMale.endsWith("ин") || surnameMale.endsWith("ын")) {
+    return `${surnameMale}а`;
+  }
+
+  return `${surnameMale}а`;
+}
+
+function uniqueFamilyKeys(students: StudentSeed[]): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+
+  for (const student of students) {
+    if (!seen.has(student.familyKey)) {
+      seen.add(student.familyKey);
+      ordered.push(student.familyKey);
+    }
+  }
+
+  return ordered;
+}
+
+function addRequirement(
+  target: RequirementSeed[],
+  groupKey: string,
+  subjectName: string,
+  lessonsPerWeek: number,
+  durationInMinutes: number,
+  breakDuration: number,
+): void {
+  target.push({
+    groupKey,
+    subjectName,
+    lessonsPerWeek,
+    durationInMinutes,
+    breakDuration,
+  });
+}
+
+function primaryRegime(classKey: string, walkLessonsPerWeek: number): RequirementSeed[] {
+  return [
+    { groupKey: classKey, subjectName: "Завтрак", lessonsPerWeek: 5, durationInMinutes: 20, breakDuration: 0 },
+    { groupKey: classKey, subjectName: "Обед", lessonsPerWeek: 5, durationInMinutes: 30, breakDuration: 0 },
+    { groupKey: classKey, subjectName: "Полдник", lessonsPerWeek: 5, durationInMinutes: 15, breakDuration: 0 },
+    { groupKey: classKey, subjectName: "Прогулка", lessonsPerWeek: walkLessonsPerWeek, durationInMinutes: 45, breakDuration: 0 },
+  ];
+}
+
+function buildRequirementSeeds(): RequirementSeed[] {
+  const requirements: RequirementSeed[] = [];
+
+  for (const entry of primaryRegime("2A", 5)) requirements.push(entry);
+  addRequirement(requirements, "2A", "Математика", 4, 40, 10);
+  addRequirement(requirements, "2A", "Русский язык", 5, 40, 10);
+  addRequirement(requirements, "2A", "Литература", 3, 40, 10);
+  addRequirement(requirements, "2A", "Окружающий мир", 2, 40, 10);
+  addRequirement(requirements, "2A", "Каллиграфия", 1, 40, 10);
+  addRequirement(requirements, "2A", "Физическая культура", 2, 40, 10);
+  addRequirement(requirements, "2A", "Музыка", 1, 40, 10);
+  addRequirement(requirements, "2A", "ИЗО", 1, 40, 10);
+  addRequirement(requirements, "2A_ENG_1", "Английский язык", 2, 40, 10);
+  addRequirement(requirements, "2A_ENG_2", "Английский язык", 2, 40, 10);
+  addRequirement(requirements, "2A", "Эксперименты", 1, 40, 10);
+  addRequirement(requirements, "2A", "Хореография", 1, 40, 10);
+
+  for (const entry of primaryRegime("2B", 5)) requirements.push(entry);
+  addRequirement(requirements, "2B", "Математика", 4, 40, 10);
+  addRequirement(requirements, "2B", "Русский язык", 5, 40, 10);
+  addRequirement(requirements, "2B", "Литература", 3, 40, 10);
+  addRequirement(requirements, "2B", "Окружающий мир", 2, 40, 10);
+  addRequirement(requirements, "2B", "Каллиграфия", 1, 40, 10);
+  addRequirement(requirements, "2B", "Физическая культура", 2, 40, 10);
+  addRequirement(requirements, "2B", "Музыка", 1, 40, 10);
+  addRequirement(requirements, "2B", "ИЗО", 1, 40, 10);
+  addRequirement(requirements, "2B", "Английский язык", 2, 40, 10);
+  addRequirement(requirements, "2B", "Эксперименты", 1, 40, 10);
+  addRequirement(requirements, "2B", "Архитектура", 1, 40, 10);
+
+  for (const entry of primaryRegime("3A", 5)) requirements.push(entry);
+  addRequirement(requirements, "3A", "Математика", 5, 45, 10);
+  addRequirement(requirements, "3A", "Русский язык", 5, 45, 10);
+  addRequirement(requirements, "3A", "Литература", 3, 45, 10);
+  addRequirement(requirements, "3A", "Окружающий мир", 2, 45, 10);
+  addRequirement(requirements, "3A", "Физическая культура", 3, 45, 10);
+  addRequirement(requirements, "3A", "Музыка", 1, 45, 10);
+  addRequirement(requirements, "3A", "ИЗО", 1, 45, 10);
+  addRequirement(requirements, "3A_ENG_1", "Английский язык", 2, 45, 10);
+  addRequirement(requirements, "3A_ENG_2", "Английский язык", 2, 45, 10);
+  addRequirement(requirements, "3A", "Эксперименты", 1, 45, 10);
+  addRequirement(requirements, "3A", "Архитектура", 1, 45, 10);
+  addRequirement(requirements, "3A", "Хореография", 1, 45, 10);
+
+  for (const entry of primaryRegime("5A", 3)) requirements.push(entry);
+  addRequirement(requirements, "5A", "Математика", 5, 45, 10);
+  addRequirement(requirements, "5A", "Русский язык", 4, 45, 10);
+  addRequirement(requirements, "5A", "Литература", 3, 45, 10);
+  addRequirement(requirements, "5A", "История", 2, 45, 10);
+  addRequirement(requirements, "5A", "География", 1, 45, 10);
+  addRequirement(requirements, "5A", "Биология", 1, 45, 10);
+  addRequirement(requirements, "5A", "Информатика", 1, 45, 10);
+  addRequirement(requirements, "5A", "Физическая культура", 2, 45, 10);
+  addRequirement(requirements, "5A", "Музыка", 1, 45, 10);
+  addRequirement(requirements, "5A", "ИЗО", 1, 45, 10);
+  addRequirement(requirements, "5A_ENG_1", "Английский язык", 3, 45, 10);
+  addRequirement(requirements, "5A_ENG_2", "Английский язык", 3, 45, 10);
+  addRequirement(requirements, "5A", "Эксперименты", 1, 45, 10);
+  addRequirement(requirements, "5A", "Архитектура", 1, 90, 15);
+
+  for (const entry of primaryRegime("6A", 3)) requirements.push(entry);
+  addRequirement(requirements, "6A", "Математика", 5, 45, 10);
+  addRequirement(requirements, "6A", "Русский язык", 4, 45, 10);
+  addRequirement(requirements, "6A", "Литература", 3, 45, 10);
+  addRequirement(requirements, "6A", "История", 2, 45, 10);
+  addRequirement(requirements, "6A", "География", 2, 45, 10);
+  addRequirement(requirements, "6A", "Биология", 2, 45, 10);
+  addRequirement(requirements, "6A", "Информатика", 1, 45, 10);
+  addRequirement(requirements, "6A", "Физическая культура", 2, 45, 10);
+  addRequirement(requirements, "6A", "Музыка", 1, 45, 10);
+  addRequirement(requirements, "6A", "ИЗО", 1, 45, 10);
+  addRequirement(requirements, "6A", "Английский язык", 3, 45, 10);
+  addRequirement(requirements, "6A", "Эксперименты", 1, 45, 10);
+  addRequirement(requirements, "6A", "Архитектура", 1, 90, 15);
+
+  for (const elective of ELECTIVE_GROUPS) {
+    addRequirement(
+      requirements,
+      elective.key,
+      elective.subjectName,
+      elective.lessonsPerWeek,
+      elective.durationInMinutes,
+      elective.breakDuration,
+    );
+  }
+
+  return requirements;
+}
+
+async function createCredentialAccount(userId: string, password: string): Promise<void> {
   await prisma.account.create({
     data: {
       userId,
       accountId: userId,
       providerId: "credential",
-      password: hashedPassword,
+      password: await hashPassword(password),
     },
   });
 }
 
-function toMinutes(time: string) {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-function dateAtMinutes(baseDate: Date, minutesFromMidnight: number) {
-  const date = new Date(baseDate);
-  date.setHours(Math.floor(minutesFromMidnight / 60), minutesFromMidnight % 60, 0, 0);
-  return date;
-}
-
-function getDefaultAttendanceLoadMode(
-  subjectName: string,
-  subjectType: string,
-) {
-  if (subjectType === "ELECTIVE_REQUIRED") {
-    return "AFTERSCHOOL_COEFFICIENT" as const;
-  }
-
-  if (subjectType !== "REGIME") {
-    return "DELIVERY_GROUP_SIZE" as const;
-  }
-
-  if (subjectName === "Завтрак" || subjectName === "Обед" || subjectName === "Полдник") {
-    return "FULL_CLASS_SIZE" as const;
-  }
-
-  return "AFTERSCHOOL_COEFFICIENT" as const;
-}
-
-async function main() {
-  console.log("Clearing existing data...");
+async function clearData(): Promise<void> {
   await prisma.scheduleEntryCoveredClass.deleteMany();
   await prisma.scheduleEntry.deleteMany();
   await prisma.weeklyTemplateCoveredClass.deleteMany();
@@ -71,12 +877,17 @@ async function main() {
   await prisma.student.deleteMany();
   await prisma.parent.deleteMany();
   await prisma.teacher.deleteMany();
+  await prisma.session.deleteMany();
   await prisma.account.deleteMany();
   await prisma.verification.deleteMany();
   await prisma.user.deleteMany();
+}
 
-  console.log("Creating mock data...");
+async function main(): Promise<void> {
+  console.log("Clearing existing data...");
+  await clearData();
 
+  console.log("Creating admin user...");
   const admin = await prisma.user.create({
     data: {
       email: "admin1@classflow.local",
@@ -89,47 +900,9 @@ async function main() {
   });
   await createCredentialAccount(admin.id, "admin1234");
 
-  const subjectSeed = [
-    { name: "Математика", type: "ACADEMIC" },
-    { name: "Русский язык", type: "ACADEMIC" },
-    { name: "Литература", type: "ACADEMIC" },
-    { name: "Каллиграфия", type: "ACADEMIC" },
-    { name: "Окружающий мир", type: "ACADEMIC" },
-    { name: "Английский язык", type: "ACADEMIC" },
-    { name: "Физическая культура", type: "ACADEMIC" },
-    { name: "Биология", type: "ACADEMIC" },
-    { name: "География", type: "ACADEMIC" },
-    { name: "История", type: "ACADEMIC" },
-    { name: "Коммуникация", type: "ACADEMIC" },
-    { name: "Испанский язык", type: "ACADEMIC" },
-    { name: "Музыка", type: "ACADEMIC" },
-    { name: "ИЗО", type: "ACADEMIC" },
-    { name: "Фехтование", type: "ACADEMIC" },
-    { name: "Фланкировка", type: "ACADEMIC" },
-    { name: "Архитектура", type: "ELECTIVE_REQUIRED" },
-    { name: "Хореография", type: "ELECTIVE_REQUIRED" },
-    { name: "Йога", type: "ELECTIVE_OPTIONAL" },
-    { name: "Арт-терапия", type: "ELECTIVE_OPTIONAL" },
-    { name: "Игры радости", type: "ELECTIVE_OPTIONAL" },
-    { name: "Эксперименты", type: "ELECTIVE_REQUIRED" },
-    { name: "Рукоделие", type: "ELECTIVE_OPTIONAL" },
-    { name: "Столярная мастерская", type: "ELECTIVE_OPTIONAL" },
-    { name: "Кулинария", type: "ELECTIVE_OPTIONAL" },
-    { name: "Шахматы и шашки", type: "ELECTIVE_OPTIONAL" },
-    { name: "Журналистика", type: "ELECTIVE_OPTIONAL" },
-    { name: "Писательский клуб", type: "ELECTIVE_OPTIONAL" },
-    { name: "Театр", type: "ELECTIVE_OPTIONAL" },
-    { name: "Подвижные игры", type: "ELECTIVE_OPTIONAL" },
-    { name: "Урок доброты и мудрости", type: "ELECTIVE_OPTIONAL" },
-    { name: "ДЗ", type: "REGIME" },
-    { name: "Прогулка", type: "REGIME" },
-    { name: "Завтрак", type: "REGIME" },
-    { name: "Обед", type: "REGIME" },
-    { name: "Полдник", type: "REGIME" },
-  ] as const;
-
-  const subjectByName: Record<string, string> = {};
-  for (const subject of subjectSeed) {
+  console.log("Creating subjects...");
+  const subjectIdByName = new Map<string, string>();
+  for (const subject of SUBJECTS) {
     const created = await prisma.subject.create({
       data: {
         name: subject.name,
@@ -137,1093 +910,324 @@ async function main() {
         defaultAttendanceLoadMode: getDefaultAttendanceLoadMode(subject.name, subject.type),
       },
     });
-    subjectByName[subject.name] = created.id;
+    subjectIdByName.set(subject.name, created.id);
   }
 
-  const mainBuilding = await prisma.building.create({ data: { name: "Главный корпус", address: "ул. Школьная, 1" } });
-  const sportsBuilding = await prisma.building.create({ data: { name: "Спортивный корпус", address: "ул. Школьная, 3" } });
-  const artsBuilding = await prisma.building.create({ data: { name: "Творческий центр", address: "ул. Школьная, 5" } });
+  console.log("Creating buildings and rooms...");
+  const buildingIdByKey = new Map<string, string>();
+  for (const building of BUILDINGS) {
+    const created = await prisma.building.create({
+      data: {
+        name: building.name,
+        address: building.address,
+      },
+    });
+    buildingIdByKey.set(building.key, created.id);
+  }
 
-  const roomSeed = [
-    { key: "CLASS_3", name: "Кабинет 3А", seatsCount: 28, buildingId: mainBuilding.id },
-    { key: "CLASS_6", name: "Кабинет 6А", seatsCount: 30, buildingId: mainBuilding.id },
-    { key: "MATH", name: "Кабинет математики", seatsCount: 26, buildingId: mainBuilding.id },
-    { key: "RUS", name: "Кабинет русского языка", seatsCount: 26, buildingId: mainBuilding.id },
-    { key: "LIT", name: "Литературная студия", seatsCount: 22, buildingId: mainBuilding.id },
-    { key: "BIO", name: "Кабинет биологии", seatsCount: 24, buildingId: mainBuilding.id },
-    { key: "HISTORY", name: "Кабинет истории и географии", seatsCount: 24, buildingId: mainBuilding.id },
-    { key: "ENGLISH_1", name: "Лингафонный кабинет 1", seatsCount: 20, buildingId: mainBuilding.id },
-    { key: "ENGLISH_2", name: "Лингафонный кабинет 2", seatsCount: 20, buildingId: mainBuilding.id },
-    { key: "COMM", name: "Кабинет коммуникации", seatsCount: 20, buildingId: mainBuilding.id },
-    { key: "PROJECT", name: "Проектная мастерская", seatsCount: 18, buildingId: artsBuilding.id },
-    { key: "SCIENCE", name: "Лаборатория экспериментов", seatsCount: 18, buildingId: mainBuilding.id },
-    { key: "WOOD", name: "Столярная мастерская", seatsCount: 16, buildingId: artsBuilding.id },
-    { key: "CRAFT", name: "Кабинет рукоделия", seatsCount: 16, buildingId: artsBuilding.id },
-    { key: "ART", name: "Арт-студия", seatsCount: 20, buildingId: artsBuilding.id },
-    { key: "DANCE", name: "Зал хореографии", seatsCount: 30, buildingId: sportsBuilding.id },
-    { key: "YOGA", name: "Зал йоги", seatsCount: 24, buildingId: sportsBuilding.id },
-    { key: "FENCING", name: "Зал фехтования", seatsCount: 24, buildingId: sportsBuilding.id },
-    { key: "GYM", name: "Спортивный зал", seatsCount: 50, buildingId: sportsBuilding.id },
-    { key: "THEATER", name: "Театральная сцена", seatsCount: 40, buildingId: artsBuilding.id },
-    { key: "MEDIA", name: "Медиа-центр", seatsCount: 20, buildingId: artsBuilding.id },
-    { key: "KITCHEN", name: "Кулинарная лаборатория", seatsCount: 16, buildingId: artsBuilding.id },
-    { key: "AFTERSCHOOL_3", name: "Комната продлёнки 3-х классов", seatsCount: 20, buildingId: mainBuilding.id },
-    { key: "AFTERSCHOOL_6", name: "Комната проектной работы 6-х классов", seatsCount: 20, buildingId: mainBuilding.id },
-    { key: "YARD_3", name: "Школьный двор младших классов", seatsCount: 120, buildingId: mainBuilding.id },
-    { key: "YARD_6", name: "Школьный двор средних классов", seatsCount: 120, buildingId: mainBuilding.id },
-    { key: "CANTEEN", name: "Столовая", seatsCount: 150, buildingId: mainBuilding.id },
-  ] as const;
-
-  const roomByKey: Record<string, string> = {};
-  for (const room of roomSeed) {
+  const roomIdByKey = new Map<string, string>();
+  for (const room of ROOMS) {
     const created = await prisma.room.create({
       data: {
         name: room.name,
         seatsCount: room.seatsCount,
-        buildingId: room.buildingId,
+        buildingId: buildingIdByKey.get(room.buildingKey),
       },
     });
-    roomByKey[room.key] = created.id;
+    roomIdByKey.set(room.key, created.id);
   }
 
-  let teacherCounter = 1;
-  const teacherByKey: Record<string, string> = {};
-  const createTeacher = async (
-    key: string,
-    name: string,
-    surname: string,
-    patronymicName: string,
-    withCredential = false,
-  ) => {
+  console.log("Creating teachers...");
+  const teacherIdByKey = new Map<string, string>();
+  let teacherEmailCounter = 1;
+
+  for (const teacher of TEACHERS) {
     const user = await prisma.user.create({
       data: {
-        email: `teacher${teacherCounter}@classflow.local`,
+        email: `teacher${teacherEmailCounter}@classflow.local`,
         role: "USER",
         status: "ACTIVE",
-        name,
-        surname,
-        patronymicName,
+        name: teacher.firstName,
+        surname: teacher.lastName,
+        patronymicName: teacher.patronymic,
       },
     });
+    await createCredentialAccount(user.id, "teacher1234");
 
-    if (withCredential) {
-      await createCredentialAccount(user.id, "teacher1234");
-    }
+    const createdTeacher = await prisma.teacher.create({
+      data: {
+        userId: user.id,
+      },
+    });
+    teacherIdByKey.set(teacher.key, createdTeacher.id);
+    teacherEmailCounter += 1;
+  }
 
-    teacherCounter += 1;
-    const teacher = await prisma.teacher.create({ data: { userId: user.id } });
-    teacherByKey[key] = teacher.id;
-    return teacher.id;
-  };
-
-  await createTeacher("C3_MATH", "Иван", "Иванов", "Андреевич", true);
-  await createTeacher("C3_RUS", "Ольга", "Смирнова", "Павловна", true);
-  await createTeacher("C3_LIT", "Марина", "Козлова", "Игоревна");
-  await createTeacher("C3_CALLIG", "Наталья", "Тихонова", "Сергеевна");
-  await createTeacher("C3_WORLD", "Елена", "Громова", "Николаевна");
-  await createTeacher("C3_ENGLISH", "Анна", "Петрова", "Ильинична", true);
-  await createTeacher("C3_PE", "Пётр", "Кузьмин", "Олегович");
-  await createTeacher("C3_ARCH", "София", "Беляева", "Алексеевна");
-  await createTeacher("C3_GAMES", "Андрей", "Фролов", "Владимирович");
-  await createTeacher("C3_MUSIC", "Ирина", "Миронова", "Юрьевна");
-  await createTeacher("C3_DANCE", "Дарья", "Артемьева", "Станиславовна");
-  await createTeacher("C3_CRAFT", "Юлия", "Серова", "Михайловна");
-  await createTeacher("C3_WOOD", "Глеб", "Матвеев", "Романович");
-  await createTeacher("C3_FENCING", "Константин", "Лебедев", "Игоревич");
-  await createTeacher("C3_ART", "Лилия", "Егорова", "Романовна");
-  await createTeacher("C3_ART_THERAPY", "Вероника", "Савина", "Евгеньевна");
-  await createTeacher("C3_YOGA", "Алёна", "Зимина", "Олеговна");
-  await createTeacher("C3_KINDNESS", "Вера", "Шевцова", "Петровна");
-  await createTeacher("C3_COOKING", "Тамара", "Молчанова", "Ильинична");
-  await createTeacher("C3_CHESS", "Сергей", "Носов", "Валерьевич");
-  await createTeacher("C3_HOMEWORK", "Нина", "Белова", "Геннадьевна");
-  await createTeacher("C3_WALK", "Галина", "Полякова", "Викторовна");
-  await createTeacher("C3_EXPERIMENT", "Виктор", "Андреев", "Аркадьевич");
-
-  await createTeacher("C6_MATH", "Дмитрий", "Орлов", "Петрович");
-  await createTeacher("C6_BIO", "Оксана", "Левина", "Игоревна");
-  await createTeacher("C6_RUS", "Татьяна", "Киреева", "Андреевна");
-  await createTeacher("C6_LIT", "Евгений", "Лапшин", "Сергеевич");
-  await createTeacher("C6_ART", "Алиса", "Власова", "Романовна");
-  await createTeacher("C6_YOGA", "Инна", "Широкова", "Сергеевна");
-  await createTeacher("C6_DANCE", "Кира", "Тарасова", "Павловна");
-  await createTeacher("C6_JOURNAL", "Роман", "Давыдов", "Алексеевич");
-  await createTeacher("C6_FLANK", "Илья", "Щербаков", "Олегович");
-  await createTeacher("C6_GEOGRAPHY", "Светлана", "Денисова", "Юрьевна");
-  await createTeacher("C6_ENGLISH", "Маргарита", "Осипова", "Николаевна");
-  await createTeacher("C6_HISTORY", "Павел", "Гурьев", "Витальевич");
-  await createTeacher("C6_COMM", "Лариса", "Крылова", "Владиславовна");
-  await createTeacher("C6_SPANISH", "Диана", "Королёва", "Андреевна");
-  await createTeacher("C6_JOY", "Олеся", "Голубева", "Олеговна");
-  await createTeacher("C6_ARCH", "Степан", "Макаров", "Егорович");
-  await createTeacher("C6_WOOD", "Ярослав", "Калинин", "Викторович");
-  await createTeacher("C6_CRAFT", "Екатерина", "Рожкова", "Юрьевна");
-  await createTeacher("C6_THEATER", "Михаил", "Гаврилов", "Леонидович");
-  await createTeacher("C6_WRITERS", "Полина", "Виноградова", "Олеговна");
-
-  const class3 = await prisma.group.create({ data: { name: "3 А", type: "CLASS", grade: 3 } });
-  const class6 = await prisma.group.create({ data: { name: "6 А", type: "CLASS", grade: 6 } });
-  const class4 = await prisma.group.create({ data: { name: "4 Б", type: "CLASS", grade: 4 } });
-  const class8 = await prisma.group.create({ data: { name: "8 А", type: "CLASS", grade: 8 } });
-
-  const class3Subgroup1 = await prisma.group.create({
-    data: {
-      name: "3 А - подгруппа 1",
-      type: "SUBJECT_SUBGROUP",
-      grade: 3,
-      parentId: class3.id,
-      subjectId: subjectByName["Английский язык"],
-    },
-  });
-  const class3Subgroup2 = await prisma.group.create({
-    data: {
-      name: "3 А - подгруппа 2",
-      type: "SUBJECT_SUBGROUP",
-      grade: 3,
-      parentId: class3.id,
-      subjectId: subjectByName["Математика"],
-    },
-  });
-  const class6Subgroup1 = await prisma.group.create({
-    data: {
-      name: "6 А - подгруппа 1",
-      type: "SUBJECT_SUBGROUP",
-      grade: 6,
-      parentId: class6.id,
-      subjectId: subjectByName["Испанский язык"],
-    },
-  });
-  const class6Subgroup2 = await prisma.group.create({
-    data: {
-      name: "6 А - подгруппа 2",
-      type: "SUBJECT_SUBGROUP",
-      grade: 6,
-      parentId: class6.id,
-      subjectId: subjectByName["Игры радости"],
-    },
+  await prisma.teacherSubject.createMany({
+    data: TEACHERS.flatMap((teacher) =>
+      teacher.capabilities.map((capability) => ({
+        teacherId: teacherIdByKey.get(teacher.key)!,
+        subjectId: subjectIdByName.get(capability.subjectName)!,
+        minGrade: capability.minGrade,
+        maxGrade: capability.maxGrade,
+      })),
+    ),
   });
 
-  const electiveChess = await prisma.group.create({
-    data: {
-      name: "Шахматный клуб 3-6",
-      type: "ELECTIVE_GROUP",
-      grade: 3,
-      subjectId: subjectByName["Шахматы и шашки"],
-    },
-  });
-  const electiveMedia = await prisma.group.create({
-    data: {
-      name: "Медиаклуб",
-      type: "ELECTIVE_GROUP",
-      grade: 6,
-      subjectId: subjectByName["Журналистика"],
-    },
-  });
-  const kindergarten = await prisma.group.create({
-    data: {
-      name: "Подготовительная группа 'Солнышко'",
-      type: "KINDERGARTEN_GROUP",
-      grade: 0,
-    },
+  await prisma.teacherAvailability.createMany({
+    data: TEACHERS.flatMap((teacher) =>
+      teacher.availability.map((slot) => ({
+        teacherId: teacherIdByKey.get(teacher.key)!,
+        dayOfWeek: slot.dayOfWeek,
+        startTime: toMinutes(slot.start),
+        endTime: toMinutes(slot.end),
+        type: slot.type ?? "AVAILABLE",
+      })),
+    ),
   });
 
-  let studentCounter = 1;
-  const allStudents: string[] = [];
+  console.log("Creating groups...");
+  const groupIdByKey = new Map<string, string>();
 
-  const createStudent = async (
-    name: string,
-    surname: string,
-    groups: string[],
-    status: "ACTIVE" | "PENDING_INVITE" = "ACTIVE",
-    withCredential = false,
-  ) => {
+  for (const schoolClass of CLASSES) {
+    const created = await prisma.group.create({
+      data: {
+        name: schoolClass.name,
+        type: "CLASS",
+        grade: schoolClass.grade,
+      },
+    });
+    groupIdByKey.set(schoolClass.key, created.id);
+  }
+
+  for (const subgroup of SUBGROUPS) {
+    const created = await prisma.group.create({
+      data: {
+        name: subgroup.name,
+        type: "SUBJECT_SUBGROUP",
+        grade: CLASSES.find((entry) => entry.key === subgroup.classKey)?.grade ?? null,
+        parentId: groupIdByKey.get(subgroup.classKey),
+        subjectId: subjectIdByName.get(subgroup.subjectName),
+      },
+    });
+    groupIdByKey.set(subgroup.key, created.id);
+  }
+
+  for (const elective of ELECTIVE_GROUPS) {
+    const created = await prisma.group.create({
+      data: {
+        name: elective.name,
+        type: "ELECTIVE_GROUP",
+        grade: null,
+        subjectId: subjectIdByName.get(elective.subjectName),
+      },
+    });
+    groupIdByKey.set(elective.key, created.id);
+  }
+
+  console.log("Creating students...");
+  const studentIdByKey = new Map<string, string>();
+  const familyStudents = new Map<string, StudentSeed[]>();
+  let studentEmailCounter = 1;
+
+  for (const student of STUDENTS) {
+    const surname = surnameForGender(student.surnameMale, student.gender);
+    const userStatus: UserStatus = student.portalAccess ? "ACTIVE" : "PENDING_INVITE";
     const user = await prisma.user.create({
       data: {
-        email: `student${studentCounter}@classflow.local`,
+        email: `student${studentEmailCounter}@classflow.local`,
         role: "USER",
-        status,
-        name,
+        status: userStatus,
+        name: student.firstName,
         surname,
       },
     });
 
-    if (withCredential) {
+    if (student.portalAccess) {
       await createCredentialAccount(user.id, "student1234");
     }
 
-    const student = await prisma.student.create({ data: { userId: user.id } });
-    allStudents.push(student.id);
-
-    await prisma.studentGroups.createMany({
-      data: groups.map((groupId) => ({ studentId: student.id, groupId })),
-    });
-
-    studentCounter += 1;
-    return student.id;
-  };
-
-  const class3Students = [
-    ["Михаил", "Кузнецов"],
-    ["Александр", "Соколов"],
-    ["Мария", "Попова"],
-    ["Дарья", "Волкова"],
-    ["Павел", "Козлов"],
-    ["Ева", "Исаева"],
-    ["Лев", "Герасимов"],
-    ["Виктория", "Крылова"],
-    ["Тимофей", "Поляков"],
-    ["Яна", "Мельникова"],
-    ["Максим", "Соболев"],
-    ["Арина", "Сафонова"],
-  ] as const;
-
-  let kuznetsovMikhailId: string | null = null;
-  for (const [name, surname] of class3Students) {
-    const studentId = await createStudent(name, surname, [class3.id], "ACTIVE", allStudents.length === 0);
-    if (name === "Михаил" && surname === "Кузнецов") {
-      kuznetsovMikhailId = studentId;
-    }
-  }
-
-  const class6Students = [
-    ["Никита", "Фомин"],
-    ["Ксения", "Николаева"],
-    ["Григорий", "Седов"],
-    ["Алина", "Жукова"],
-    ["Матвей", "Абрамов"],
-    ["Диана", "Ермакова"],
-    ["Илья", "Сазонов"],
-    ["Олеся", "Лукина"],
-    ["Роман", "Селиванов"],
-    ["Анна", "Климова"],
-    ["Денис", "Новиков"],
-    ["Софья", "Чистякова"],
-  ] as const;
-
-  let fominNikitaId: string | null = null;
-  for (const [name, surname] of class6Students) {
-    const studentId = await createStudent(name, surname, [class6.id]);
-    if (name === "Никита" && surname === "Фомин") {
-      fominNikitaId = studentId;
-    }
-  }
-
-  await createStudent("Егор", "Лазарев", [class4.id]);
-  await createStudent("Полина", "Галкина", [class4.id]);
-  await createStudent("Захар", "Доронин", [class8.id], "PENDING_INVITE");
-  await createStudent("Милана", "Аксенова", [class8.id]);
-  await createStudent("Кирилл", "Панин", [kindergarten.id]);
-  await createStudent("Валерия", "Щукина", [electiveChess.id, class3.id]);
-  await createStudent("Фёдор", "Колесников", [electiveMedia.id, class6.id]);
-
-  const parent1User = await prisma.user.create({
-    data: {
-      email: "parent1@classflow.local",
-      role: "USER",
-      status: "ACTIVE",
-      name: "Ольга",
-      surname: "Кузнецова",
-      patronymicName: "Сергеевна",
-    },
-  });
-  await createCredentialAccount(parent1User.id, "parent1234");
-  const parent1 = await prisma.parent.create({ data: { userId: parent1User.id } });
-
-  const parent2User = await prisma.user.create({
-    data: {
-      email: "parent2@classflow.local",
-      role: "USER",
-      status: "PENDING_INVITE",
-      name: "Андрей",
-      surname: "Соколов",
-      patronymicName: "Викторович",
-    },
-  });
-  const parent2 = await prisma.parent.create({ data: { userId: parent2User.id } });
-
-  if (!kuznetsovMikhailId || !fominNikitaId) {
-    throw new Error("Не удалось найти Михаила Кузнецова или Никиту Фомина в сид-данных");
-  }
-
-  const parent1Class3ChildId = kuznetsovMikhailId;
-  const parent1Class6ChildId = fominNikitaId;
-  const parent2ChildId = allStudents[1];
-
-  await prisma.studentParents.createMany({
-    data: [
-      { parentId: parent1.id, studentId: parent1Class3ChildId },
-      { parentId: parent1.id, studentId: parent1Class6ChildId },
-      { parentId: parent2.id, studentId: parent2ChildId },
-    ],
-  });
-
-  type DirectTemplateSeed = {
-    deliveryMode: "DIRECT_GROUP";
-    dayOfWeek: number;
-    start: string;
-    end: string;
-    groupId: string;
-    subjectName: string;
-    roomId: string | null;
-    teacherId: string | null;
-    grades: number[];
-  };
-
-  type SharedTemplateSeed = {
-    deliveryMode: "SHARED_CLASSES";
-    dayOfWeek: number;
-    start: string;
-    end: string;
-    coveredClassIds: string[];
-    subjectName: string;
-    roomId: string | null;
-    teacherId: string | null;
-    grades: number[];
-  };
-
-  type TemplateSeed = DirectTemplateSeed | SharedTemplateSeed;
-
-  const weeklyTemplateSeed: TemplateSeed[] = [];
-
-  const addTemplate = (
-    dayOfWeek: number,
-    start: string,
-    end: string,
-    groupId: string,
-    subjectName: string,
-    roomId: string | null,
-    teacherId: string | null,
-    grade: number,
-  ) => {
-    weeklyTemplateSeed.push({
-      deliveryMode: "DIRECT_GROUP",
-      dayOfWeek,
-      start,
-      end,
-      groupId,
-      subjectName,
-      roomId,
-      teacherId,
-      grades: [grade],
-    });
-  };
-
-  const addSharedTemplate = (
-    dayOfWeek: number,
-    start: string,
-    end: string,
-    coveredClassIds: string[],
-    subjectName: string,
-    roomId: string | null,
-    teacherId: string | null,
-    grades: number[],
-  ) => {
-    weeklyTemplateSeed.push({
-      deliveryMode: "SHARED_CLASSES",
-      dayOfWeek,
-      start,
-      end,
-      coveredClassIds,
-      subjectName,
-      roomId,
-      teacherId,
-      grades,
-    });
-  };
-
-  // 3A schedule
-  addTemplate(1, "08:20", "09:05", class3.id, "Математика", roomByKey.CLASS_3, teacherByKey.C3_MATH, 3);
-  addTemplate(1, "09:20", "10:05", class3.id, "Русский язык", roomByKey.CLASS_3, teacherByKey.C3_RUS, 3);
-  addTemplate(1, "10:05", "10:20", class3.id, "Завтрак", roomByKey.CANTEEN, null, 3);
-  addTemplate(1, "10:20", "11:05", class3.id, "Литература", roomByKey.CLASS_3, teacherByKey.C3_LIT, 3);
-  addTemplate(1, "11:20", "12:05", class3.id, "Каллиграфия", roomByKey.CRAFT, teacherByKey.C3_CALLIG, 3);
-  addTemplate(1, "12:20", "13:05", class3.id, "Окружающий мир", roomByKey.CLASS_3, teacherByKey.C3_WORLD, 3);
-  addTemplate(1, "13:05", "13:20", class3.id, "Обед", roomByKey.CANTEEN, null, 3);
-  addTemplate(1, "13:20", "14:05", class3Subgroup1.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-  addTemplate(1, "13:20", "14:05", class3Subgroup2.id, "Эксперименты", roomByKey.SCIENCE, teacherByKey.C3_EXPERIMENT, 3);
-  addTemplate(1, "14:05", "15:00", class3Subgroup1.id, "Эксперименты", roomByKey.SCIENCE, teacherByKey.C3_EXPERIMENT, 3);
-  addTemplate(1, "14:05", "15:00", class3Subgroup2.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-  addTemplate(1, "15:00", "15:15", class3.id, "Полдник", null, null, 3);
-  addTemplate(1, "15:15", "16:00", class3.id, "ДЗ", roomByKey.AFTERSCHOOL_3, teacherByKey.C3_HOMEWORK, 3);
-  addTemplate(1, "17:00", "18:00", class3.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-
-  addTemplate(2, "08:20", "09:05", class3Subgroup1.id, "Английский язык", roomByKey.ENGLISH_1, teacherByKey.C3_ENGLISH, 3);
-  addTemplate(2, "08:20", "09:05", class3Subgroup2.id, "Математика", roomByKey.CLASS_3, teacherByKey.C3_MATH, 3);
-  addTemplate(2, "09:20", "10:05", class3Subgroup1.id, "Математика", roomByKey.CLASS_3, teacherByKey.C3_MATH, 3);
-  addTemplate(2, "09:20", "10:05", class3Subgroup2.id, "Английский язык", roomByKey.ENGLISH_1, teacherByKey.C3_ENGLISH, 3);
-  addTemplate(2, "10:05", "10:20", class3.id, "Завтрак", roomByKey.CANTEEN, null, 3);
-  addTemplate(2, "10:20", "11:05", class3.id, "Русский язык", roomByKey.CLASS_3, teacherByKey.C3_RUS, 3);
-  addTemplate(2, "11:20", "12:05", class3.id, "Физическая культура", roomByKey.GYM, teacherByKey.C3_PE, 3);
-  addTemplate(2, "12:20", "13:05", class3.id, "Литература", roomByKey.CLASS_3, teacherByKey.C3_LIT, 3);
-  addTemplate(2, "13:05", "13:20", class3.id, "Обед", roomByKey.CANTEEN, null, 3);
-  addTemplate(2, "13:20", "14:05", class3Subgroup1.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-  addTemplate(2, "13:20", "14:05", class3Subgroup2.id, "Архитектура", roomByKey.PROJECT, teacherByKey.C3_ARCH, 3);
-  addTemplate(2, "14:05", "15:00", class3Subgroup1.id, "Архитектура", roomByKey.PROJECT, teacherByKey.C3_ARCH, 3);
-  addTemplate(2, "14:05", "15:00", class3Subgroup2.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-  addTemplate(2, "15:00", "15:15", class3.id, "Полдник", null, null, 3);
-  addTemplate(2, "15:15", "16:00", class3.id, "ДЗ", roomByKey.AFTERSCHOOL_3, teacherByKey.C3_HOMEWORK, 3);
-  addTemplate(2, "16:15", "17:00", class3.id, "Подвижные игры", roomByKey.GYM, teacherByKey.C3_GAMES, 3);
-  addTemplate(2, "17:00", "18:00", class3.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-
-  addTemplate(3, "08:20", "09:05", class3.id, "Математика", roomByKey.CLASS_3, teacherByKey.C3_MATH, 3);
-  addTemplate(3, "09:20", "10:05", class3.id, "Русский язык", roomByKey.CLASS_3, teacherByKey.C3_RUS, 3);
-  addTemplate(3, "10:05", "10:20", class3.id, "Завтрак", roomByKey.CANTEEN, null, 3);
-  addTemplate(3, "10:20", "11:05", class3.id, "Литература", roomByKey.CLASS_3, teacherByKey.C3_LIT, 3);
-  addTemplate(3, "11:20", "12:05", class3.id, "Игры радости", roomByKey.AFTERSCHOOL_3, teacherByKey.C3_GAMES, 3);
-  addTemplate(3, "12:20", "13:05", class3.id, "Музыка", roomByKey.MEDIA, teacherByKey.C3_MUSIC, 3);
-  addTemplate(3, "13:05", "13:20", class3.id, "Обед", roomByKey.CANTEEN, null, 3);
-  addTemplate(3, "13:20", "14:05", class3.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-  addTemplate(3, "14:05", "15:00", class3.id, "Хореография", roomByKey.DANCE, teacherByKey.C3_DANCE, 3);
-  addTemplate(3, "15:00", "15:15", class3.id, "Полдник", null, null, 3);
-  addTemplate(3, "15:15", "16:00", class3.id, "ДЗ", roomByKey.AFTERSCHOOL_3, teacherByKey.C3_HOMEWORK, 3);
-  addTemplate(3, "16:15", "17:00", class3Subgroup1.id, "Рукоделие", roomByKey.CRAFT, teacherByKey.C3_CRAFT, 3);
-  addTemplate(3, "16:15", "17:00", class3Subgroup2.id, "Столярная мастерская", roomByKey.WOOD, teacherByKey.C3_WOOD, 3);
-  addTemplate(3, "17:00", "18:00", class3.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-
-  addTemplate(4, "08:20", "09:05", class3Subgroup1.id, "Английский язык", roomByKey.ENGLISH_1, teacherByKey.C3_ENGLISH, 3);
-  addTemplate(4, "08:20", "09:05", class3Subgroup2.id, "Математика", roomByKey.CLASS_3, teacherByKey.C3_MATH, 3);
-  addTemplate(4, "09:20", "10:05", class3Subgroup1.id, "Математика", roomByKey.CLASS_3, teacherByKey.C3_MATH, 3);
-  addTemplate(4, "09:20", "10:05", class3Subgroup2.id, "Английский язык", roomByKey.ENGLISH_1, teacherByKey.C3_ENGLISH, 3);
-  addTemplate(4, "10:05", "10:20", class3.id, "Завтрак", roomByKey.CANTEEN, null, 3);
-  addTemplate(4, "10:20", "11:05", class3.id, "Русский язык", roomByKey.CLASS_3, teacherByKey.C3_RUS, 3);
-  addTemplate(4, "11:20", "12:05", class3.id, "Фехтование", roomByKey.FENCING, teacherByKey.C3_FENCING, 3);
-  addTemplate(4, "12:20", "13:05", class3.id, "Окружающий мир", roomByKey.CLASS_3, teacherByKey.C3_WORLD, 3);
-  addTemplate(4, "13:05", "13:20", class3.id, "Обед", roomByKey.CANTEEN, null, 3);
-  addTemplate(4, "13:20", "14:05", class3Subgroup1.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-  addTemplate(4, "13:20", "14:05", class3Subgroup2.id, "ИЗО", roomByKey.ART, teacherByKey.C3_ART, 3);
-  addTemplate(4, "14:05", "15:00", class3Subgroup1.id, "ИЗО", roomByKey.ART, teacherByKey.C3_ART, 3);
-  addTemplate(4, "14:05", "15:00", class3Subgroup2.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-  addTemplate(4, "15:00", "15:15", class3.id, "Полдник", null, null, 3);
-  addTemplate(4, "15:15", "16:00", class3.id, "ДЗ", roomByKey.AFTERSCHOOL_3, teacherByKey.C3_HOMEWORK, 3);
-  addTemplate(4, "16:15", "17:00", class3.id, "Арт-терапия", roomByKey.ART, teacherByKey.C3_ART_THERAPY, 3);
-  addTemplate(4, "17:00", "18:00", class3.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-
-  addTemplate(5, "08:20", "09:05", class3.id, "Математика", roomByKey.CLASS_3, teacherByKey.C3_MATH, 3);
-  addTemplate(5, "09:20", "10:05", class3.id, "Русский язык", roomByKey.CLASS_3, teacherByKey.C3_RUS, 3);
-  addTemplate(5, "10:05", "10:20", class3.id, "Завтрак", roomByKey.CANTEEN, null, 3);
-  addTemplate(5, "10:20", "11:05", class3.id, "Литература", roomByKey.CLASS_3, teacherByKey.C3_LIT, 3);
-  addTemplate(5, "11:20", "12:05", class3.id, "Йога", roomByKey.YOGA, teacherByKey.C3_YOGA, 3);
-  addTemplate(5, "12:20", "13:05", class3.id, "Урок доброты и мудрости", roomByKey.AFTERSCHOOL_3, teacherByKey.C3_KINDNESS, 3);
-  addTemplate(5, "13:05", "13:20", class3.id, "Обед", roomByKey.CANTEEN, null, 3);
-  addTemplate(5, "13:20", "14:05", class3.id, "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, 3);
-  addTemplate(5, "14:05", "15:00", class3.id, "Кулинария", roomByKey.KITCHEN, teacherByKey.C3_COOKING, 3);
-  addTemplate(5, "15:00", "15:15", class3.id, "Полдник", null, null, 3);
-  addTemplate(5, "15:15", "16:00", class3.id, "ДЗ", roomByKey.AFTERSCHOOL_3, teacherByKey.C3_HOMEWORK, 3);
-  addTemplate(5, "16:15", "17:00", class3.id, "Шахматы и шашки", roomByKey.MEDIA, teacherByKey.C3_CHESS, 3);
-  addSharedTemplate(5, "17:00", "18:00", [class3.id, class4.id], "Прогулка", roomByKey.YARD_3, teacherByKey.C3_WALK, [3, 4]);
-
-  // 6A schedule + fixed meal slots
-  for (const dayOfWeek of [1, 2, 3, 4, 5]) {
-    addTemplate(dayOfWeek, "09:50", "10:05", class6.id, "Завтрак", roomByKey.CANTEEN, null, 6);
-    addTemplate(dayOfWeek, "12:50", "13:05", class6.id, "Обед", roomByKey.CANTEEN, null, 6);
-    addTemplate(dayOfWeek, "15:00", "15:15", class6.id, "Полдник", null, null, 6);
-  }
-
-  addTemplate(1, "08:15", "09:00", class6.id, "Математика", roomByKey.MATH, teacherByKey.C6_MATH, 6);
-  addTemplate(1, "09:05", "09:50", class6.id, "Биология", roomByKey.BIO, teacherByKey.C6_BIO, 6);
-  addTemplate(1, "10:15", "11:00", class6.id, "Русский язык", roomByKey.RUS, teacherByKey.C6_RUS, 6);
-  addTemplate(1, "11:15", "12:00", class6.id, "Литература", roomByKey.LIT, teacherByKey.C6_LIT, 6);
-  addTemplate(1, "12:05", "12:50", class6.id, "ИЗО", roomByKey.ART, teacherByKey.C6_ART, 6);
-  addTemplate(1, "13:10", "13:55", class6.id, "Йога", roomByKey.YOGA, teacherByKey.C6_YOGA, 6);
-  addTemplate(1, "14:05", "15:00", class6.id, "Хореография", roomByKey.DANCE, teacherByKey.C6_DANCE, 6);
-  addTemplate(1, "15:15", "16:00", class6.id, "Журналистика", roomByKey.MEDIA, teacherByKey.C6_JOURNAL, 6);
-
-  addTemplate(2, "08:15", "09:00", class6.id, "Фланкировка", roomByKey.FENCING, teacherByKey.C6_FLANK, 6);
-  addTemplate(2, "09:05", "09:50", class6.id, "Математика", roomByKey.MATH, teacherByKey.C6_MATH, 6);
-  addTemplate(2, "10:15", "11:00", class6.id, "Русский язык", roomByKey.RUS, teacherByKey.C6_RUS, 6);
-  addTemplate(2, "11:15", "12:00", class6.id, "География", roomByKey.HISTORY, teacherByKey.C6_GEOGRAPHY, 6);
-  addTemplate(2, "12:05", "12:50", class6.id, "География", roomByKey.HISTORY, teacherByKey.C6_GEOGRAPHY, 6);
-  addTemplate(2, "13:10", "13:55", class6.id, "Английский язык", roomByKey.ENGLISH_2, teacherByKey.C6_ENGLISH, 6);
-  addTemplate(2, "14:05", "15:00", class6.id, "Физическая культура", roomByKey.GYM, teacherByKey.C3_PE, 6);
-
-  addTemplate(3, "08:15", "09:00", class6.id, "Русский язык", roomByKey.RUS, teacherByKey.C6_RUS, 6);
-  addTemplate(3, "09:05", "09:50", class6.id, "Литература", roomByKey.LIT, teacherByKey.C6_LIT, 6);
-  addTemplate(3, "10:15", "11:00", class6.id, "Математика", roomByKey.MATH, teacherByKey.C6_MATH, 6);
-  addTemplate(3, "11:15", "12:00", class6.id, "Математика", roomByKey.MATH, teacherByKey.C6_MATH, 6);
-  addTemplate(3, "12:05", "12:50", class6.id, "История", roomByKey.HISTORY, teacherByKey.C6_HISTORY, 6);
-  addTemplate(3, "13:10", "13:55", class6.id, "Музыка", roomByKey.MEDIA, teacherByKey.C3_MUSIC, 6);
-  addTemplate(3, "14:05", "15:00", class6.id, "История", roomByKey.HISTORY, teacherByKey.C6_HISTORY, 6);
-  addTemplate(3, "15:15", "16:00", class6Subgroup1.id, "Арт-терапия", roomByKey.ART, teacherByKey.C3_ART_THERAPY, 6);
-  addTemplate(3, "15:15", "16:00", class6Subgroup2.id, "Писательский клуб", roomByKey.AFTERSCHOOL_6, teacherByKey.C6_WRITERS, 6);
-
-  addTemplate(4, "08:15", "09:00", class6.id, "Фехтование", roomByKey.FENCING, teacherByKey.C3_FENCING, 6);
-  addTemplate(4, "09:05", "09:50", class6.id, "Русский язык", roomByKey.RUS, teacherByKey.C6_RUS, 6);
-  addTemplate(4, "10:15", "11:00", class6.id, "Коммуникация", roomByKey.COMM, teacherByKey.C6_COMM, 6);
-  addTemplate(4, "11:15", "12:00", class6.id, "Русский язык", roomByKey.RUS, teacherByKey.C6_RUS, 6);
-  addTemplate(4, "12:05", "12:50", class6.id, "Биология", roomByKey.BIO, teacherByKey.C6_BIO, 6);
-  addTemplate(4, "13:10", "13:55", class6.id, "Английский язык", roomByKey.ENGLISH_2, teacherByKey.C6_ENGLISH, 6);
-  addTemplate(4, "14:05", "15:00", class6Subgroup1.id, "Испанский язык", roomByKey.ENGLISH_2, teacherByKey.C6_SPANISH, 6);
-  addTemplate(4, "14:05", "15:00", class6Subgroup2.id, "Игры радости", roomByKey.AFTERSCHOOL_6, teacherByKey.C6_JOY, 6);
-  addTemplate(4, "15:15", "17:00", class6.id, "Архитектура", roomByKey.PROJECT, teacherByKey.C6_ARCH, 6);
-
-  addTemplate(5, "08:15", "09:00", class6.id, "Математика", roomByKey.MATH, teacherByKey.C6_MATH, 6);
-  addTemplate(5, "09:05", "09:50", class6.id, "Английский язык", roomByKey.ENGLISH_2, teacherByKey.C6_ENGLISH, 6);
-  addTemplate(5, "10:15", "11:00", class6.id, "История", roomByKey.HISTORY, teacherByKey.C6_HISTORY, 6);
-  addTemplate(5, "11:15", "12:00", class6.id, "Литература", roomByKey.LIT, teacherByKey.C6_LIT, 6);
-  addTemplate(5, "12:05", "12:50", class6.id, "Математика", roomByKey.MATH, teacherByKey.C6_MATH, 6);
-  addTemplate(5, "13:10", "13:55", class6.id, "Русский язык", roomByKey.RUS, teacherByKey.C6_RUS, 6);
-  addTemplate(5, "14:05", "15:00", class6Subgroup1.id, "Столярная мастерская", roomByKey.WOOD, teacherByKey.C6_WOOD, 6);
-  addTemplate(5, "14:05", "15:00", class6Subgroup2.id, "Рукоделие", roomByKey.CRAFT, teacherByKey.C6_CRAFT, 6);
-  addTemplate(5, "15:15", "16:00", class6.id, "Театр", roomByKey.THEATER, teacherByKey.C6_THEATER, 6);
-
-  const subjectTypeByName = new Map<string, string>(subjectSeed.map((subject) => [subject.name, subject.type]));
-  const subjectTypeById = new Map<string, string>(
-    subjectSeed.map((subject) => [subjectByName[subject.name], subject.type]),
-  );
-  const groupInfoById = new Map(
-    (await prisma.group.findMany({
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        grade: true,
-        parentId: true,
-        subjectId: true,
-      },
-    })).map((group) => [group.id, group]),
-  );
-
-  const getOwningClassId = (groupId: string) => {
-    const group = groupInfoById.get(groupId);
-    if (!group) {
-      throw new Error(`Unknown group ${groupId}`);
-    }
-
-    if (group.type === "SUBJECT_SUBGROUP" && group.parentId) {
-      return group.parentId;
-    }
-
-    return group.id;
-  };
-
-  const reusableElectiveGroupByKey = new Map<string, string>([
-    [`${class3.id}:${subjectByName["Шахматы и шашки"]}`, electiveChess.id],
-    [`${class6.id}:${subjectByName["Журналистика"]}`, electiveMedia.id],
-  ]);
-  const electiveOfferingGroupByKey = new Map(reusableElectiveGroupByKey);
-
-  const ensureElectiveOfferingGroup = async (classId: string, subjectName: string) => {
-    const subjectId = subjectByName[subjectName];
-    const key = `${classId}:${subjectId}`;
-    const existing = electiveOfferingGroupByKey.get(key);
-
-    if (existing) {
-      return existing;
-    }
-
-    const classInfo = groupInfoById.get(classId);
-    if (!classInfo) {
-      throw new Error(`Class ${classId} not found for elective offering`);
-    }
-
-    const created = await prisma.group.create({
+    const createdStudent = await prisma.student.create({
       data: {
-        name: `${subjectName} • ${classInfo.name}`,
-        type: "ELECTIVE_GROUP",
-        grade: classInfo.grade,
-        subjectId,
+        userId: user.id,
       },
     });
 
-    electiveOfferingGroupByKey.set(key, created.id);
-    groupInfoById.set(created.id, {
-      id: created.id,
-      name: created.name,
-      type: created.type,
-      grade: created.grade,
-      parentId: created.parentId,
-      subjectId: created.subjectId,
+    studentIdByKey.set(student.key, createdStudent.id);
+    studentEmailCounter += 1;
+
+    const siblings = familyStudents.get(student.familyKey) ?? [];
+    siblings.push(student);
+    familyStudents.set(student.familyKey, siblings);
+  }
+
+  const studentGroupLinks = STUDENTS.map((student) => ({
+    studentId: studentIdByKey.get(student.key)!,
+    groupId: groupIdByKey.get(student.classKey)!,
+  }));
+
+  for (const subgroup of SUBGROUPS) {
+    for (const studentKey of subgroup.studentKeys) {
+      studentGroupLinks.push({
+        studentId: studentIdByKey.get(studentKey)!,
+        groupId: groupIdByKey.get(subgroup.key)!,
+      });
+    }
+  }
+
+  for (const elective of ELECTIVE_GROUPS) {
+    for (const studentKey of elective.studentKeys) {
+      studentGroupLinks.push({
+        studentId: studentIdByKey.get(studentKey)!,
+        groupId: groupIdByKey.get(elective.key)!,
+      });
+    }
+  }
+
+  await prisma.studentGroups.createMany({ data: studentGroupLinks });
+
+  console.log("Creating parents and family links...");
+  const familyOrder = uniqueFamilyKeys(STUDENTS);
+  let parentEmailCounter = 1;
+
+  for (let index = 0; index < familyOrder.length; index += 1) {
+    const familyKey = familyOrder[index];
+    const children = familyStudents.get(familyKey);
+
+    if (!children || children.length === 0) {
+      continue;
+    }
+
+    const familySurnameMale = children[0].surnameMale;
+    const motherName = MOTHER_FIRST_NAMES[index % MOTHER_FIRST_NAMES.length];
+    const fatherName = FATHER_FIRST_NAMES[index % FATHER_FIRST_NAMES.length];
+    const motherPatronymic = PATRONYMICS[index % 10];
+    const fatherPatronymic = PATRONYMICS[10 + (index % 10)];
+    const hasSecondParent = index % 4 !== 0;
+    const primaryParentActive = index < 8 || index % 3 === 0;
+    const primarySurname = surnameForGender(familySurnameMale, "FEMALE");
+    const secondarySurname = surnameForGender(familySurnameMale, "MALE");
+
+    const primaryUser = await prisma.user.create({
+      data: {
+        email: `parent${parentEmailCounter}@classflow.local`,
+        role: "USER",
+        status: primaryParentActive ? "ACTIVE" : "PENDING_INVITE",
+        name: motherName,
+        surname: primarySurname,
+        patronymicName: motherPatronymic,
+      },
     });
 
-    return created.id;
-  };
-
-  type NormalizedTemplateSeed = {
-    dayOfWeek: number;
-    startTime: number;
-    endTime: number;
-    subjectId: string;
-    teacherId: string | null;
-    roomId: string | null;
-    deliveryMode: "DIRECT_GROUP" | "ELECTIVE_GROUP" | "SHARED_CLASSES";
-    deliveryGroupId: string | null;
-    openClassIds: string[];
-    coveredClassIds: string[];
-    requirementGroupIds: string[];
-    grades: number[];
-  };
-
-  const normalizedTemplateSeeds: NormalizedTemplateSeed[] = [];
-
-  for (const lesson of weeklyTemplateSeed) {
-    const subjectId = subjectByName[lesson.subjectName];
-    const subjectType = subjectTypeByName.get(lesson.subjectName);
-
-    if (!subjectType) {
-      throw new Error(`Unknown subject type for ${lesson.subjectName}`);
+    if (primaryParentActive) {
+      await createCredentialAccount(primaryUser.id, "parent1234");
     }
 
-    if (lesson.deliveryMode === "SHARED_CLASSES") {
-      normalizedTemplateSeeds.push({
-        dayOfWeek: lesson.dayOfWeek,
-        startTime: toMinutes(lesson.start),
-        endTime: toMinutes(lesson.end),
-        subjectId,
-        teacherId: lesson.teacherId,
-        roomId: lesson.roomId,
-        deliveryMode: "SHARED_CLASSES",
-        deliveryGroupId: null,
-        openClassIds: [],
-        coveredClassIds: lesson.coveredClassIds,
-        requirementGroupIds: subjectType === "REGIME" ? [] : lesson.coveredClassIds,
-        grades: lesson.grades,
+    const primaryParent = await prisma.parent.create({
+      data: {
+        userId: primaryUser.id,
+      },
+    });
+    parentEmailCounter += 1;
+
+    const parentIds = [primaryParent.id];
+
+    if (hasSecondParent) {
+      const secondaryUser = await prisma.user.create({
+        data: {
+          email: `parent${parentEmailCounter}@classflow.local`,
+          role: "USER",
+          status: index % 5 === 0 ? "ACTIVE" : "PENDING_INVITE",
+          name: fatherName,
+          surname: secondarySurname,
+          patronymicName: fatherPatronymic,
+        },
       });
-      continue;
-    }
 
-    if (subjectType === "ELECTIVE_OPTIONAL") {
-      const classId = getOwningClassId(lesson.groupId);
-      const electiveGroupId = await ensureElectiveOfferingGroup(classId, lesson.subjectName);
-      const openClassIds =
-        electiveGroupId === electiveChess.id
-          ? [class3.id, class6.id]
-          : [classId];
+      if (index % 5 === 0) {
+        await createCredentialAccount(secondaryUser.id, "parent1234");
+      }
 
-      normalizedTemplateSeeds.push({
-        dayOfWeek: lesson.dayOfWeek,
-        startTime: toMinutes(lesson.start),
-        endTime: toMinutes(lesson.end),
-        subjectId,
-        teacherId: lesson.teacherId,
-        roomId: lesson.roomId,
-        deliveryMode: "ELECTIVE_GROUP",
-        deliveryGroupId: electiveGroupId,
-        openClassIds,
-        coveredClassIds: [],
-        requirementGroupIds: [electiveGroupId],
-        grades: lesson.grades,
+      const secondaryParent = await prisma.parent.create({
+        data: {
+          userId: secondaryUser.id,
+        },
       });
-      continue;
+      parentIds.push(secondaryParent.id);
+      parentEmailCounter += 1;
     }
 
-    normalizedTemplateSeeds.push({
-      dayOfWeek: lesson.dayOfWeek,
-      startTime: toMinutes(lesson.start),
-      endTime: toMinutes(lesson.end),
-      subjectId,
-      teacherId: lesson.teacherId,
-      roomId: lesson.roomId,
-      deliveryMode: "DIRECT_GROUP",
-      deliveryGroupId: lesson.groupId,
-      openClassIds: [],
-      coveredClassIds: [],
-      requirementGroupIds: subjectType === "REGIME" ? [] : [lesson.groupId],
-      grades: lesson.grades,
+    await prisma.studentParents.createMany({
+      data: parentIds.flatMap((parentId) =>
+        children.map((child) => ({
+          parentId,
+          studentId: studentIdByKey.get(child.key)!,
+        })),
+      ),
     });
   }
 
-  const electiveAssignments = [
-    { studentId: kuznetsovMikhailId, classId: class3.id, subjectName: "Подвижные игры" },
-    { studentId: kuznetsovMikhailId, classId: class3.id, subjectName: "Рукоделие" },
-    { studentId: kuznetsovMikhailId, classId: class3.id, subjectName: "Арт-терапия" },
-    { studentId: kuznetsovMikhailId, classId: class3.id, subjectName: "Шахматы и шашки" },
-    { studentId: fominNikitaId, classId: class6.id, subjectName: "Йога" },
-    { studentId: fominNikitaId, classId: class6.id, subjectName: "Журналистика" },
-    { studentId: fominNikitaId, classId: class6.id, subjectName: "Писательский клуб" },
-    { studentId: fominNikitaId, classId: class6.id, subjectName: "Театр" },
-  ] as const;
-
-  await prisma.studentGroups.createMany({
-    data: await Promise.all(
-      electiveAssignments.map(async ({ studentId, classId, subjectName }) => ({
-        studentId,
-        groupId: await ensureElectiveOfferingGroup(classId, subjectName),
-      })),
-    ),
-  });
-
-  const teacherSubjectRows = new Map<string, { teacherId: string; subjectId: string; minGrade: number; maxGrade: number }>();
-  for (const lesson of normalizedTemplateSeeds) {
-    if (!lesson.teacherId) {
-      continue;
-    }
-
-    const key = `${lesson.teacherId}:${lesson.subjectId}`;
-    const existing = teacherSubjectRows.get(key);
-    const minGrade = Math.min(...lesson.grades);
-    const maxGrade = Math.max(...lesson.grades);
-
-    if (!existing) {
-      teacherSubjectRows.set(key, {
-        teacherId: lesson.teacherId,
-        subjectId: lesson.subjectId,
-        minGrade,
-        maxGrade,
-      });
-      continue;
-    }
-
-    existing.minGrade = Math.min(existing.minGrade, minGrade);
-    existing.maxGrade = Math.max(existing.maxGrade, maxGrade);
-  }
-
-  const widenTeacherSubject = (teacherKey: string, subjectName: string, minGrade: number, maxGrade: number) => {
-    const teacherId = teacherByKey[teacherKey];
-    const subjectId = subjectByName[subjectName];
-    const key = `${teacherId}:${subjectId}`;
-    const existing = teacherSubjectRows.get(key);
-
-    if (!existing) {
-      teacherSubjectRows.set(key, { teacherId, subjectId, minGrade, maxGrade });
-      return;
-    }
-
-    existing.minGrade = Math.min(existing.minGrade, minGrade);
-    existing.maxGrade = Math.max(existing.maxGrade, maxGrade);
-  };
-
-  widenTeacherSubject("C3_MATH", "Математика", 3, 4);
-  widenTeacherSubject("C3_RUS", "Русский язык", 3, 4);
-  widenTeacherSubject("C3_LIT", "Литература", 3, 4);
-  widenTeacherSubject("C3_WORLD", "Окружающий мир", 3, 4);
-  widenTeacherSubject("C3_ENGLISH", "Английский язык", 3, 4);
-  widenTeacherSubject("C3_PE", "Физическая культура", 3, 8);
-  widenTeacherSubject("C3_MUSIC", "Музыка", 3, 8);
-  widenTeacherSubject("C3_ART", "ИЗО", 3, 8);
-  widenTeacherSubject("C3_CALLIG", "Каллиграфия", 3, 4);
-  widenTeacherSubject("C3_EXPERIMENT", "Эксперименты", 3, 4);
-  widenTeacherSubject("C3_ARCH", "Архитектура", 3, 4);
-  widenTeacherSubject("C3_DANCE", "Хореография", 3, 4);
-  widenTeacherSubject("C3_YOGA", "Йога", 3, 4);
-  widenTeacherSubject("C3_CHESS", "Шахматы и шашки", 3, 4);
-  widenTeacherSubject("C3_COOKING", "Кулинария", 3, 4);
-  widenTeacherSubject("C3_GAMES", "Игры радости", 0, 6);
-  widenTeacherSubject("C3_FENCING", "Фехтование", 3, 8);
-  widenTeacherSubject("C3_MUSIC", "Музыка", 0, 8);
-  widenTeacherSubject("C3_ART", "ИЗО", 0, 8);
-  widenTeacherSubject("C6_MATH", "Математика", 6, 8);
-  widenTeacherSubject("C6_RUS", "Русский язык", 6, 8);
-  widenTeacherSubject("C6_LIT", "Литература", 6, 8);
-  widenTeacherSubject("C6_BIO", "Биология", 6, 8);
-  widenTeacherSubject("C6_GEOGRAPHY", "География", 6, 8);
-  widenTeacherSubject("C6_HISTORY", "История", 6, 8);
-  widenTeacherSubject("C6_ENGLISH", "Английский язык", 6, 8);
-  widenTeacherSubject("C6_COMM", "Коммуникация", 6, 8);
-  widenTeacherSubject("C6_ARCH", "Архитектура", 6, 8);
-  widenTeacherSubject("C6_JOURNAL", "Журналистика", 6, 8);
-  widenTeacherSubject("C6_THEATER", "Театр", 6, 8);
-
-  await prisma.teacherSubject.createMany({
-    data: Array.from(teacherSubjectRows.values()),
-  });
-
-  const roomSubjectRows = new Map<string, { roomId: string; subjectId: string }>();
-  for (const lesson of normalizedTemplateSeeds) {
-    if (!lesson.roomId) {
-      continue;
-    }
-
-    const key = `${lesson.roomId}:${lesson.subjectId}`;
-    if (!roomSubjectRows.has(key)) {
-      roomSubjectRows.set(key, { roomId: lesson.roomId, subjectId: lesson.subjectId });
-    }
-  }
-
+  console.log("Creating room compatibilities...");
   await prisma.roomSubject.createMany({
-    data: Array.from(roomSubjectRows.values()),
-  });
-
-  const createdTemplateIds: string[] = [];
-  for (const lesson of normalizedTemplateSeeds) {
-    const created = await prisma.weeklyScheduleTemplate.create({
-      data: {
-        dayOfWeek: lesson.dayOfWeek,
-        startTime: lesson.startTime,
-        endTime: lesson.endTime,
-        subjectId: lesson.subjectId,
-        teacherId: lesson.teacherId,
-        roomId: lesson.roomId,
-        deliveryMode: lesson.deliveryMode,
-        deliveryGroupId: lesson.deliveryGroupId,
-        openClasses:
-          lesson.openClassIds.length > 0
-            ? {
-                create: lesson.openClassIds.map((classGroupId) => ({ classGroupId })),
-              }
-            : undefined,
-        coveredClasses:
-          lesson.coveredClassIds.length > 0
-            ? {
-                create: lesson.coveredClassIds.map((classGroupId) => ({ classGroupId })),
-              }
-            : undefined,
-      },
-    });
-
-    createdTemplateIds.push(created.id);
-  }
-
-  const requirementRows = new Map<string, {
-    groupId: string;
-    subjectId: string;
-    lessonsPerWeek: number;
-    durationInMinutes: number;
-    breakDuration: number;
-  }>();
-
-  const addRequirement = (
-    groupId: string,
-    subjectName: string,
-    lessonsPerWeek: number,
-    durationInMinutes = 45,
-    breakDuration = 0,
-  ) => {
-    requirementRows.set(`${groupId}:${subjectByName[subjectName]}`, {
-      groupId,
-      subjectId: subjectByName[subjectName],
-      lessonsPerWeek,
-      durationInMinutes,
-      breakDuration,
-    });
-  };
-
-  for (const lesson of normalizedTemplateSeeds) {
-    const subjectType = subjectTypeById.get(lesson.subjectId);
-
-    if (subjectType === "REGIME") {
-      continue;
-    }
-
-    for (const requirementGroupId of lesson.requirementGroupIds) {
-      const groupInfo = groupInfoById.get(requirementGroupId);
-      if (!groupInfo || (groupInfo.grade ?? 0) !== 3 && (groupInfo.grade ?? 0) !== 6) {
-        continue;
-      }
-
-      const key = `${requirementGroupId}:${lesson.subjectId}`;
-      const duration = lesson.endTime - lesson.startTime;
-      const existing = requirementRows.get(key);
-
-      if (!existing) {
-        requirementRows.set(key, {
-          groupId: requirementGroupId,
-          subjectId: lesson.subjectId,
-          lessonsPerWeek: 1,
-          durationInMinutes: duration,
-          breakDuration: 0,
-        });
-        continue;
-      }
-
-      existing.lessonsPerWeek += 1;
-    }
-  }
-
-  const commonRegime = [
-    ["Завтрак", 5, 15, 0],
-    ["Обед", 5, 15, 0],
-    ["Полдник", 5, 15, 0],
-  ] as const;
-
-  for (const [subjectName, lessonsPerWeek, durationInMinutes, breakDuration] of commonRegime) {
-    addRequirement(class3.id, subjectName, lessonsPerWeek, durationInMinutes, breakDuration);
-    addRequirement(class4.id, subjectName, lessonsPerWeek, durationInMinutes, breakDuration);
-    addRequirement(class6.id, subjectName, lessonsPerWeek, durationInMinutes, breakDuration);
-  }
-  addRequirement(class3.id, "Прогулка", 5, 45, 0);
-  addRequirement(class4.id, "Прогулка", 5, 45, 0);
-
-  addRequirement(class4.id, "Математика", 5, 45, 10);
-  addRequirement(class4.id, "Русский язык", 5, 45, 10);
-  addRequirement(class4.id, "Литература", 3, 45, 10);
-  addRequirement(class4.id, "Окружающий мир", 2, 45, 10);
-  addRequirement(class4.id, "Английский язык", 2, 45, 10);
-  addRequirement(class4.id, "Физическая культура", 3, 45, 10);
-  addRequirement(class4.id, "Музыка", 1, 45, 10);
-  addRequirement(class4.id, "ИЗО", 1, 45, 10);
-  addRequirement(class4.id, "Каллиграфия", 1, 45, 10);
-  addRequirement(class4.id, "Эксперименты", 1, 45, 10);
-  addRequirement(class4.id, "Архитектура", 1, 90, 10);
-  addRequirement(class4.id, "Хореография", 1, 45, 10);
-  addRequirement(class4.id, "Йога", 1, 45, 0);
-  addRequirement(class4.id, "Шахматы и шашки", 1, 45, 0);
-  addRequirement(class4.id, "Кулинария", 1, 90, 0);
-
-  addRequirement(class8.id, "Математика", 5, 45, 10);
-  addRequirement(class8.id, "Русский язык", 4, 45, 10);
-  addRequirement(class8.id, "Литература", 3, 45, 10);
-  addRequirement(class8.id, "Биология", 2, 45, 10);
-  addRequirement(class8.id, "География", 2, 45, 10);
-  addRequirement(class8.id, "История", 2, 45, 10);
-  addRequirement(class8.id, "Английский язык", 3, 45, 10);
-  addRequirement(class8.id, "Коммуникация", 1, 45, 10);
-  addRequirement(class8.id, "Физическая культура", 3, 45, 10);
-  addRequirement(class8.id, "ИЗО", 1, 45, 10);
-  addRequirement(class8.id, "Музыка", 1, 45, 10);
-  addRequirement(class8.id, "Архитектура", 1, 90, 10);
-  addRequirement(class8.id, "Журналистика", 1, 45, 0);
-  addRequirement(class8.id, "Театр", 1, 90, 0);
-  addRequirement(class8.id, "Фехтование", 1, 45, 0);
-
-  addRequirement(class3Subgroup1.id, "Английский язык", 2, 45, 10);
-  addRequirement(class3Subgroup2.id, "Английский язык", 2, 45, 10);
-  addRequirement(class6Subgroup1.id, "Испанский язык", 1, 45, 10);
-  addRequirement(class6Subgroup2.id, "Игры радости", 1, 45, 0);
-
-  addRequirement(electiveChess.id, "Шахматы и шашки", 2, 45, 0);
-  addRequirement(electiveMedia.id, "Журналистика", 2, 45, 0);
-  addRequirement(electiveMedia.id, "Писательский клуб", 1, 45, 0);
-  addRequirement(kindergarten.id, "Игры радости", 3, 30, 0);
-  addRequirement(kindergarten.id, "Музыка", 2, 30, 0);
-  addRequirement(kindergarten.id, "ИЗО", 2, 30, 0);
-  addRequirement(kindergarten.id, "Прогулка", 5, 45, 0);
-  addRequirement(kindergarten.id, "Обед", 5, 20, 0);
-
-  await prisma.groupSubjectRequirement.createMany({
-    data: Array.from(requirementRows.values()),
-  });
-
-  const createdTemplates = await prisma.weeklyScheduleTemplate.findMany({
-    where: {
-      id: {
-        in: createdTemplateIds,
-      },
-    },
-    include: {
-      subject: {
-        select: {
-          defaultAttendanceLoadMode: true,
-        },
-      },
-      coveredClasses: {
-        select: {
-          classGroupId: true,
-        },
-      },
-    },
-  });
-
-  const today = new Date();
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-  monday.setHours(0, 0, 0, 0);
-
-  for (const template of createdTemplates) {
-    if (template.dayOfWeek === null || template.startTime === null || template.endTime === null) {
-      continue;
-    }
-
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + (template.dayOfWeek - 1));
-
-    await prisma.scheduleEntry.create({
-      data: {
-        templateId: template.id,
-        date,
-        startTime: dateAtMinutes(date, template.startTime),
-        endTime: dateAtMinutes(date, template.endTime),
-        subjectId: template.subjectId,
-        teacherId: template.teacherId,
-        roomId: template.roomId,
-        deliveryMode: template.deliveryMode,
-        deliveryGroupId: template.deliveryGroupId,
-        attendanceLoadMode: template.attendanceLoadModeOverride ?? template.subject.defaultAttendanceLoadMode,
-        coveredClasses:
-          template.coveredClasses.length > 0
-            ? {
-                create: template.coveredClasses.map((coveredClass) => ({
-                  classGroupId: coveredClass.classGroupId,
-                })),
-              }
-            : undefined,
-      },
-    });
-  }
-
-  const manualOverrideDate = new Date(monday);
-  manualOverrideDate.setDate(monday.getDate() + 1);
-
-  await prisma.scheduleEntry.create({
-    data: {
-      date: manualOverrideDate,
-      startTime: dateAtMinutes(manualOverrideDate, toMinutes("16:15")),
-      endTime: dateAtMinutes(manualOverrideDate, toMinutes("17:00")),
-      subjectId: subjectByName["Шахматы и шашки"],
-      teacherId: teacherByKey.C3_CHESS,
-      roomId: roomByKey.MEDIA,
-      deliveryMode: "ELECTIVE_GROUP",
-      deliveryGroupId: electiveChess.id,
-      attendanceLoadMode: "AFTERSCHOOL_COEFFICIENT",
-    },
-  });
-
-  const manualDirectDate = new Date(monday);
-  manualDirectDate.setDate(monday.getDate() + 2);
-
-  await prisma.scheduleEntry.create({
-    data: {
-      date: manualDirectDate,
-      startTime: dateAtMinutes(manualDirectDate, toMinutes("16:15")),
-      endTime: dateAtMinutes(manualDirectDate, toMinutes("17:00")),
-      subjectId: subjectByName["Коммуникация"],
-      teacherId: teacherByKey.C6_COMM,
-      roomId: roomByKey.COMM,
-      deliveryMode: "DIRECT_GROUP",
-      deliveryGroupId: class6.id,
-      attendanceLoadMode: "DELIVERY_GROUP_SIZE",
-    },
-  });
-
-  console.log("Creating teacher availability data...");
-
-  const fetGenerationTeacherIds = Array.from(
-    new Set(Array.from(teacherSubjectRows.values()).map((row) => row.teacherId)),
-  );
-
-  await prisma.teacherAvailability.createMany({
-    data: fetGenerationTeacherIds.flatMap((teacherId) =>
-      [1, 2, 3, 4, 5].map((dayOfWeek) => ({
-        teacherId,
-        dayOfWeek,
-        startTime: toMinutes("08:20"),
-        endTime: toMinutes("18:00"),
-        type: "AVAILABLE" as const,
+    data: ROOMS.flatMap((room) =>
+      room.subjectNames.map((subjectName) => ({
+        roomId: roomIdByKey.get(room.key)!,
+        subjectId: subjectIdByName.get(subjectName)!,
       })),
     ),
   });
 
-  console.log("Creating teacher availability overrides...");
+  console.log("Creating lesson requirements...");
+  const requirementSeeds = buildRequirementSeeds();
+  await prisma.groupSubjectRequirement.createMany({
+    data: requirementSeeds.map((requirement) => ({
+      groupId: groupIdByKey.get(requirement.groupKey)!,
+      subjectId: subjectIdByName.get(requirement.subjectName)!,
+      lessonsPerWeek: requirement.lessonsPerWeek,
+      durationInMinutes: requirement.durationInMinutes,
+      breakDuration: requirement.breakDuration,
+    })),
+  });
 
-  const nextMonday = new Date(today);
-  nextMonday.setDate(today.getDate() + ((1 + 7 - today.getDay()) % 7 || 7));
-  nextMonday.setHours(0, 0, 0, 0);
-
-  const wednesdayNextWeek = new Date(nextMonday);
-  wednesdayNextWeek.setDate(nextMonday.getDate() + 2);
+  console.log("Creating availability overrides...");
+  const baseDate = new Date();
+  const nextMonday = nextWeekday(baseDate, 1);
+  const nextThursday = nextWeekday(baseDate, 4);
 
   await prisma.teacherAvailabilityOverride.createMany({
     data: [
       {
-        teacherId: teacherByKey["C3_MATH"],
+        teacherId: teacherIdByKey.get("ENGLISH_PRIMARY")!,
         type: "UNAVAILABLE",
-        startTime: dateAtMinutes(nextMonday, toMinutes("08:00")),
-        endTime: dateAtMinutes(nextMonday, toMinutes("12:00")),
+        startTime: dateAtMinutes(nextMonday, toMinutes("09:30")),
+        endTime: dateAtMinutes(nextMonday, toMinutes("12:30")),
       },
       {
-        teacherId: teacherByKey["C3_ENGLISH"],
+        teacherId: teacherIdByKey.get("SCIENCE")!,
+        type: "UNAVAILABLE",
+        startTime: dateAtMinutes(nextThursday, toMinutes("10:00")),
+        endTime: dateAtMinutes(nextThursday, toMinutes("13:00")),
+      },
+      {
+        teacherId: teacherIdByKey.get("STAGE")!,
         type: "AVAILABLE",
-        startTime: dateAtMinutes(wednesdayNextWeek, toMinutes("14:00")),
-        endTime: dateAtMinutes(wednesdayNextWeek, toMinutes("16:00")),
-      }
-    ]
+        startTime: dateAtMinutes(nextThursday, toMinutes("15:00")),
+        endTime: dateAtMinutes(nextThursday, toMinutes("18:00")),
+      },
+    ],
   });
 
-  console.log("Database seeded successfully!");
+  console.log("Seed completed.");
+  console.log(`Teachers: ${TEACHERS.length}`);
+  console.log(`Parents: ${parentEmailCounter - 1}`);
+  console.log(`Students: ${STUDENTS.length}`);
+  console.log(`Groups: ${CLASSES.length + SUBGROUPS.length + ELECTIVE_GROUPS.length}`);
+  console.log(`Requirements: ${requirementSeeds.length}`);
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
+  .catch((error) => {
+    console.error(error);
     process.exit(1);
   })
   .finally(async () => {
