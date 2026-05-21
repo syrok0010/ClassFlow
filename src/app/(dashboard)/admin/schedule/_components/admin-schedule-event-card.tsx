@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -25,18 +26,20 @@ interface AdminScheduleEventCardProps {
   conflicts?: ScheduleConflict[];
   showActions?: boolean;
   forceFullDetails?: boolean;
+  disableTooltip?: boolean;
   onEdit?: (event: AdminScheduleEvent) => void;
   onDelete?: (event: AdminScheduleEvent) => void;
 }
 
 type AdminScheduleCardLayout = "title-only" | "title-time" | "full";
 
-export function AdminScheduleEventCard({
+export const AdminScheduleEventCard = memo(function AdminScheduleEventCard({
   event,
   isDimmed = false,
   conflicts = [],
   showActions = false,
   forceFullDetails = false,
+  disableTooltip = false,
   onEdit,
   onDelete,
 }: AdminScheduleEventCardProps) {
@@ -50,8 +53,21 @@ export function AdminScheduleEventCard({
   const fieldSeverities = getScheduleConflictFieldSeverities(conflicts);
   const hardConflicts = conflicts.filter((conflict) => conflict.severity === "hard");
   const warningConflicts = conflicts.filter((conflict) => conflict.severity === "warning");
+  const inlineCard = (
+    <AdminScheduleEventInlineCard
+      event={event}
+      groupLabel={displayGroupLabel}
+      layout={layout}
+      isDimmed={isDimmed}
+      conflictLevel={conflictLevel}
+      fieldSeverities={fieldSeverities}
+      showActions={showActions}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    />
+  );
 
-  if (isDimmed) {
+  if (isDimmed || disableTooltip) {
     return (
       <div
         data-testid="admin-schedule-card"
@@ -61,14 +77,7 @@ export function AdminScheduleEventCard({
         className="block h-full w-full bg-transparent p-0 text-left"
         aria-label={cardLabel}
       >
-        <AdminScheduleEventInlineCard
-          event={event}
-          groupLabel={displayGroupLabel}
-          layout={layout}
-          isDimmed
-          conflictLevel={conflictLevel}
-          fieldSeverities={fieldSeverities}
-        />
+        {inlineCard}
       </div>
     );
   }
@@ -84,17 +93,7 @@ export function AdminScheduleEventCard({
         className="block h-full w-full bg-transparent p-0 text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring/60"
         aria-label={cardLabel}
       >
-        <AdminScheduleEventInlineCard
-          event={event}
-          groupLabel={displayGroupLabel}
-          layout={layout}
-          isDimmed={isDimmed}
-          conflictLevel={conflictLevel}
-          fieldSeverities={fieldSeverities}
-          showActions={showActions}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
+        {inlineCard}
       </TooltipTrigger>
       <TooltipContent
         data-testid="admin-schedule-card-tooltip"
@@ -147,7 +146,7 @@ export function AdminScheduleEventCard({
       </TooltipContent>
     </Tooltip>
   );
-}
+}, areAdminScheduleEventCardPropsEqual);
 
 interface AdminScheduleEventInlineCardProps {
   event: AdminScheduleEvent;
@@ -320,4 +319,20 @@ function getCardLayout(durationMinutes: number): AdminScheduleCardLayout {
 
 function getEventDurationMinutes(event: AdminScheduleEvent): number {
   return differenceInMinutes(event.end, event.start, { roundingMethod: "round" });
+}
+
+function areAdminScheduleEventCardPropsEqual(
+  previousProps: AdminScheduleEventCardProps,
+  nextProps: AdminScheduleEventCardProps,
+) {
+  return (
+    previousProps.event === nextProps.event &&
+    previousProps.isDimmed === nextProps.isDimmed &&
+    previousProps.conflicts === nextProps.conflicts &&
+    previousProps.showActions === nextProps.showActions &&
+    previousProps.forceFullDetails === nextProps.forceFullDetails &&
+    previousProps.disableTooltip === nextProps.disableTooltip &&
+    previousProps.onEdit === nextProps.onEdit &&
+    previousProps.onDelete === nextProps.onDelete
+  );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -9,7 +9,6 @@ import {
   rectIntersection,
   useSensor,
   useSensors,
-  type DragEndEvent,
   type CollisionDetection,
 } from "@dnd-kit/core";
 import { BookOpen } from "lucide-react";
@@ -19,20 +18,19 @@ import { ReadonlySchedule } from "@/features/schedule";
 import {
   createOrUpdateAdminScheduleTemplateAction,
   deleteAdminScheduleTemplateAction,
-  moveAdminScheduleTemplateAction,
 } from "../_actions/schedule-actions";
 import type { AdminScheduleEvent, AdminSchedulePageData } from "../_lib/admin-schedule-types";
 import {
-  buildDetachTemplateInput,
   buildDraftFromEvent,
   buildEmptyDraft,
-  buildMoveTemplateInput,
 } from "../_lib/admin-schedule-template-commands";
-import { analyzeScheduleTemplateConflicts } from "../_lib/schedule-conflicts";
+import {
+  analyzeScheduleTemplateConflicts,
+  type ScheduleConflict,
+} from "../_lib/schedule-conflicts";
 import {
   DraggableScheduleEventCard,
-  GridDropOverlay,
-  PARKING_DROP_ID,
+  ScheduleGridDropCell,
   TemporaryScheduleArea,
 } from "./schedule-dnd-components";
 import { ScheduleDeleteDialog } from "./schedule-delete-dialog";
@@ -41,15 +39,15 @@ import {
   ScheduleEventEditorDialog,
 } from "./schedule-event-editor-dialog";
 import { ScheduleMultiSelect } from "./schedule-multi-select";
+import { useAdminScheduleDnd } from "./use-admin-schedule-dnd";
 
 type AdminScheduleViewProps = AdminSchedulePageData;
 
-const DAY_CODE_TO_NUMBER: Record<string, number> = {
-  mon: 1,
-  tue: 2,
-  wed: 3,
-  thu: 4,
-  fri: 5,
+const EMPTY_CONFLICTS: ScheduleConflict[] = [];
+const SCHEDULE_EMPTY_STATE = {
+  icon: <BookOpen />,
+  title: "Нет шаблонов",
+  description: "На выбранный период шаблон расписания не заполнен.",
 };
 
 const scheduleCollisionDetection: CollisionDetection = (args) => {
@@ -82,49 +80,40 @@ export function AdminScheduleView({
   const [deleteTarget, setDeleteTarget] = useState<AdminScheduleEvent | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const {
+    optimisticEvents,
+    isDragActive,
+    isEventDisabled,
+    handleDragStart,
+    handleDragCancel,
+    handleDragEnd,
+  } = useAdminScheduleDnd(events);
 
   const classOptions = useMemo(
     () => classRows.map((row) => ({ id: row.id, label: row.name })),
     [classRows],
   );
 
-  const teacherFilterOptions = useMemo(() => {
-    const seen = new Set<string>();
-    return events
-      .filter((event) => event.teacherId)
-      .map((event) => ({ id: event.teacherId as string, label: event.teacherName }))
-      .filter((option) => {
-        if (seen.has(option.id)) return false;
-        seen.add(option.id);
-        return true;
-      })
-      .sort((left, right) => left.label.localeCompare(right.label, "ru"));
-  }, [events]);
+  const teacherFilterOptions = useMemo(
+    () => buildUniqueSortedOptions(
+      events.map((event) => ({ id: event.teacherId, label: event.teacherName })),
+    ),
+    [events],
+  );
 
-  const roomFilterOptions = useMemo(() => {
-    const seen = new Set<string>();
-    return events
-      .filter((event) => event.roomId)
-      .map((event) => ({ id: event.roomId as string, label: event.roomName }))
-      .filter((option) => {
-        if (seen.has(option.id)) return false;
-        seen.add(option.id);
-        return true;
-      })
-      .sort((left, right) => left.label.localeCompare(right.label, "ru"));
-  }, [events]);
+  const roomFilterOptions = useMemo(
+    () => buildUniqueSortedOptions(
+      events.map((event) => ({ id: event.roomId, label: event.roomName })),
+    ),
+    [events],
+  );
 
-  const subjectFilterOptions = useMemo(() => {
-    const seen = new Set<string>();
-    return events
-      .map((event) => ({ id: event.subjectId, label: event.subjectName }))
-      .filter((option) => {
-        if (seen.has(option.id)) return false;
-        seen.add(option.id);
-        return true;
-      })
-      .sort((left, right) => left.label.localeCompare(right.label, "ru"));
-  }, [events]);
+  const subjectFilterOptions = useMemo(
+    () => buildUniqueSortedOptions(
+      events.map((event) => ({ id: event.subjectId, label: event.subjectName })),
+    ),
+    [events],
+  );
 
   const visibleClassIds = useMemo(
     () => (selectedClassIds.length > 0 ? new Set(selectedClassIds) : null),
@@ -139,11 +128,14 @@ export function AdminScheduleView({
     [classRows, visibleClassIds],
   );
 
-  const detachedEvents = useMemo(() => events.filter((event) => event.detached), [events]);
+  const detachedEvents = useMemo(
+    () => optimisticEvents.filter((event) => event.detached),
+    [optimisticEvents],
+  );
 
   const gridEvents = useMemo(
-    () => events.filter((event) => !event.detached && (!visibleClassIds || visibleClassIds.has(event.classId))),
-    [events, visibleClassIds],
+    () => optimisticEvents.filter((event) => !event.detached && (!visibleClassIds || visibleClassIds.has(event.classId))),
+    [optimisticEvents, visibleClassIds],
   );
 
   const shouldDimByMetaFilters =
@@ -153,7 +145,7 @@ export function AdminScheduleView({
   const selectedRoomSet = useMemo(() => new Set(selectedRoomIds), [selectedRoomIds]);
   const selectedSubjectSet = useMemo(() => new Set(selectedSubjectIds), [selectedSubjectIds]);
 
-  const isEventHighlighted = (event: AdminScheduleEvent) => {
+  const isEventHighlighted = useCallback((event: AdminScheduleEvent) => {
     if (selectedTeacherSet.size > 0 && (!event.teacherId || !selectedTeacherSet.has(event.teacherId))) {
       return false;
     }
@@ -164,71 +156,76 @@ export function AdminScheduleView({
       return false;
     }
     return true;
-  };
+  }, [selectedRoomSet, selectedSubjectSet, selectedTeacherSet]);
 
-  const conflictAnalysis = useMemo(() => analyzeScheduleTemplateConflicts(events), [events]);
+  const conflictAnalysis = useMemo(() => analyzeScheduleTemplateConflicts(optimisticEvents), [optimisticEvents]);
   const conflictByEvent = conflictAnalysis.conflictsByProjectionId;
 
-  const handleEdit = (event: AdminScheduleEvent) => {
+  const handleEdit = useCallback((event: AdminScheduleEvent) => {
     setEditingDraft(buildDraftFromEvent(event));
     setIsEditorOpen(true);
-  };
+  }, []);
 
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     setEditingDraft(buildEmptyDraft());
     setIsEditorOpen(true);
-  };
+  }, []);
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const activeId = String(event.active.id);
-    const activeEvent = events.find((item) => item.id === activeId);
-    if (!activeEvent) {
-      return;
-    }
+  const handleDelete = useCallback((event: AdminScheduleEvent) => {
+    setDeleteTarget(event);
+  }, []);
 
-    const overId = event.over?.id ? String(event.over.id) : null;
-    if (!overId) {
-      return;
-    }
-
-    if (overId === PARKING_DROP_ID) {
-      const result = await moveAdminScheduleTemplateAction(
-        buildDetachTemplateInput(activeEvent),
-      );
-      if (result.error) {
-        return;
-      }
-      router.refresh();
-      return;
-    }
-
-    if (!overId.startsWith("slot:")) {
-      return;
-    }
-
-    const [, dayKey, rowId, startMinutesRaw] = overId.split(":");
-    const dayOfWeek = DAY_CODE_TO_NUMBER[dayKey];
-    const startMinutes = Number(startMinutesRaw);
-
-    if (!dayOfWeek || Number.isNaN(startMinutes) || !rowId) {
-      return;
-    }
-
-    const moveInput = buildMoveTemplateInput(activeEvent, {
-      dayOfWeek,
+  const getEventConflicts = useCallback(
+    (eventId: string) => conflictByEvent.get(eventId) ?? EMPTY_CONFLICTS,
+    [conflictByEvent],
+  );
+  const getEventRowId = useCallback((event: AdminScheduleEvent) => event.classId, []);
+  const renderDayColumnOverlay = useCallback(
+    ({
+      dayIndex,
       rowId,
       startMinutes,
-    });
-    if (!moveInput) {
-      return;
-    }
-
-    const moveResult = await moveAdminScheduleTemplateAction(moveInput);
-    if (moveResult.error) {
-      return;
-    }
-    router.refresh();
-  };
+      endMinutes,
+    }: {
+      dayIndex: number;
+      rowId: string | null;
+      startMinutes: number;
+      endMinutes: number;
+    }) =>
+      rowId ? (
+        <div className="pointer-events-none absolute inset-0">
+          <ScheduleGridDropCell
+            dayIndex={dayIndex}
+            rowId={rowId}
+            startMinutes={startMinutes}
+            endMinutes={endMinutes}
+          />
+        </div>
+      ) : null,
+    [],
+  );
+  const renderScheduleEvent = useCallback(
+    (event: AdminScheduleEvent) => (
+      <DraggableScheduleEventCard
+        event={event}
+        isDimmed={shouldDimByMetaFilters && !isEventHighlighted(event)}
+        conflicts={getEventConflicts(event.id)}
+        disabled={isEventDisabled(event)}
+        disableTooltip={isDragActive}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
+    ),
+    [
+      getEventConflicts,
+      handleDelete,
+      handleEdit,
+      isDragActive,
+      isEventDisabled,
+      isEventHighlighted,
+      shouldDimByMetaFilters,
+    ],
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -262,7 +259,9 @@ export function AdminScheduleView({
       <DndContext
         sensors={sensors}
         collisionDetection={scheduleCollisionDetection}
+        onDragStart={handleDragStart}
         onDragEnd={(event) => void handleDragEnd(event)}
+        onDragCancel={handleDragCancel}
       >
         <div className="grid grid-cols-[260px_minmax(0,1fr)] gap-3">
           <TemporaryScheduleArea
@@ -270,9 +269,11 @@ export function AdminScheduleView({
             conflictByEvent={conflictByEvent}
             shouldDimByMetaFilters={shouldDimByMetaFilters}
             isEventHighlighted={isEventHighlighted}
+            isEventDisabled={isEventDisabled}
+            disableTooltips={isDragActive}
             onCreate={handleCreate}
             onEdit={handleEdit}
-            onDelete={setDeleteTarget}
+            onDelete={handleDelete}
           />
 
           <div className="relative">
@@ -280,31 +281,11 @@ export function AdminScheduleView({
               viewMode="week"
               events={gridEvents}
               rows={scheduleRows}
-              getEventRowId={(event) => event.classId}
+              getEventRowId={getEventRowId}
               rowColumnTitle="Класс"
-              renderDayColumnOverlay={({ dayKey, rowId, startMinutes, endMinutes, heightPx }) => (
-                <GridDropOverlay
-                  dayKey={dayKey}
-                  rowId={rowId}
-                  startMinutes={startMinutes}
-                  endMinutes={endMinutes}
-                  heightPx={heightPx}
-                />
-              )}
-              emptyState={{
-                icon: <BookOpen />,
-                title: "Нет шаблонов",
-                description: "На выбранный период шаблон расписания не заполнен.",
-              }}
-              renderEvent={(event) => (
-                <DraggableScheduleEventCard
-                  event={event}
-                  isDimmed={shouldDimByMetaFilters && !isEventHighlighted(event)}
-                  conflicts={conflictByEvent.get(event.id) ?? []}
-                  onEdit={handleEdit}
-                  onDelete={setDeleteTarget}
-                />
-              )}
+              renderDayColumnOverlay={renderDayColumnOverlay}
+              emptyState={SCHEDULE_EMPTY_STATE}
+              renderEvent={renderScheduleEvent}
             />
           </div>
         </div>
@@ -353,4 +334,22 @@ export function AdminScheduleView({
       />
     </div>
   );
+}
+
+function buildUniqueSortedOptions(
+  options: Array<{ id: string | null; label: string }>,
+) {
+  const seen = new Set<string>();
+
+  return options
+    .filter((option): option is { id: string; label: string } => {
+      if (!option.id || seen.has(option.id)) {
+        return false;
+      }
+
+      seen.add(option.id);
+      return true;
+    })
+    .map((option) => ({ id: option.id, label: option.label }))
+    .sort((left, right) => left.label.localeCompare(right.label, "ru"));
 }

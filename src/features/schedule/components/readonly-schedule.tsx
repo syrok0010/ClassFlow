@@ -33,7 +33,7 @@ interface ReadonlyScheduleProps<TEvent extends BaseScheduleEvent> {
   getEventRowId?: (event: TEvent) => string
   rowColumnTitle?: string
   renderDayColumnOverlay?: (context: {
-    dayKey: string
+    dayIndex: number
     rowId: string | null
     startMinutes: number
     endMinutes: number
@@ -246,7 +246,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
                 ))}
               </div>
 
-              {currentLayout.days.map((day) => {
+              {currentLayout.days.map((day, dayIndex) => {
                 const positionedEvents = currentLayout.eventsByDay[day.key] ?? []
 
                 return (
@@ -259,7 +259,7 @@ export function ReadonlySchedule<TEvent extends BaseScheduleEvent>({
                   >
                     {renderDayColumnOverlay
                       ? renderDayColumnOverlay({
-                          dayKey: day.key,
+                          dayIndex,
                           rowId: rowLayoutItem.row?.id ?? null,
                           startMinutes: currentLayout.timeRange.startMinutes,
                           endMinutes: currentLayout.timeRange.endMinutes,
