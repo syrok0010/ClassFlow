@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { startTransition, useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { addDays, set, startOfWeek } from "date-fns";
 import {
   DndContext,
   PointerSensor,
@@ -12,9 +13,11 @@ import {
   type DragEndEvent,
   type CollisionDetection,
 } from "@dnd-kit/core";
+import { toast } from "sonner";
 import { BookOpen } from "lucide-react";
 
 import { ReadonlySchedule } from "@/features/schedule";
+import { TIME_SLOT_STEP_MINUTES, formatTimeLabel } from "@/features/schedule/lib/date-utils";
 
 import {
   createOrUpdateAdminScheduleTemplateAction,
@@ -28,11 +31,15 @@ import {
   buildEmptyDraft,
   buildMoveTemplateInput,
 } from "../_lib/admin-schedule-template-commands";
-import { analyzeScheduleTemplateConflicts } from "../_lib/schedule-conflicts";
+import {
+  analyzeScheduleTemplateConflicts,
+  type ScheduleConflict,
+} from "../_lib/schedule-conflicts";
 import {
   DraggableScheduleEventCard,
-  GridDropOverlay,
   PARKING_DROP_ID,
+  ScheduleGridDropCell,
+  type ScheduleGridDropData,
   TemporaryScheduleArea,
 } from "./schedule-dnd-components";
 import { ScheduleDeleteDialog } from "./schedule-delete-dialog";
@@ -43,14 +50,14 @@ import {
 import { ScheduleMultiSelect } from "./schedule-multi-select";
 
 type AdminScheduleViewProps = AdminSchedulePageData;
-
-const DAY_CODE_TO_NUMBER: Record<string, number> = {
-  mon: 1,
-  tue: 2,
-  wed: 3,
-  thu: 4,
-  fri: 5,
+type PendingTemplateMove = {
+  dayOfWeek: number | null;
+  startMinutes: number | null;
+  endMinutes: number | null;
+  detached: boolean;
 };
+
+const EMPTY_CONFLICTS: ScheduleConflict[] = [];
 
 const scheduleCollisionDetection: CollisionDetection = (args) => {
   const collisions = pointerWithin(args);
@@ -80,6 +87,8 @@ export function AdminScheduleView({
   const [editingDraft, setEditingDraft] = useState<ScheduleEditorDraft | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminScheduleEvent | null>(null);
+  const [pendingTemplateMoves, setPendingTemplateMoves] = useState<Record<string, PendingTemplateMove>>({});
+  const [isDragActive, setIsDragActive] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -139,11 +148,32 @@ export function AdminScheduleView({
     [classRows, visibleClassIds],
   );
 
-  const detachedEvents = useMemo(() => events.filter((event) => event.detached), [events]);
+  const visiblePendingTemplateMoves = useMemo(
+    () => excludeSyncedPendingTemplateMoves(events, pendingTemplateMoves),
+    [events, pendingTemplateMoves],
+  );
+
+  const optimisticEvents = useMemo(
+    () => applyPendingTemplateMoves(events, visiblePendingTemplateMoves),
+    [events, visiblePendingTemplateMoves],
+  );
+
+  const detachedEvents = useMemo(
+    () => optimisticEvents.filter((event) => event.detached),
+    [optimisticEvents],
+  );
 
   const gridEvents = useMemo(
-    () => events.filter((event) => !event.detached && (!visibleClassIds || visibleClassIds.has(event.classId))),
-    [events, visibleClassIds],
+    () => optimisticEvents.filter((event) => !event.detached && (!visibleClassIds || visibleClassIds.has(event.classId))),
+    [optimisticEvents, visibleClassIds],
+  );
+  const eventsById = useMemo(
+    () => new Map(optimisticEvents.map((event) => [event.id, event])),
+    [optimisticEvents],
+  );
+  const pendingTemplateIds = useMemo(
+    () => new Set(Object.keys(visiblePendingTemplateMoves)),
+    [visiblePendingTemplateMoves],
   );
 
   const shouldDimByMetaFilters =
@@ -153,7 +183,7 @@ export function AdminScheduleView({
   const selectedRoomSet = useMemo(() => new Set(selectedRoomIds), [selectedRoomIds]);
   const selectedSubjectSet = useMemo(() => new Set(selectedSubjectIds), [selectedSubjectIds]);
 
-  const isEventHighlighted = (event: AdminScheduleEvent) => {
+  const isEventHighlighted = useCallback((event: AdminScheduleEvent) => {
     if (selectedTeacherSet.size > 0 && (!event.teacherId || !selectedTeacherSet.has(event.teacherId))) {
       return false;
     }
@@ -164,71 +194,145 @@ export function AdminScheduleView({
       return false;
     }
     return true;
-  };
+  }, [selectedRoomSet, selectedSubjectSet, selectedTeacherSet]);
 
-  const conflictAnalysis = useMemo(() => analyzeScheduleTemplateConflicts(events), [events]);
+  const conflictAnalysis = useMemo(() => analyzeScheduleTemplateConflicts(optimisticEvents), [optimisticEvents]);
   const conflictByEvent = conflictAnalysis.conflictsByProjectionId;
 
-  const handleEdit = (event: AdminScheduleEvent) => {
+  const handleEdit = useCallback((event: AdminScheduleEvent) => {
     setEditingDraft(buildDraftFromEvent(event));
     setIsEditorOpen(true);
-  };
+  }, []);
 
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     setEditingDraft(buildEmptyDraft());
     setIsEditorOpen(true);
-  };
+  }, []);
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDelete = useCallback((event: AdminScheduleEvent) => {
+    setDeleteTarget(event);
+  }, []);
+
+  const isEventDisabled = useCallback(
+    (event: AdminScheduleEvent) => pendingTemplateIds.has(event.templateId),
+    [pendingTemplateIds],
+  );
+
+  const getEventConflicts = useCallback(
+    (eventId: string) => conflictByEvent.get(eventId) ?? EMPTY_CONFLICTS,
+    [conflictByEvent],
+  );
+
+  const handleDragStart = useCallback(() => {
+    setIsDragActive(true);
+  }, []);
+
+  const handleDragCancel = useCallback(() => {
+    setIsDragActive(false);
+  }, []);
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    setIsDragActive(false);
+
     const activeId = String(event.active.id);
-    const activeEvent = events.find((item) => item.id === activeId);
+    const activeEvent = eventsById.get(activeId);
     if (!activeEvent) {
       return;
     }
 
-    const overId = event.over?.id ? String(event.over.id) : null;
-    if (!overId) {
+    const over = event.over;
+    if (!over) {
       return;
     }
+    const overId = String(over.id);
 
     if (overId === PARKING_DROP_ID) {
-      const result = await moveAdminScheduleTemplateAction(
-        buildDetachTemplateInput(activeEvent),
-      );
-      if (result.error) {
+      const detachInput = buildDetachTemplateInput(activeEvent);
+      if (isSameTemplateMove(activeEvent, detachInput)) {
         return;
       }
-      router.refresh();
+
+      const optimisticMove = toPendingTemplateMove(detachInput);
+      setPendingTemplateMoves((currentMoves) => ({
+        ...currentMoves,
+        [activeEvent.templateId]: optimisticMove,
+      }));
+
+      try {
+        const result = await moveAdminScheduleTemplateAction(detachInput);
+        if (result.error) {
+          setPendingTemplateMoves((currentMoves) => removePendingTemplateMove(currentMoves, activeEvent.templateId));
+          toast.error(result.error);
+          return;
+        }
+
+        startTransition(() => {
+          router.refresh();
+        });
+      } catch {
+        setPendingTemplateMoves((currentMoves) => removePendingTemplateMove(currentMoves, activeEvent.templateId));
+        toast.error("Не удалось переместить карточку");
+        return;
+      }
       return;
     }
 
-    if (!overId.startsWith("slot:")) {
+    const overData = over.data.current;
+    if (!isScheduleGridDropData(overData) || !over.rect) {
       return;
     }
 
-    const [, dayKey, rowId, startMinutesRaw] = overId.split(":");
-    const dayOfWeek = DAY_CODE_TO_NUMBER[dayKey];
-    const startMinutes = Number(startMinutesRaw);
+    const dayOfWeek = overData.dayIndex + 1;
+    const draggedTopClientY = getDraggedEventTopClientY(event);
 
-    if (!dayOfWeek || Number.isNaN(startMinutes) || !rowId) {
+    if (draggedTopClientY === null) {
       return;
     }
+
+    const startMinutes = snapDraggedTopToScheduleMinutes({
+      draggedTopClientY,
+      rectTop: over.rect.top,
+      rectHeight: over.rect.height,
+      startMinutes: overData.startMinutes,
+      endMinutes: overData.endMinutes,
+      stepMinutes: TIME_SLOT_STEP_MINUTES,
+    });
 
     const moveInput = buildMoveTemplateInput(activeEvent, {
       dayOfWeek,
-      rowId,
+      rowId: overData.rowId,
       startMinutes,
     });
     if (!moveInput) {
       return;
     }
-
-    const moveResult = await moveAdminScheduleTemplateAction(moveInput);
-    if (moveResult.error) {
+    if (isSameTemplateMove(activeEvent, moveInput)) {
       return;
     }
-    router.refresh();
-  };
+
+    const optimisticMove = toPendingTemplateMove(moveInput);
+    setPendingTemplateMoves((currentMoves) => ({
+      ...currentMoves,
+      [activeEvent.templateId]: optimisticMove,
+    }));
+
+    try {
+      const moveResult = await moveAdminScheduleTemplateAction(moveInput);
+      if (moveResult.error) {
+        setPendingTemplateMoves((currentMoves) => removePendingTemplateMove(currentMoves, activeEvent.templateId));
+        toast.error(moveResult.error);
+        return;
+      }
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch {
+      setPendingTemplateMoves((currentMoves) => removePendingTemplateMove(currentMoves, activeEvent.templateId));
+      toast.error("Не удалось переместить карточку");
+      return;
+    }
+  }, [eventsById, router]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -262,7 +366,9 @@ export function AdminScheduleView({
       <DndContext
         sensors={sensors}
         collisionDetection={scheduleCollisionDetection}
+        onDragStart={handleDragStart}
         onDragEnd={(event) => void handleDragEnd(event)}
+        onDragCancel={handleDragCancel}
       >
         <div className="grid grid-cols-[260px_minmax(0,1fr)] gap-3">
           <TemporaryScheduleArea
@@ -270,9 +376,11 @@ export function AdminScheduleView({
             conflictByEvent={conflictByEvent}
             shouldDimByMetaFilters={shouldDimByMetaFilters}
             isEventHighlighted={isEventHighlighted}
+            isEventDisabled={isEventDisabled}
+            disableTooltips={isDragActive}
             onCreate={handleCreate}
             onEdit={handleEdit}
-            onDelete={setDeleteTarget}
+            onDelete={handleDelete}
           />
 
           <div className="relative">
@@ -282,15 +390,18 @@ export function AdminScheduleView({
               rows={scheduleRows}
               getEventRowId={(event) => event.classId}
               rowColumnTitle="Класс"
-              renderDayColumnOverlay={({ dayKey, rowId, startMinutes, endMinutes, heightPx }) => (
-                <GridDropOverlay
-                  dayKey={dayKey}
-                  rowId={rowId}
-                  startMinutes={startMinutes}
-                  endMinutes={endMinutes}
-                  heightPx={heightPx}
-                />
-              )}
+              renderDayColumnOverlay={({ dayIndex, rowId, startMinutes, endMinutes }) =>
+                rowId ? (
+                  <div className="pointer-events-none absolute inset-0">
+                    <ScheduleGridDropCell
+                      dayIndex={dayIndex}
+                      rowId={rowId}
+                      startMinutes={startMinutes}
+                      endMinutes={endMinutes}
+                    />
+                  </div>
+                ) : null
+              }
               emptyState={{
                 icon: <BookOpen />,
                 title: "Нет шаблонов",
@@ -300,9 +411,11 @@ export function AdminScheduleView({
                 <DraggableScheduleEventCard
                   event={event}
                   isDimmed={shouldDimByMetaFilters && !isEventHighlighted(event)}
-                  conflicts={conflictByEvent.get(event.id) ?? []}
+                  conflicts={getEventConflicts(event.id)}
+                  disabled={isEventDisabled(event)}
+                  disableTooltip={isDragActive}
                   onEdit={handleEdit}
-                  onDelete={setDeleteTarget}
+                  onDelete={handleDelete}
                 />
               )}
             />
@@ -353,4 +466,182 @@ export function AdminScheduleView({
       />
     </div>
   );
+}
+
+function getDraggedEventTopClientY(event: DragEndEvent) {
+  const translatedRect = event.active.rect.current.translated;
+
+  if (!translatedRect) {
+    const initialRect = event.active.rect.current.initial;
+    return initialRect ? initialRect.top + event.delta.y : null;
+  }
+
+  return translatedRect.top;
+}
+
+function snapDraggedTopToScheduleMinutes({
+  draggedTopClientY,
+  rectTop,
+  rectHeight,
+  startMinutes,
+  endMinutes,
+  stepMinutes,
+}: {
+  draggedTopClientY: number;
+  rectTop: number;
+  rectHeight: number;
+  startMinutes: number;
+  endMinutes: number;
+  stepMinutes: number;
+}) {
+  const clampedOffsetY = clamp(draggedTopClientY - rectTop, 0, Math.max(rectHeight - 1, 0));
+  const minutesSpan = Math.max(endMinutes - startMinutes, stepMinutes);
+  const minuteOffset = (clampedOffsetY / Math.max(rectHeight, 1)) * minutesSpan;
+  const snappedOffset = Math.floor(minuteOffset / stepMinutes) * stepMinutes;
+  const maxOffset = Math.max(minutesSpan - stepMinutes, 0);
+
+  return startMinutes + clamp(snappedOffset, 0, maxOffset);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function applyPendingTemplateMoves(
+  events: AdminScheduleEvent[],
+  pendingTemplateMoves: Record<string, PendingTemplateMove>,
+) {
+  if (Object.keys(pendingTemplateMoves).length === 0) {
+    return events;
+  }
+
+  return events.map((event) => {
+    const pendingMove = pendingTemplateMoves[event.templateId];
+
+    return pendingMove ? applyPendingTemplateMove(event, pendingMove) : event;
+  });
+}
+
+function excludeSyncedPendingTemplateMoves(
+  events: AdminScheduleEvent[],
+  pendingTemplateMoves: Record<string, PendingTemplateMove>,
+) {
+  if (Object.keys(pendingTemplateMoves).length === 0) {
+    return pendingTemplateMoves;
+  }
+
+  const nextMoves = Object.fromEntries(
+    Object.entries(pendingTemplateMoves).filter(
+      ([templateId, move]) => !isTemplateMoveSynced(events, templateId, move),
+    ),
+  );
+
+  return Object.keys(nextMoves).length === Object.keys(pendingTemplateMoves).length
+    ? pendingTemplateMoves
+    : nextMoves;
+}
+
+function applyPendingTemplateMove(
+  event: AdminScheduleEvent,
+  pendingMove: PendingTemplateMove,
+): AdminScheduleEvent {
+  if (
+    pendingMove.detached
+    || pendingMove.dayOfWeek === null
+    || pendingMove.startMinutes === null
+    || pendingMove.endMinutes === null
+  ) {
+    return {
+      ...event,
+      dayOfWeek: null,
+      startMinutes: null,
+      endMinutes: null,
+      detached: true,
+      timeLabel: "Без времени",
+    };
+  }
+
+  const start = buildDateForScheduleTime(pendingMove.dayOfWeek, pendingMove.startMinutes);
+  const end = buildDateForScheduleTime(pendingMove.dayOfWeek, pendingMove.endMinutes);
+
+  return {
+    ...event,
+    dayOfWeek: pendingMove.dayOfWeek,
+    startMinutes: pendingMove.startMinutes,
+    endMinutes: pendingMove.endMinutes,
+    detached: false,
+    start,
+    end,
+    timeLabel: `${formatTimeLabel(pendingMove.startMinutes)}-${formatTimeLabel(pendingMove.endMinutes)}`,
+  };
+}
+
+function buildDateForScheduleTime(dayOfWeek: number, minutesFromMidnight: number) {
+  return set(
+    addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), dayOfWeek - 1),
+    {
+      hours: Math.floor(minutesFromMidnight / 60),
+      minutes: minutesFromMidnight % 60,
+      seconds: 0,
+      milliseconds: 0,
+    },
+  );
+}
+
+function isTemplateMoveSynced(
+  events: AdminScheduleEvent[],
+  templateId: string,
+  pendingMove: PendingTemplateMove,
+) {
+  const templateEvents = events.filter((event) => event.templateId === templateId);
+
+  if (templateEvents.length === 0) {
+    return false;
+  }
+
+  return templateEvents.every((event) => isSameTemplateMove(event, pendingMove));
+}
+
+function isSameTemplateMove(
+  event: AdminScheduleEvent,
+  move: Pick<PendingTemplateMove, "dayOfWeek" | "startMinutes" | "endMinutes">,
+) {
+  return (
+    event.dayOfWeek === move.dayOfWeek
+    && event.startMinutes === move.startMinutes
+    && event.endMinutes === move.endMinutes
+  );
+}
+
+function toPendingTemplateMove(
+  move: Pick<PendingTemplateMove, "dayOfWeek" | "startMinutes" | "endMinutes">,
+): PendingTemplateMove {
+  return {
+    dayOfWeek: move.dayOfWeek,
+    startMinutes: move.startMinutes,
+    endMinutes: move.endMinutes,
+    detached: move.dayOfWeek === null || move.startMinutes === null || move.endMinutes === null,
+  };
+}
+
+function removePendingTemplateMove(
+  pendingTemplateMoves: Record<string, PendingTemplateMove>,
+  templateId: string,
+) {
+  if (!(templateId in pendingTemplateMoves)) {
+    return pendingTemplateMoves;
+  }
+
+  const nextMoves = { ...pendingTemplateMoves };
+  delete nextMoves[templateId];
+
+  return nextMoves;
+}
+
+function isScheduleGridDropData(data: unknown): data is ScheduleGridDropData {
+  if (!data || typeof data !== "object") {
+    return false;
+  }
+
+  return (data as ScheduleGridDropData).type === "schedule-grid-cell";
 }
