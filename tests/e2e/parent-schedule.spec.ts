@@ -7,7 +7,6 @@ test.describe("Parent schedule", () => {
 
   test("opens children schedule from direct URL", async ({ page }) => {
     await loginAsParent(page);
-    await page.goto("/parent/schedule");
 
     await expect(page).toHaveURL(/\/parent\/schedule\?.*studentId=/);
     await expect(page.getByRole("heading", { name: "Расписание детей" })).toBeVisible();
@@ -36,7 +35,6 @@ test.describe("Parent schedule", () => {
 
   test("switches selected child", async ({ page }) => {
     await loginAsParent(page);
-    await page.goto("/parent/schedule");
 
     const duplicateChildren = page.getByRole("radio", { name: "Петров Иван · 5 А" });
 

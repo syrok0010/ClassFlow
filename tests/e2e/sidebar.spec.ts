@@ -23,7 +23,7 @@ test.describe("Sidebar roles", () => {
   test("teacher sees only teacher section", async ({ page }) => {
     await loginAsTeacher(page);
 
-    await expect(page.getByRole("heading", { name: "Кабинет преподавателя" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Мое расписание" })).toBeVisible();
     await expect(page.getByTestId("sidebar-section-teacher")).toBeVisible();
     await expect(page.getByTestId("sidebar-section-admin")).toHaveCount(0);
     await expect(page.getByTestId("sidebar-section-parent")).toHaveCount(0);
@@ -48,27 +48,27 @@ test.describe("Sidebar roles", () => {
   test("root redirects by access priority", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto("/");
-    await expect(page).toHaveURL(/\/admin$/);
+    await expect(page).toHaveURL(/\/admin\/schedule\/entries(\?|$)/);
 
     await page.context().clearCookies();
     await loginAsTeacher(page);
     await page.goto("/");
-    await expect(page).toHaveURL(/\/teacher$/);
+    await expect(page).toHaveURL(/\/teacher\/schedule(\?|$)/);
 
     await page.context().clearCookies();
     await loginAsTeacherParent(page);
     await page.goto("/");
-    await expect(page).toHaveURL(/\/teacher$/);
+    await expect(page).toHaveURL(/\/teacher\/schedule(\?|$)/);
 
     await page.context().clearCookies();
     await loginAsParent(page);
     await page.goto("/");
-    await expect(page).toHaveURL(/\/parent$/);
+    await expect(page).toHaveURL(/\/parent\/schedule(\?|$)/);
 
     await page.context().clearCookies();
     await loginAsStudent(page);
     await page.goto("/");
-    await expect(page).toHaveURL(/\/student$/);
+    await expect(page).toHaveURL(/\/student\/schedule(\?|$)/);
   });
 
   test("teacher opens my subjects page from sidebar", async ({ page }) => {

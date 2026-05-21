@@ -38,21 +38,21 @@ async function login(page: Page, email: string, password: string, expectedPath: 
 }
 
 export async function loginAsAdmin(page: Page) {
-  await login(page, adminCredentials.email, adminCredentials.password, /\/admin$/);
+  await login(page, adminCredentials.email, adminCredentials.password, /\/admin\/schedule\/entries(\?|$)/);
 }
 
 export async function loginAsTeacher(page: Page) {
-  await login(page, teacherCredentials.email, teacherCredentials.password, /\/teacher$/);
+  await login(page, teacherCredentials.email, teacherCredentials.password, /\/teacher\/schedule(\?|$)/);
 }
 
 export async function loginAsTeacherParent(page: Page) {
-  await login(page, teacherParentCredentials.email, teacherParentCredentials.password, /\/teacher$/);
+  await login(page, teacherParentCredentials.email, teacherParentCredentials.password, /\/teacher\/schedule(\?|$)/);
 }
 
 export async function loginAsParent(page: Page) {
-  await login(page, parentCredentials.email, parentCredentials.password, /\/parent$/);
+  await login(page, parentCredentials.email, parentCredentials.password, /\/parent\/schedule(\?|$)/);
 }
 
 export async function loginAsStudent(page: Page) {
-  await login(page, studentCredentials.email, studentCredentials.password, /\/student$/);
+  await login(page, studentCredentials.email, studentCredentials.password, /\/student\/schedule(\?|$)/);
 }

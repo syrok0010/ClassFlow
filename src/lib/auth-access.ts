@@ -18,6 +18,13 @@ const CONTEXT_LABELS: Record<AccessContext, string> = {
   student: "Ученик",
 };
 
+const DEFAULT_PATH_BY_CONTEXT: Record<AccessContext, string> = {
+  admin: "/admin/schedule/entries",
+  parent: "/parent/schedule",
+  student: "/student/schedule",
+  teacher: "/teacher/schedule",
+};
+
 export function getAccessContexts(user: SessionAccessUser): AccessContext[] {
   const domainRoles = new Set(user.domainRoles ?? []);
 
@@ -32,7 +39,7 @@ export function getAccessContexts(user: SessionAccessUser): AccessContext[] {
 
 export function getDefaultPath(user: SessionAccessUser): string | null {
   const primaryContext = getAccessContexts(user)[0];
-  return primaryContext ? `/${primaryContext}` : null;
+  return primaryContext ? DEFAULT_PATH_BY_CONTEXT[primaryContext] : null;
 }
 
 export function getRoleSummary(user: SessionAccessUser): string {

@@ -5,7 +5,6 @@ import {
   Building2,
   CalendarDays,
   GraduationCap,
-  LayoutDashboard,
   Users,
   UserSquare2,
 } from "lucide-react";
@@ -29,9 +28,8 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     id: "admin",
     label: "Администрирование",
     items: [
-      { name: "Дашборд", href: "/admin", icon: LayoutDashboard },
-      { name: "Шаблон расписания", href: "/admin/schedule", icon: NotebookPen },
       { name: "Фактическое расписание", href: "/admin/schedule/entries", icon: CalendarDays },
+      { name: "Шаблон расписания", href: "/admin/schedule", icon: NotebookPen },
       { name: "Доступность", href: "/admin/availability", icon: UserSquare2 },
       { name: "Помещения", href: "/admin/rooms", icon: Building2 },
       { name: "Предметы", href: "/admin/subjects", icon: BarChart },
