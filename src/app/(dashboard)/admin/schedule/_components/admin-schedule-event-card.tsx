@@ -53,6 +53,19 @@ export const AdminScheduleEventCard = memo(function AdminScheduleEventCard({
   const fieldSeverities = getScheduleConflictFieldSeverities(conflicts);
   const hardConflicts = conflicts.filter((conflict) => conflict.severity === "hard");
   const warningConflicts = conflicts.filter((conflict) => conflict.severity === "warning");
+  const inlineCard = (
+    <AdminScheduleEventInlineCard
+      event={event}
+      groupLabel={displayGroupLabel}
+      layout={layout}
+      isDimmed={isDimmed}
+      conflictLevel={conflictLevel}
+      fieldSeverities={fieldSeverities}
+      showActions={showActions}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    />
+  );
 
   if (isDimmed || disableTooltip) {
     return (
@@ -64,17 +77,7 @@ export const AdminScheduleEventCard = memo(function AdminScheduleEventCard({
         className="block h-full w-full bg-transparent p-0 text-left"
         aria-label={cardLabel}
       >
-        <AdminScheduleEventInlineCard
-          event={event}
-          groupLabel={displayGroupLabel}
-          layout={layout}
-          isDimmed={isDimmed}
-          conflictLevel={conflictLevel}
-          fieldSeverities={fieldSeverities}
-          showActions={showActions}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
+        {inlineCard}
       </div>
     );
   }
@@ -90,17 +93,7 @@ export const AdminScheduleEventCard = memo(function AdminScheduleEventCard({
         className="block h-full w-full bg-transparent p-0 text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring/60"
         aria-label={cardLabel}
       >
-        <AdminScheduleEventInlineCard
-          event={event}
-          groupLabel={displayGroupLabel}
-          layout={layout}
-          isDimmed={isDimmed}
-          conflictLevel={conflictLevel}
-          fieldSeverities={fieldSeverities}
-          showActions={showActions}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
+        {inlineCard}
       </TooltipTrigger>
       <TooltipContent
         data-testid="admin-schedule-card-tooltip"
