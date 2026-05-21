@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { Copy, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { copyInviteUrl } from "@/lib/invite";
 import { createUserAction } from "../_actions/user-actions";
@@ -44,6 +45,7 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
       patronymicName: "",
       email: "",
       domainRole: "student" as "student" | "teacher" | "admin",
+      sendInviteEmail: false,
     },
     validators: {
       onChange: createUserSchema,
@@ -56,10 +58,16 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
           toast.error(result.error);
         } else {
           const fullName = `${value.surname} ${value.name}`;
-          toast.success(`${fullName} добавлен`);
+          if (result.emailDelivery.status === "sent") {
+            toast.success(`${fullName} добавлен, инвайт отправлен на ${result.emailDelivery.recipient}`);
+          } else if (result.emailDelivery.status === "failed") {
+            toast.error(`Пользователь создан, но письмо не отправлено: ${result.emailDelivery.error}`);
+          } else {
+            toast.success(`${fullName} добавлен`);
+          }
 
           flushSync(() => {
-            if (result.inviteToken) {
+            if (result.emailDelivery.status !== "sent" && result.inviteToken) {
               setLastInviteToken(result.inviteToken);
             }
             form.reset();
@@ -229,21 +237,51 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
         <TableCell>
           <form.Field name="email">
             {(field) => (
-              <Input
-                name={field.name}
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                onChange={(e) => field.handleChange(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Email (необязательно)"
-                className={cn(
-                  "h-8 text-sm w-56 transition-all",
-                  field.state.meta.errors.length ? "border-destructive ring-destructive/20 ring-2" : "hover:border-primary/50"
-                )}
-                disabled={form.state.isSubmitting}
-                type="email"
-                data-testid="smart-row-email"
-              />
+              <div className="flex flex-col gap-1">
+                <Input
+                  name={field.name}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(e) => {
+                    const nextEmail = e.target.value;
+                    field.handleChange(nextEmail);
+                    if (!nextEmail.trim()) {
+                      form.setFieldValue("sendInviteEmail", false);
+                    }
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Email (необязательно)"
+                  className={cn(
+                    "h-8 text-sm w-56 transition-all",
+                    field.state.meta.errors.length ? "border-destructive ring-destructive/20 ring-2" : "hover:border-primary/50"
+                  )}
+                  disabled={form.state.isSubmitting}
+                  type="email"
+                  data-testid="smart-row-email"
+                />
+                <form.Subscribe selector={(state) => state.values.email.trim().length > 0}>
+                  {(hasEmail) =>
+                    hasEmail ? (
+                      <form.Field name="sendInviteEmail">
+                        {(sendField) => (
+                          <label className="flex w-56 items-start gap-2 rounded-md border border-primary/20 bg-background/70 px-2 py-1.5 text-xs">
+                            <Checkbox
+                              checked={sendField.state.value}
+                              onBlur={sendField.handleBlur}
+                              onCheckedChange={(checked) => sendField.handleChange(checked)}
+                              disabled={form.state.isSubmitting}
+                              data-testid="smart-row-send-invite-email"
+                            />
+                            <span className="grid gap-0.5 leading-tight">
+                              <span className="font-medium">Отправить инвайт на почту</span>
+                            </span>
+                          </label>
+                        )}
+                      </form.Field>
+                    ) : null
+                  }
+                </form.Subscribe>
+              </div>
             )}
           </form.Field>
         </TableCell>

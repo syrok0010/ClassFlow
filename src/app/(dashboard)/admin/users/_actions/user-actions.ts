@@ -7,16 +7,55 @@ import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
 import { createParentInviteForStudent, createStaffInviteToken } from "@/features/users/invites";
 import { requireAdminContext, rethrowIfNextControlFlow } from "@/lib/server-action-auth";
+import { buildServerInviteUrl } from "@/lib/server-invite";
+import { InviteEmailConfigError, sendInviteEmail } from "@/lib/email/invite-email";
 import {
   type CreateUserInput,
   createUserSchema,
   deleteUserSchema,
   generateParentInviteSchema,
   linkExistingParentSchema,
+  sendUserInviteEmailSchema,
   updateUserSchema,
   UpdateUserInput,
 } from "../_lib/schemas";
 import { userInclude, type UsersFilterState } from "../_lib/types";
+
+async function getOrCreateActiveStaffInviteToken(
+  tx: Prisma.TransactionClient | typeof prisma,
+  userId: string
+) {
+  const verification = await tx.verification.findFirst({
+    where: {
+      identifier: userId,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { expiresAt: "desc" },
+  });
+
+  if (verification) {
+    return verification.value;
+  }
+
+  return createStaffInviteToken(tx, userId);
+}
+
+function getUserFullName(user: { surname?: string | null; name?: string | null; patronymicName?: string | null }) {
+  return [user.surname, user.name, user.patronymicName].filter(Boolean).join(" ");
+}
+
+function hasRealInviteEmail(email: string | null): email is string {
+  return Boolean(email && !/^(pending|parent-pending)-[a-f0-9]+@classflow\.local$/i.test(email));
+}
+
+function getInviteEmailErrorMessage(error: unknown) {
+  if (error instanceof InviteEmailConfigError) {
+    return error.message;
+  }
+
+  console.error("Ошибка при отправке инвайта на email:", error);
+  return "Не удалось отправить email";
+}
 
 const USERS_PATH = "/admin/users";
 
@@ -90,11 +129,34 @@ export async function createUserAction(input: CreateUserInput) {
       return { user: newUser, token: newToken };
     });
 
+    let emailDelivery:
+      | { status: "not_requested" }
+      | { status: "sent"; recipient: string }
+      | { status: "failed"; recipient: string; error: string } = { status: "not_requested" };
+
+    if (data.email && data.sendInviteEmail) {
+      try {
+        await sendInviteEmail({
+          to: data.email,
+          inviteUrl: buildServerInviteUrl(token),
+          userFullName: getUserFullName(user),
+        });
+        emailDelivery = { status: "sent", recipient: data.email };
+      } catch (error) {
+        emailDelivery = {
+          status: "failed",
+          recipient: data.email,
+          error: getInviteEmailErrorMessage(error),
+        };
+      }
+    }
+
     revalidatePath(USERS_PATH);
 
     return {
       user,
-      inviteToken: data.email ? null : token,
+      inviteToken: token,
+      emailDelivery,
     };
   } catch (e: unknown) {
     rethrowIfNextControlFlow(e);
@@ -334,5 +396,50 @@ export async function getInviteTokenAction(userId: string) {
     rethrowIfNextControlFlow(error);
     console.error("Ошибка при получении инвайт-токена:", error);
     return { error: "Не удалось получить инвайт-ссылку" };
+  }
+}
+
+export async function sendUserInviteEmailAction(userId: string) {
+  await requireAdminContext();
+
+  const parsed = sendUserInviteEmailSchema.safeParse({ userId });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Некорректный ID пользователя" };
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: parsed.data.userId } });
+    if (!user) {
+      return { error: "Пользователь не найден" };
+    }
+
+    if (user.status !== "PENDING_INVITE") {
+      return { error: "Инвайт можно отправить только пользователю, ожидающему активации" };
+    }
+
+    if (!hasRealInviteEmail(user.email)) {
+      return { error: "У пользователя нет email для отправки инвайта" };
+    }
+
+    const token = await getOrCreateActiveStaffInviteToken(prisma, user.id);
+
+    try {
+      await sendInviteEmail({
+        to: user.email,
+        inviteUrl: buildServerInviteUrl(token),
+        userFullName: getUserFullName(user),
+      });
+    } catch (error) {
+      return {
+        error: getInviteEmailErrorMessage(error),
+        token,
+      };
+    }
+
+    return { success: true, recipient: user.email };
+  } catch (error) {
+    rethrowIfNextControlFlow(error);
+    console.error("Ошибка при отправке инвайта на email:", error);
+    return { error: "Не удалось отправить инвайт на email" };
   }
 }
