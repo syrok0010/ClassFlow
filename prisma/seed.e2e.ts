@@ -124,7 +124,12 @@ async function seedAuthAndUsers() {
     },
   });
   await createCredentialAccount(studentPortalUser.id, "student1234");
-  const studentPortalProfile = await prisma.student.create({ data: { userId: studentPortalUser.id } });
+  const studentPortalProfile = await prisma.student.create({
+    data: {
+      id: "e2e-student-profile",
+      userId: studentPortalUser.id,
+    },
+  });
 
   const duplicateStudentUsers = await Promise.all([
     prisma.user.create({

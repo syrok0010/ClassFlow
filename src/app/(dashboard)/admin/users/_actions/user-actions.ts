@@ -2,8 +2,10 @@
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
+import { err, ok, type Result } from "@/lib/result";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
+import { createParentInviteForStudent, createStaffInviteToken } from "@/features/users/invites";
 import { requireAdminContext, rethrowIfNextControlFlow } from "@/lib/server-action-auth";
 import {
   type CreateUserInput,
@@ -15,35 +17,6 @@ import {
   UpdateUserInput,
 } from "../_lib/schemas";
 import { userInclude, type UsersFilterState } from "../_lib/types";
-
-function generateInviteToken(): string {
-  return randomBytes(4)
-    .toString("hex")
-    .toUpperCase()
-    .replace(/(.{4})(.{4})/, "$1-$2");
-}
-
-const STAFF_INVITE_TTL_DAYS = 7;
-const PARENT_INVITE_TTL_DAYS = 30;
-
-async function createInviteToken(
-  tx: Prisma.TransactionClient | typeof prisma,
-  userId: string,
-  ttlDays: number
-) {
-  const token = generateInviteToken();
-  const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
-
-  await tx.verification.create({
-    data: {
-      identifier: userId,
-      value: token,
-      expiresAt,
-    },
-  });
-
-  return token;
-}
 
 const USERS_PATH = "/admin/users";
 
@@ -112,7 +85,7 @@ export async function createUserAction(input: CreateUserInput) {
         include: userInclude,
       });
 
-      const newToken = await createInviteToken(tx, newUser.id, STAFF_INVITE_TTL_DAYS);
+      const newToken = await createStaffInviteToken(tx, newUser.id);
 
       return { user: newUser, token: newToken };
     });
@@ -138,51 +111,25 @@ export async function createUserAction(input: CreateUserInput) {
   }
 }
 
-export async function generateParentInviteAction(studentId: string) {
+export async function generateParentInviteAction(
+  studentId: string
+): Promise<Result<{ token: string; parentUserId: string }>> {
   await requireAdminContext();
 
   const parsed = generateParentInviteSchema.safeParse({ studentId });
   if (!parsed.success) {
-    return { error: "Некорректный ID ученика" };
+    return err("Некорректный ID ученика");
   }
 
-  const student = await prisma.student.findUnique({
-    where: { id: studentId },
-    include: { user: true },
-  });
+  const result = await createParentInviteForStudent(studentId);
 
-  if (!student) {
-    return { error: "Ученик не найден" };
+  if (result.error) {
+    return err(result.error);
   }
-
-  const result = await prisma.$transaction(async (tx) => {
-    const parentUser = await tx.user.create({
-      data: {
-        email: `parent-pending-${randomBytes(4).toString("hex")}@classflow.local`,
-        status: "PENDING_INVITE",
-        role: "USER",
-      },
-    });
-
-    const parent = await tx.parent.create({
-      data: { userId: parentUser.id },
-    });
-
-    await tx.studentParents.create({
-      data: {
-        parentId: parent.id,
-        studentId: student.id,
-      },
-    });
-
-    const token = await createInviteToken(tx, parentUser.id, PARENT_INVITE_TTL_DAYS);
-
-    return { token, parentUserId: parentUser.id };
-  });
 
   revalidatePath(USERS_PATH);
 
-  return result;
+  return ok(result.result!);
 }
 
 export async function linkExistingParentAction(
@@ -380,7 +327,7 @@ export async function getInviteTokenAction(userId: string) {
       return { token: verification.value };
     }
 
-    const newToken = await createInviteToken(prisma, userId, STAFF_INVITE_TTL_DAYS);
+    const newToken = await createStaffInviteToken(prisma, userId);
 
     return { token: newToken };
   } catch (error) {

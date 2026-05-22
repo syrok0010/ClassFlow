@@ -55,10 +55,10 @@ export function ParentInviteDialog({
     setIsGenerating(true);
     try {
       const result = await generateParentInviteAction(studentId);
-      if ("error" in result) {
+      if (result.error) {
         toast.error(result.error);
       } else {
-        setGeneratedCode(result.token);
+        setGeneratedCode(result.result!.token);
       }
     } catch {
       toast.error("Ошибка при генерации инвайта");

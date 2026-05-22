@@ -1,6 +1,22 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext } from "@playwright/test";
 
 import { loginAsTeacher } from "./helpers/auth";
+
+const E2E_STUDENT_PROFILE_ID = "e2e-student-profile";
+
+async function createParentInviteToken(request: APIRequestContext) {
+  const response = await request.post("/api/admin/parent-invites", {
+    data: { studentId: E2E_STUDENT_PROFILE_ID },
+  });
+
+  if (!response.ok()) {
+    throw new Error(`Failed to create parent invite: ${response.status()} ${await response.text()}`);
+  }
+
+  const result = (await response.json()) as { token: string; parentUserId: string };
+
+  return result.token;
+}
 
 test.describe("Invite activation", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -69,11 +85,27 @@ test.describe("Invite activation", () => {
     await expect(page.getByRole("heading", { name: "Мое расписание" })).toBeVisible();
   });
 
-  test("opens parent invite activation with empty editable user fields", async ({ page }) => {
+  test("opens parent invite activation with empty editable user fields", async ({
+    page,
+    baseURL,
+    playwright,
+  }) => {
     const email = `activated-parent-${Date.now()}@classflow.local`;
     const password = "invite1234";
+    const adminRequest = await playwright.request.newContext({
+      baseURL,
+      storageState: "tests/e2e/.auth/admin.json",
+    });
 
-    await page.goto("/invite/E2E-PARENT-INVITE");
+    let inviteToken: string;
+
+    try {
+      inviteToken = await createParentInviteToken(adminRequest);
+    } finally {
+      await adminRequest.dispose();
+    }
+
+    await page.goto(`/invite/${inviteToken}`);
 
     await expect(page.getByText("Активация аккаунта")).toBeVisible();
     await expect(page.getByLabel("Фамилия")).toHaveValue("");
@@ -95,7 +127,7 @@ test.describe("Invite activation", () => {
     await page.getByLabel("Пароль").fill(password);
     await page.getByRole("button", { name: "Войти" }).click();
 
-    await expect(page).toHaveURL(/\/parent\/schedule\/?$/);
+    await expect(page).toHaveURL(/\/parent\/schedule(?:\?.*)?$/);
     await expect(page.getByRole("heading", { name: "Расписание детей" })).toBeVisible();
   });
 
