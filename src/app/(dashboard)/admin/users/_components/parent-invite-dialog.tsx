@@ -206,7 +206,7 @@ export function ParentInviteDialog({
                   Отправить приглашение на почту
                 </Button>
                 <Button
-                  onClick={() => void generateMutation.mutateAsync()}
+                  onClick={() => void generateMutation.mutateAsync({})}
                   disabled={generateMutation.isPending}
                   className="w-full"
                   size="lg"
