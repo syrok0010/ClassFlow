@@ -41,7 +41,8 @@ export async function createStaffInviteToken(
 }
 
 export async function createParentInviteForStudent(
-  studentId: string
+  studentId: string,
+  parentEmail?: string | null
 ): Promise<Result<{ token: string; parentUserId: string }>> {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
@@ -55,7 +56,7 @@ export async function createParentInviteForStudent(
   return prisma.$transaction(async (tx) => {
     const parentUser = await tx.user.create({
       data: {
-        email: `parent-pending-${randomBytes(4).toString("hex")}@classflow.local`,
+        email: parentEmail ?? `parent-pending-${randomBytes(4).toString("hex")}@classflow.local`,
         status: "PENDING_INVITE",
         role: "USER",
       },

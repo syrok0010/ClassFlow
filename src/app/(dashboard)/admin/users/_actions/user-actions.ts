@@ -173,25 +173,75 @@ export async function createUserAction(input: CreateUserInput) {
   }
 }
 
+type InviteEmailDelivery =
+  | { status: "not_requested" }
+  | { status: "sent"; recipient: string }
+  | { status: "failed"; recipient: string; error: string };
+
+type GenerateParentInviteInput = {
+  studentId: string;
+  email?: string;
+  sendInviteEmail?: boolean;
+};
+
 export async function generateParentInviteAction(
-  studentId: string
-): Promise<Result<{ token: string; parentUserId: string }>> {
+  input: GenerateParentInviteInput
+): Promise<Result<{ token: string; parentUserId: string; emailDelivery: InviteEmailDelivery }>> {
   await requireAdminContext();
 
-  const parsed = generateParentInviteSchema.safeParse({ studentId });
+  const parsed = generateParentInviteSchema.safeParse(input);
   if (!parsed.success) {
-    return err("Некорректный ID ученика");
+    return err(parsed.error.issues[0]?.message ?? "Некорректные данные");
   }
 
-  const result = await createParentInviteForStudent(studentId);
+  const data = parsed.data;
+  const parentEmail = data.email?.trim() || null;
 
-  if (result.error) {
-    return err(result.error);
+  try {
+    const result = await createParentInviteForStudent(data.studentId, parentEmail);
+
+    if (result.error) {
+      return err(result.error);
+    }
+
+    let emailDelivery: InviteEmailDelivery = { status: "not_requested" };
+
+    if (data.sendInviteEmail && parentEmail) {
+      try {
+        await sendInviteEmail({
+          to: parentEmail,
+          inviteUrl: buildServerInviteUrl(result.result!.token),
+          userFullName: "родитель",
+        });
+        emailDelivery = { status: "sent", recipient: parentEmail };
+      } catch (error) {
+        emailDelivery = {
+          status: "failed",
+          recipient: parentEmail,
+          error: getInviteEmailErrorMessage(error),
+        };
+      }
+    }
+
+    revalidatePath(USERS_PATH);
+
+    return ok({
+      ...result.result!,
+      emailDelivery,
+    });
+  } catch (e: unknown) {
+    rethrowIfNextControlFlow(e);
+
+    if (
+      e &&
+      typeof e === "object" &&
+      "code" in e &&
+      (e as { code: string }).code === "P2002"
+    ) {
+      return err("Пользователь с таким email уже существует");
+    }
+    throw e;
   }
-
-  revalidatePath(USERS_PATH);
-
-  return ok(result.result!);
 }
 
 export async function linkExistingParentAction(

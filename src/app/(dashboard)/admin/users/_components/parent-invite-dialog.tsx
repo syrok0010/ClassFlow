@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Copy, Search, Link2 } from "lucide-react";
+import { Copy, Search, Link2, Mail } from "lucide-react";
+import { z } from "zod";
 import {
   Dialog,
   DialogContent,
@@ -47,20 +48,38 @@ export function ParentInviteDialog({
 }: ParentInviteDialogProps) {
   const [activeTab, setActiveTab] = useState<"new" | "existing">("new");
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const [parentEmail, setParentEmail] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ParentSearchResult[]>([]);
 
+  const trimmedParentEmail = parentEmail.trim();
+  const isParentEmailValid = z.email().safeParse(trimmedParentEmail).success;
+
   const generateMutation = useMutation({
-    mutationFn: async () => {
-      const result = await generateParentInviteAction(studentId);
+    mutationFn: async (options?: { sendInviteEmail?: boolean }) => {
+      const result = await generateParentInviteAction({
+        studentId,
+        email: options?.sendInviteEmail ? trimmedParentEmail : "",
+        sendInviteEmail: options?.sendInviteEmail ?? false,
+      });
       if (result.error) {
         throw new Error(result.error);
       }
       return result.result;
     },
-    onSuccess: (result) => setGeneratedCode(result!.token),
+    onSuccess: (result) => {
+      setGeneratedCode(result!.token);
+      if (result!.emailDelivery.status === "sent") {
+        toast.success(`Приглашение отправлено на ${result!.emailDelivery.recipient}`);
+      } else if (result!.emailDelivery.status === "failed") {
+        toast.error(`Родитель создан, но письмо не отправлено: ${result!.emailDelivery.error}`);
+      }
+    },
     onError: (error) => toast.error(error.message || "Ошибка при генерации инвайта"),
   });
+
+  const canSendEmailInvite =
+    trimmedParentEmail.length > 0 && isParentEmailValid && !generateMutation.isPending;
 
   const linkMutation = useMutation({
     mutationFn: async (parentId: string) => {
@@ -115,6 +134,7 @@ export function ParentInviteDialog({
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setGeneratedCode(null);
+      setParentEmail("");
       setSearchQuery("");
       setSearchResults([]);
       parentSearch.cancel();
@@ -159,13 +179,39 @@ export function ParentInviteDialog({
                 <p className="text-sm text-muted-foreground">
                   Будет сгенерирован уникальный код для активации. Передайте его родителю через мессенджер — он сам заполнит свои данные при первом входе.
                 </p>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium" htmlFor="parent-invite-email">
+                    Email родителя
+                  </label>
+                  <Input
+                    id="parent-invite-email"
+                    value={parentEmail}
+                    onChange={(event) => setParentEmail(event.target.value)}
+                    placeholder="parent@example.com"
+                    type="email"
+                    disabled={generateMutation.isPending}
+                  />
+                  {trimmedParentEmail && !isParentEmailValid ? (
+                    <p className="text-xs text-destructive">Введите корректный email</p>
+                  ) : null}
+                </div>
+                <Button
+                  onClick={() => void generateMutation.mutateAsync({ sendInviteEmail: true })}
+                  disabled={!canSendEmailInvite}
+                  className="w-full"
+                  size="lg"
+                  variant="outline"
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Отправить приглашение на почту
+                </Button>
                 <Button
                   onClick={() => void generateMutation.mutateAsync()}
                   disabled={generateMutation.isPending}
                   className="w-full"
                   size="lg"
                 >
-                  {generateMutation.isPending ? "Генерация..." : "Сгенерировать код"}
+                  {generateMutation.isPending ? "Генерация..." : "Или сгенерировать код для ручной отправки"}
                 </Button>
               </div>
             )}

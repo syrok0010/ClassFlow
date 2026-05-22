@@ -35,9 +35,16 @@ export const deleteUserSchema = z.object({
   confirmName: z.string().trim().min(1, "Введите имя для подтверждения"),
 });
 
-export const generateParentInviteSchema = z.object({
-  studentId: z.string(),
-});
+export const generateParentInviteSchema = z
+  .object({
+    studentId: z.string(),
+    email: z.email("Некорректный email").or(z.literal("")).optional(),
+    sendInviteEmail: z.boolean().optional(),
+  })
+  .refine((data) => !data.sendInviteEmail || Boolean(data.email?.trim()), {
+    path: ["email"],
+    message: "Укажите email для отправки инвайта",
+  });
 
 export const linkExistingParentSchema = z.object({
   studentId: z.string(),
