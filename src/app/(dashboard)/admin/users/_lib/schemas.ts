@@ -6,11 +6,6 @@ const inviteEmailSchema = z
     message: "Нельзя использовать служебный домен @classflow.local",
   });
 
-const parentInviteFieldsSchema = z.object({
-  email: inviteEmailSchema.or(z.literal("")),
-  sendInviteEmail: z.boolean(),
-});
-
 export const createUserSchema = z
   .object({
     surname: z.string().trim().min(1, "Фамилия обязательна"),
@@ -46,16 +41,9 @@ export const deleteUserSchema = z.object({
   confirmName: z.string().trim().min(1, "Введите имя для подтверждения"),
 });
 
-export const parentInviteFormSchema = parentInviteFieldsSchema.refine(
-  (data) => !data.sendInviteEmail || data.email.trim().length > 0,
-  {
-    path: ["email"],
-    message: "Укажите email для отправки инвайта",
-  }
-);
-
-export const generateParentInviteSchema = parentInviteFieldsSchema
-  .extend({
+export const generateParentInviteSchema = z.object({
+    email: inviteEmailSchema.or(z.literal("")),
+    sendInviteEmail: z.boolean(),
     studentId: z.string(),
   })
   .refine((data) => !data.sendInviteEmail || data.email.trim().length > 0, {

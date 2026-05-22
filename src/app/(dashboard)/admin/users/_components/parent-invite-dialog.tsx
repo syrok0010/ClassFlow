@@ -23,7 +23,7 @@ import {
   linkExistingParentAction,
   searchParentsAction,
 } from "../_actions/user-actions";
-import { parentInviteFormSchema } from "../_lib/schemas";
+import { generateParentInviteSchema } from "../_lib/schemas";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -94,11 +94,12 @@ export function ParentInviteDialog({
 
   const form = useForm({
     defaultValues: {
+      studentId,
       email: "",
       sendInviteEmail: false,
     },
     validators: {
-      onChange: parentInviteFormSchema,
+      onChange: generateParentInviteSchema,
     },
     onSubmit: async ({ value }) => {
       await generateMutation.mutateAsync(value);
@@ -254,8 +255,7 @@ export function ParentInviteDialog({
                         !email.trim() ||
                         !canSubmit ||
                         !isValid ||
-                        isSubmitting ||
-                        generateMutation.isPending
+                        isSubmitting
                       }
                       className="w-full"
                       size="lg"
@@ -274,11 +274,11 @@ export function ParentInviteDialog({
                         form.setFieldValue("sendInviteEmail", false);
                         void form.handleSubmit();
                       }}
-                      disabled={isSubmitting || generateMutation.isPending}
+                      disabled={isSubmitting}
                       className="w-full"
                       size="lg"
                     >
-                      {isSubmitting || generateMutation.isPending
+                      {isSubmitting
                         ? "Генерация..."
                         : "Или сгенерировать код для ручной отправки"}
                     </Button>

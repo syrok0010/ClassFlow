@@ -259,6 +259,13 @@ export function SmartRow({ active, onDeactivate }: SmartRowProps) {
                   type="email"
                   data-testid="smart-row-email"
                 />
+                {field.state.meta.errors.length ? (
+                    <p className="text-xs text-destructive">
+                      {field.state.meta.errors
+                          .flatMap((error) => (error ? [error.message] : []))
+                          .join(", ")}
+                    </p>
+                ) : null}
                 <form.Subscribe selector={(state) => state.values.email.trim().length > 0}>
                   {(hasEmail) =>
                     hasEmail ? (
