@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Copy, UserPlus, Pencil, ShieldOff, ShieldCheck, Trash2, BookOpenCheck } from "lucide-react";
+import { MoreHorizontal, Copy, UserPlus, Pencil, ShieldOff, ShieldCheck, Trash2, BookOpenCheck, Mail } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +16,12 @@ import type { UserWithRoles, UserTableMeta } from "../_lib/types";
 import {
   toggleUserStatusAction,
   getInviteTokenAction,
+  sendUserInviteEmailAction,
 } from "../_actions/user-actions";
+
+function hasRealInviteEmail(email: string | null) {
+  return Boolean(email && !/^(pending|parent-pending)-[a-f0-9]+@classflow\.local$/i.test(email));
+}
 
 export function UserActionsMenu({ user, table }: { user: UserWithRoles; table: Table<UserWithRoles> }) {
   const meta = table.options.meta as UserTableMeta;
@@ -25,6 +30,7 @@ export function UserActionsMenu({ user, table }: { user: UserWithRoles; table: T
   const isStudent = user.students.length > 0;
   const isPending = user.status === "PENDING_INVITE";
   const isDisabled = user.status === "DISABLED";
+  const canSendInviteEmail = isPending && hasRealInviteEmail(user.email);
 
   const handleCopyInvite = async () => {
     try {
@@ -55,6 +61,20 @@ export function UserActionsMenu({ user, table }: { user: UserWithRoles; table: T
     }
   };
 
+  const handleSendInviteEmail = async () => {
+    try {
+      const result = await sendUserInviteEmailAction(user.id);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success(`Инвайт отправлен на ${result.recipient}`);
+    } catch {
+      toast.error("Не удалось отправить инвайт на email");
+    }
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -81,6 +101,13 @@ export function UserActionsMenu({ user, table }: { user: UserWithRoles; table: T
             <DropdownMenuItem onClick={handleCopyInvite}>
               <Copy className="mr-2 h-4 w-4" />
               Скопировать ссылку-инвайт
+            </DropdownMenuItem>
+          )}
+
+          {canSendInviteEmail && (
+            <DropdownMenuItem onClick={handleSendInviteEmail}>
+              <Mail className="mr-2 h-4 w-4" />
+              Отправить инвайт на почту
             </DropdownMenuItem>
           )}
 

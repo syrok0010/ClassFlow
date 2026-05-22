@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useForm } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
-import { Copy, Search, Link2 } from "lucide-react";
+import { Copy, Search, Link2, Mail } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import {
   linkExistingParentAction,
   searchParentsAction,
 } from "../_actions/user-actions";
+import { generateParentInviteSchema } from "../_lib/schemas";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -39,6 +41,23 @@ const TAB_OPTIONS = [
   { value: "existing", label: "Существующий родитель" }
 ] as const;
 
+function getFormErrorMessage(error: unknown) {
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  return "Некорректный email";
+}
+
 export function ParentInviteDialog({
   open,
   onOpenChange,
@@ -51,15 +70,40 @@ export function ParentInviteDialog({
   const [searchResults, setSearchResults] = useState<ParentSearchResult[]>([]);
 
   const generateMutation = useMutation({
-    mutationFn: async () => {
-      const result = await generateParentInviteAction(studentId);
+    mutationFn: async (value: { email: string; sendInviteEmail: boolean }) => {
+      const result = await generateParentInviteAction({
+        studentId,
+        email: value.sendInviteEmail ? value.email.trim() : "",
+        sendInviteEmail: value.sendInviteEmail,
+      });
       if (result.error) {
         throw new Error(result.error);
       }
       return result.result;
     },
-    onSuccess: (result) => setGeneratedCode(result!.token),
+    onSuccess: (result) => {
+      setGeneratedCode(result!.token);
+      if (result!.emailDelivery.status === "sent") {
+        toast.success(`Приглашение отправлено на ${result!.emailDelivery.recipient}`);
+      } else if (result!.emailDelivery.status === "failed") {
+        toast.error(`Родитель создан, но письмо не отправлено: ${result!.emailDelivery.error}`);
+      }
+    },
     onError: (error) => toast.error(error.message || "Ошибка при генерации инвайта"),
+  });
+
+  const form = useForm({
+    defaultValues: {
+      studentId,
+      email: "",
+      sendInviteEmail: false,
+    },
+    validators: {
+      onChange: generateParentInviteSchema,
+    },
+    onSubmit: async ({ value }) => {
+      await generateMutation.mutateAsync(value);
+    },
   });
 
   const linkMutation = useMutation({
@@ -115,6 +159,7 @@ export function ParentInviteDialog({
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setGeneratedCode(null);
+      form.reset();
       setSearchQuery("");
       setSearchResults([]);
       parentSearch.cancel();
@@ -155,19 +200,91 @@ export function ParentInviteDialog({
                 </Button>
               </div>
             ) : (
-              <div className="space-y-3">
+              <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  form.setFieldValue("sendInviteEmail", true);
+                  void form.handleSubmit();
+                }}
+              >
                 <p className="text-sm text-muted-foreground">
-                  Будет сгенерирован уникальный код для активации. Передайте его родителю через мессенджер — он сам заполнит свои данные при первом входе.
+                  Будет сгенерирован уникальный код для активации. Передайте его родителю через мессенджер - он сам заполнит свои данные при первом входе.
                 </p>
-                <Button
-                  onClick={() => void generateMutation.mutateAsync()}
-                  disabled={generateMutation.isPending}
-                  className="w-full"
-                  size="lg"
+                <form.Field name="email">
+                  {(field) => (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium" htmlFor="parent-invite-email">
+                        Email родителя
+                      </label>
+                      <Input
+                        id="parent-invite-email"
+                        name={field.name}
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                        placeholder="parent@example.com"
+                        type="email"
+                        disabled={generateMutation.isPending}
+                      />
+                      {field.state.meta.errors.length ? (
+                        <p className="text-xs text-destructive">
+                          {getFormErrorMessage(field.state.meta.errors[0])}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </form.Field>
+                <form.Subscribe
+                  selector={(state) => ({
+                    email: state.values.email,
+                    canSubmit: state.canSubmit,
+                    isSubmitting: state.isSubmitting,
+                    isValid: state.isValid,
+                  })}
                 >
-                  {generateMutation.isPending ? "Генерация..." : "Сгенерировать код"}
-                </Button>
-              </div>
+                  {({ email, canSubmit, isSubmitting, isValid }) => (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        form.setFieldValue("sendInviteEmail", true);
+                        void form.handleSubmit();
+                      }}
+                      disabled={
+                        !email.trim() ||
+                        !canSubmit ||
+                        !isValid ||
+                        isSubmitting
+                      }
+                      className="w-full"
+                      size="lg"
+                      variant="outline"
+                    >
+                      <Mail className="mr-2 h-4 w-4" />
+                      Отправить приглашение на почту
+                    </Button>
+                  )}
+                </form.Subscribe>
+                <form.Subscribe selector={(state) => state.isSubmitting}>
+                  {(isSubmitting) => (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        form.setFieldValue("sendInviteEmail", false);
+                        void form.handleSubmit();
+                      }}
+                      disabled={isSubmitting}
+                      className="w-full"
+                      size="lg"
+                    >
+                      {isSubmitting
+                        ? "Генерация..."
+                        : "Или сгенерировать код для ручной отправки"}
+                    </Button>
+                  )}
+                </form.Subscribe>
+              </form>
             )}
           </div>
         ) : (
