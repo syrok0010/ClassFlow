@@ -6,6 +6,7 @@ import { err, ok, type Result } from "@/lib/result";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
 import { createParentInviteForStudent, createStaffInviteToken } from "@/features/users/invites";
+import { getUserFullName } from "@/lib/auth-access";
 import { requireAdminContext, rethrowIfNextControlFlow } from "@/lib/server-action-auth";
 import { buildServerInviteUrl } from "@/lib/server-invite";
 import { InviteEmailConfigError, sendInviteEmail } from "@/lib/email/invite-email";
@@ -38,10 +39,6 @@ async function getOrCreateActiveStaffInviteToken(
   }
 
   return createStaffInviteToken(tx, userId);
-}
-
-function getUserFullName(user: { surname?: string | null; name?: string | null; patronymicName?: string | null }) {
-  return [user.surname, user.name, user.patronymicName].filter(Boolean).join(" ");
 }
 
 function hasRealInviteEmail(email: string | null): email is string {
@@ -98,6 +95,28 @@ export async function getUsersAction(filters?: Partial<UsersFilterState>) {
   });
 }
 
+async function sendInviteEmailWithStatus(
+  recipient: string,
+  userFullName: string,
+  token: string
+): Promise<InviteEmailDelivery> {
+  try {
+    await sendInviteEmail({
+      to: recipient,
+      inviteUrl: buildServerInviteUrl(token),
+      userFullName,
+    });
+
+    return { status: "sent", recipient };
+  } catch (error) {
+    return {
+      status: "failed",
+      recipient,
+      error: getInviteEmailErrorMessage(error),
+    };
+  }
+}
+
 export async function createUserAction(input: CreateUserInput) {
   await requireAdminContext();
 
@@ -129,27 +148,10 @@ export async function createUserAction(input: CreateUserInput) {
       return { user: newUser, token: newToken };
     });
 
-    let emailDelivery:
-      | { status: "not_requested" }
-      | { status: "sent"; recipient: string }
-      | { status: "failed"; recipient: string; error: string } = { status: "not_requested" };
-
-    if (data.email && data.sendInviteEmail) {
-      try {
-        await sendInviteEmail({
-          to: data.email,
-          inviteUrl: buildServerInviteUrl(token),
-          userFullName: getUserFullName(user),
-        });
-        emailDelivery = { status: "sent", recipient: data.email };
-      } catch (error) {
-        emailDelivery = {
-          status: "failed",
-          recipient: data.email,
-          error: getInviteEmailErrorMessage(error),
-        };
-      }
-    }
+    const emailDelivery: InviteEmailDelivery =
+      data.sendInviteEmail && data.email
+        ? await sendInviteEmailWithStatus(data.email, getUserFullName(user), token)
+        : { status: "not_requested" };
 
     revalidatePath(USERS_PATH);
 
@@ -173,16 +175,16 @@ export async function createUserAction(input: CreateUserInput) {
   }
 }
 
-type InviteEmailDelivery =
-  | { status: "not_requested" }
-  | { status: "sent"; recipient: string }
-  | { status: "failed"; recipient: string; error: string };
-
 type GenerateParentInviteInput = {
   studentId: string;
-  email?: string;
-  sendInviteEmail?: boolean;
+  email: string;
+  sendInviteEmail: boolean;
 };
+
+type InviteEmailDelivery =
+    | { status: "not_requested" }
+    | { status: "sent"; recipient: string }
+    | { status: "failed"; recipient: string; error: string };
 
 export async function generateParentInviteAction(
   input: GenerateParentInviteInput
@@ -204,24 +206,10 @@ export async function generateParentInviteAction(
       return err(result.error);
     }
 
-    let emailDelivery: InviteEmailDelivery = { status: "not_requested" };
-
-    if (data.sendInviteEmail && parentEmail) {
-      try {
-        await sendInviteEmail({
-          to: parentEmail,
-          inviteUrl: buildServerInviteUrl(result.result!.token),
-          userFullName: "родитель",
-        });
-        emailDelivery = { status: "sent", recipient: parentEmail };
-      } catch (error) {
-        emailDelivery = {
-          status: "failed",
-          recipient: parentEmail,
-          error: getInviteEmailErrorMessage(error),
-        };
-      }
-    }
+    const emailDelivery: InviteEmailDelivery =
+      data.sendInviteEmail && parentEmail
+        ? await sendInviteEmailWithStatus(parentEmail, "родитель", result.result!.token)
+        : { status: "not_requested" };
 
     revalidatePath(USERS_PATH);
 

@@ -1,16 +1,27 @@
 import { z } from "zod";
 
+const inviteEmailSchema = z
+  .email("Некорректный email")
+  .refine((email) => !email.toLowerCase().endsWith("@classflow.local"), {
+    message: "Нельзя использовать служебный домен @classflow.local",
+  });
+
+const parentInviteFieldsSchema = z.object({
+  email: inviteEmailSchema.or(z.literal("")),
+  sendInviteEmail: z.boolean(),
+});
+
 export const createUserSchema = z
   .object({
     surname: z.string().trim().min(1, "Фамилия обязательна"),
     name: z.string().trim().min(1, "Имя обязательно"),
     patronymicName: z.string().trim(),
-    email: z.email("Некорректный email").or(z.literal("")),
+    email: inviteEmailSchema.or(z.literal("")),
     domainRole: z.enum(["student", "teacher", "admin"]),
     sendInviteEmail: z.boolean(),
   })
   .refine((data) => !data.sendInviteEmail || data.email.trim().length > 0, {
-    path: ["sendInviteEmail"],
+    path: ["email"],
     message: "Укажите email для отправки инвайта",
   });
 
@@ -35,13 +46,19 @@ export const deleteUserSchema = z.object({
   confirmName: z.string().trim().min(1, "Введите имя для подтверждения"),
 });
 
-export const generateParentInviteSchema = z
-  .object({
+export const parentInviteFormSchema = parentInviteFieldsSchema.refine(
+  (data) => !data.sendInviteEmail || data.email.trim().length > 0,
+  {
+    path: ["email"],
+    message: "Укажите email для отправки инвайта",
+  }
+);
+
+export const generateParentInviteSchema = parentInviteFieldsSchema
+  .extend({
     studentId: z.string(),
-    email: z.email("Некорректный email").or(z.literal("")).optional(),
-    sendInviteEmail: z.boolean().optional(),
   })
-  .refine((data) => !data.sendInviteEmail || Boolean(data.email?.trim()), {
+  .refine((data) => !data.sendInviteEmail || data.email.trim().length > 0, {
     path: ["email"],
     message: "Укажите email для отправки инвайта",
   });

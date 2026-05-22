@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useForm } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { Copy, Search, Link2, Mail } from "lucide-react";
-import { z } from "zod";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,7 @@ import {
   linkExistingParentAction,
   searchParentsAction,
 } from "../_actions/user-actions";
+import { parentInviteFormSchema } from "../_lib/schemas";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -40,6 +41,23 @@ const TAB_OPTIONS = [
   { value: "existing", label: "Существующий родитель" }
 ] as const;
 
+function getFormErrorMessage(error: unknown) {
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  return "Некорректный email";
+}
+
 export function ParentInviteDialog({
   open,
   onOpenChange,
@@ -48,19 +66,15 @@ export function ParentInviteDialog({
 }: ParentInviteDialogProps) {
   const [activeTab, setActiveTab] = useState<"new" | "existing">("new");
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
-  const [parentEmail, setParentEmail] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ParentSearchResult[]>([]);
 
-  const trimmedParentEmail = parentEmail.trim();
-  const isParentEmailValid = z.email().safeParse(trimmedParentEmail).success;
-
   const generateMutation = useMutation({
-    mutationFn: async (options?: { sendInviteEmail?: boolean }) => {
+    mutationFn: async (value: { email: string; sendInviteEmail: boolean }) => {
       const result = await generateParentInviteAction({
         studentId,
-        email: options?.sendInviteEmail ? trimmedParentEmail : "",
-        sendInviteEmail: options?.sendInviteEmail ?? false,
+        email: value.sendInviteEmail ? value.email.trim() : "",
+        sendInviteEmail: value.sendInviteEmail,
       });
       if (result.error) {
         throw new Error(result.error);
@@ -78,8 +92,18 @@ export function ParentInviteDialog({
     onError: (error) => toast.error(error.message || "Ошибка при генерации инвайта"),
   });
 
-  const canSendEmailInvite =
-    trimmedParentEmail.length > 0 && isParentEmailValid && !generateMutation.isPending;
+  const form = useForm({
+    defaultValues: {
+      email: "",
+      sendInviteEmail: false,
+    },
+    validators: {
+      onChange: parentInviteFormSchema,
+    },
+    onSubmit: async ({ value }) => {
+      await generateMutation.mutateAsync(value);
+    },
+  });
 
   const linkMutation = useMutation({
     mutationFn: async (parentId: string) => {
@@ -134,7 +158,7 @@ export function ParentInviteDialog({
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setGeneratedCode(null);
-      setParentEmail("");
+      form.reset();
       setSearchQuery("");
       setSearchResults([]);
       parentSearch.cancel();
@@ -175,45 +199,92 @@ export function ParentInviteDialog({
                 </Button>
               </div>
             ) : (
-              <div className="space-y-3">
+              <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  form.setFieldValue("sendInviteEmail", true);
+                  void form.handleSubmit();
+                }}
+              >
                 <p className="text-sm text-muted-foreground">
-                  Будет сгенерирован уникальный код для активации. Передайте его родителю через мессенджер — он сам заполнит свои данные при первом входе.
+                  Будет сгенерирован уникальный код для активации. Передайте его родителю через мессенджер - он сам заполнит свои данные при первом входе.
                 </p>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium" htmlFor="parent-invite-email">
-                    Email родителя
-                  </label>
-                  <Input
-                    id="parent-invite-email"
-                    value={parentEmail}
-                    onChange={(event) => setParentEmail(event.target.value)}
-                    placeholder="parent@example.com"
-                    type="email"
-                    disabled={generateMutation.isPending}
-                  />
-                  {trimmedParentEmail && !isParentEmailValid ? (
-                    <p className="text-xs text-destructive">Введите корректный email</p>
-                  ) : null}
-                </div>
-                <Button
-                  onClick={() => void generateMutation.mutateAsync({ sendInviteEmail: true })}
-                  disabled={!canSendEmailInvite}
-                  className="w-full"
-                  size="lg"
-                  variant="outline"
+                <form.Field name="email">
+                  {(field) => (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium" htmlFor="parent-invite-email">
+                        Email родителя
+                      </label>
+                      <Input
+                        id="parent-invite-email"
+                        name={field.name}
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                        placeholder="parent@example.com"
+                        type="email"
+                        disabled={generateMutation.isPending}
+                      />
+                      {field.state.meta.errors.length ? (
+                        <p className="text-xs text-destructive">
+                          {getFormErrorMessage(field.state.meta.errors[0])}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </form.Field>
+                <form.Subscribe
+                  selector={(state) => ({
+                    email: state.values.email,
+                    canSubmit: state.canSubmit,
+                    isSubmitting: state.isSubmitting,
+                    isValid: state.isValid,
+                  })}
                 >
-                  <Mail className="mr-2 h-4 w-4" />
-                  Отправить приглашение на почту
-                </Button>
-                <Button
-                  onClick={() => void generateMutation.mutateAsync({})}
-                  disabled={generateMutation.isPending}
-                  className="w-full"
-                  size="lg"
-                >
-                  {generateMutation.isPending ? "Генерация..." : "Или сгенерировать код для ручной отправки"}
-                </Button>
-              </div>
+                  {({ email, canSubmit, isSubmitting, isValid }) => (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        form.setFieldValue("sendInviteEmail", true);
+                        void form.handleSubmit();
+                      }}
+                      disabled={
+                        !email.trim() ||
+                        !canSubmit ||
+                        !isValid ||
+                        isSubmitting ||
+                        generateMutation.isPending
+                      }
+                      className="w-full"
+                      size="lg"
+                      variant="outline"
+                    >
+                      <Mail className="mr-2 h-4 w-4" />
+                      Отправить приглашение на почту
+                    </Button>
+                  )}
+                </form.Subscribe>
+                <form.Subscribe selector={(state) => state.isSubmitting}>
+                  {(isSubmitting) => (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        form.setFieldValue("sendInviteEmail", false);
+                        void form.handleSubmit();
+                      }}
+                      disabled={isSubmitting || generateMutation.isPending}
+                      className="w-full"
+                      size="lg"
+                    >
+                      {isSubmitting || generateMutation.isPending
+                        ? "Генерация..."
+                        : "Или сгенерировать код для ручной отправки"}
+                    </Button>
+                  )}
+                </form.Subscribe>
+              </form>
             )}
           </div>
         ) : (
