@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Copy, Search, Link2 } from "lucide-react";
 import {
   Dialog,
@@ -46,26 +47,36 @@ export function ParentInviteDialog({
 }: ParentInviteDialogProps) {
   const [activeTab, setActiveTab] = useState<"new" | "existing">("new");
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ParentSearchResult[]>([]);
-  const [isLinking, setIsLinking] = useState(false);
 
-  const handleGenerate = async () => {
-    setIsGenerating(true);
-    try {
+  const generateMutation = useMutation({
+    mutationFn: async () => {
       const result = await generateParentInviteAction(studentId);
       if (result.error) {
-        toast.error(result.error);
-      } else {
-        setGeneratedCode(result.result!.token);
+        throw new Error(result.error);
       }
-    } catch {
-      toast.error("Ошибка при генерации инвайта");
-    } finally {
-      setIsGenerating(false);
-    }
-  };
+      return result.result;
+    },
+    onSuccess: (result) => setGeneratedCode(result!.token),
+    onError: (error) => toast.error(error.message || "Ошибка при генерации инвайта"),
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: async (parentId: string) => {
+      const result = await linkExistingParentAction(studentId, parentId);
+      if ("error" in result) {
+        throw new Error(result.error);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Родитель привязан к ученику");
+      onOpenChange(false);
+    },
+    onError: (error) => {
+      toast.error(error.message || "Ошибка при привязке");
+    },
+  });
 
   const handleCopyCode = async () => {
     if (!generatedCode) return;
@@ -100,23 +111,6 @@ export function ParentInviteDialog({
     },
     [parentSearch]
   );
-
-  const handleLink = async (parentId: string) => {
-    setIsLinking(true);
-    try {
-      const result = await linkExistingParentAction(studentId, parentId);
-      if ("error" in result) {
-        toast.error(result.error);
-      } else {
-        toast.success("Родитель привязан к ученику");
-        onOpenChange(false);
-      }
-    } catch {
-      toast.error("Ошибка при привязке");
-    } finally {
-      setIsLinking(false);
-    }
-  };
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
@@ -166,12 +160,12 @@ export function ParentInviteDialog({
                   Будет сгенерирован уникальный код для активации. Передайте его родителю через мессенджер — он сам заполнит свои данные при первом входе.
                 </p>
                 <Button
-                  onClick={handleGenerate}
-                  disabled={isGenerating}
+                  onClick={() => void generateMutation.mutateAsync()}
+                  disabled={generateMutation.isPending}
                   className="w-full"
                   size="lg"
                 >
-                  {isGenerating ? "Генерация..." : "Сгенерировать код"}
+                  {generateMutation.isPending ? "Генерация..." : "Сгенерировать код"}
                 </Button>
               </div>
             )}
@@ -187,12 +181,20 @@ export function ParentInviteDialog({
                 className="pl-9"
               />
             </div>
-            <div className="max-h-48 space-y-1 overflow-y-auto">
-              {parentSearch.isRunning && (
-                <>
-                  <Spinner/>
-                  <p className="py-4 text-center text-sm text-muted-foreground">Поиск...</p>
-                </>
+            <div className="h-48 space-y-1 overflow-y-auto">
+              {(!searchQuery || parentSearch.isRunning) && (
+                <div className="h-full w-full flex items-center justify-center gap-4">
+                  {parentSearch.isRunning ? (
+                    <>
+                      <Spinner/>
+                      <p className="text-sm text-muted-foreground">Поиск...</p>
+                    </>
+                  ) : (
+                    <>
+                      Начните искать родителей в поле выше...
+                    </>
+                  )}
+                </div>
               )}
               {!parentSearch.isRunning && searchQuery.length >= 2 && searchResults.length === 0 && (
                 <FilterableEmptyState
@@ -200,11 +202,10 @@ export function ParentInviteDialog({
                   empty={{
                     title: "Родители пока не найдены",
                     description: "Начните вводить ФИО родителя.",
-                    className: "py-4",
                   }}
                 />
               )}
-              {searchResults.map((parent) => {
+              {searchResults && searchResults.map((parent) => {
                 const fullName = getUserFullName(parent.user);
                 const childrenNames = parent.studentParents
                   .map((sp) => getUserFullName(sp.student.user))
@@ -226,11 +227,11 @@ export function ParentInviteDialog({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleLink(parent.id)}
-                      disabled={isLinking}
+                      onClick={() => void linkMutation.mutateAsync(parent.id)}
+                      disabled={linkMutation.isPending}
                     >
                       <Link2 className="mr-1 h-3 w-3" />
-                      Связать
+                      {linkMutation.isPending ? "Связывание..." : "Связать"}
                     </Button>
                   </div>
                 );
