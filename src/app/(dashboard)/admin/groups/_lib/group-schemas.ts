@@ -15,38 +15,63 @@ export const groupNameSchema = z
 
 export const groupGradeSchema = z.number().int().min(1).max(11).nullable().optional();
 export const groupLinkedClassIdsSchema = z.array(z.string().min(1)).optional();
+const requiredLinkedClassIdsSchema = z
+  .array(z.string().min(1))
+  .min(1, "Выберите хотя бы один класс");
 
-export const createGroupSchema = z.object({
+const createGroupBaseSchema = z.object({
   name: groupNameSchema,
-  type: groupTypeSchema,
   grade: groupGradeSchema,
-  linkedClassIds: groupLinkedClassIdsSchema,
   parentId: z.string().min(1).nullable().optional(),
   subjectId: z.string().min(1).nullable().optional(),
-}).superRefine((value, ctx) => {
-  if (value.type === "ELECTIVE_GROUP" && (!value.linkedClassIds || value.linkedClassIds.length === 0)) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["linkedClassIds"],
-      message: "Выберите хотя бы один класс",
-    });
-  }
 });
 
-export const updateGroupSchema = z.object({
+const updateGroupBaseSchema = z.object({
   name: groupNameSchema.optional(),
-  type: groupTypeSchema.optional(),
   grade: groupGradeSchema,
-  linkedClassIds: groupLinkedClassIdsSchema,
-}).superRefine((value, ctx) => {
-  if (value.type === "ELECTIVE_GROUP" && value.linkedClassIds && value.linkedClassIds.length === 0) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["linkedClassIds"],
-      message: "Выберите хотя бы один класс",
-    });
-  }
 });
+
+export const createGroupSchema = z.discriminatedUnion("type", [
+  createGroupBaseSchema.extend({
+    type: z.literal("CLASS"),
+    linkedClassIds: groupLinkedClassIdsSchema,
+  }),
+  createGroupBaseSchema.extend({
+    type: z.literal("KINDERGARTEN_GROUP"),
+    linkedClassIds: groupLinkedClassIdsSchema,
+  }),
+  createGroupBaseSchema.extend({
+    type: z.literal("SUBJECT_SUBGROUP"),
+    linkedClassIds: groupLinkedClassIdsSchema,
+  }),
+  createGroupBaseSchema.extend({
+    type: z.literal("ELECTIVE_GROUP"),
+    linkedClassIds: requiredLinkedClassIdsSchema,
+  }),
+]);
+
+export const updateGroupSchema = z.union([
+  updateGroupBaseSchema.extend({
+    type: z.literal("CLASS"),
+    linkedClassIds: groupLinkedClassIdsSchema,
+  }),
+  updateGroupBaseSchema.extend({
+    type: z.literal("KINDERGARTEN_GROUP"),
+    linkedClassIds: groupLinkedClassIdsSchema,
+  }),
+  updateGroupBaseSchema.extend({
+    type: z.literal("SUBJECT_SUBGROUP"),
+    linkedClassIds: groupLinkedClassIdsSchema,
+  }),
+  updateGroupBaseSchema.extend({
+    type: z.literal("ELECTIVE_GROUP"),
+    linkedClassIds: requiredLinkedClassIdsSchema,
+  }),
+  updateGroupBaseSchema.extend({
+    type: z.undefined().optional(),
+    linkedClassIds: groupLinkedClassIdsSchema,
+  }),
+]);
 
 export const idSchema = z.string().min(1, "ID обязателен");
 
@@ -74,6 +99,10 @@ export const redistributeSchema = z.object({
 
 export type GroupTypeInput = z.infer<typeof groupTypeSchema>;
 export type CreateGroupInput = z.infer<typeof createGroupSchema>;
+export type InlineCreateGroupInput = Extract<
+  CreateGroupInput,
+  { type: "CLASS" | "ELECTIVE_GROUP" }
+>;
 export type UpdateGroupInput = z.infer<typeof updateGroupSchema>;
 export type IdInput = z.infer<typeof idSchema>;
 export type AssignStudentsInput = z.infer<typeof assignStudentsSchema>;
@@ -86,6 +115,23 @@ export const groupGradeInputSchema = z.string().refine(
     (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 11),
   "1-11"
 );
+
+const groupInlineCreateBaseSchema = z.object({
+  name: groupNameSchema,
+  grade: z.string(),
+  linkedClassIds: z.array(z.string().min(1)),
+});
+
+export const inlineCreateGroupFormSchema = z.discriminatedUnion("type", [
+  groupInlineCreateBaseSchema.extend({
+    type: z.literal("CLASS"),
+    grade: groupGradeInputSchema,
+  }),
+  groupInlineCreateBaseSchema.extend({
+    type: z.literal("ELECTIVE_GROUP"),
+    linkedClassIds: requiredLinkedClassIdsSchema,
+  }),
+]);
 
 export function parseGroupGradeInput(value: string): number | null {
   if (value === "") {

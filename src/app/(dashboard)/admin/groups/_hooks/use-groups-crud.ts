@@ -4,6 +4,7 @@ import { startTransition, useCallback, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
 import type { GroupType } from "@/generated/prisma/client";
 import type { GroupWithDetails } from "../_lib/types";
+import type { InlineCreateGroupInput } from "../_lib/group-schemas";
 import {
   assignStudentsToGroupAction,
   createGroupAction,
@@ -118,12 +119,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
   );
 
   const handleCreateGroup = useCallback(
-    async (data: {
-      name: string;
-      type: GroupType;
-      grade?: number | null;
-      linkedClassIds?: string[];
-    }) => {
+    async (data: InlineCreateGroupInput) => {
       const classMap = new Map(
         groups
           .filter((group) => group.type === "CLASS" && group.parentId === null)

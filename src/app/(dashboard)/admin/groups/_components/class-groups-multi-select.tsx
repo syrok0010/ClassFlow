@@ -43,20 +43,20 @@ export function ClassGroupsMultiSelect({
 }: ClassGroupsMultiSelectProps) {
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
-  const sortedOptions = useMemo(() => {
-    const selected: ClassGroupOption[] = [];
-    const unselected: ClassGroupOption[] = [];
+  const sortedOptions = useMemo(
+    () =>
+      [...options].sort((left, right) => {
+        const selectedDelta =
+          Number(selectedSet.has(right.id)) - Number(selectedSet.has(left.id));
 
-    for (const option of options) {
-      if (selectedSet.has(option.id)) {
-        selected.push(option);
-      } else {
-        unselected.push(option);
-      }
-    }
+        if (selectedDelta !== 0) {
+          return selectedDelta;
+        }
 
-    return [...selected, ...unselected];
-  }, [options, selectedSet]);
+        return left.label.localeCompare(right.label, "ru");
+      }),
+    [options, selectedSet]
+  );
 
   const selectedOptions = useMemo(
     () => options.filter((option) => selectedSet.has(option.id)),

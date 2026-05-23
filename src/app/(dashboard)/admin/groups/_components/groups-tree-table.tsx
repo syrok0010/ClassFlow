@@ -6,7 +6,6 @@ import {
   useCallback,
   type FocusEvent,
 } from "react";
-import type { GroupType } from "@/generated/prisma/client";
 import type { GroupWithDetails } from "../_lib/types";
 import {
   useReactTable,
@@ -15,7 +14,7 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
-import { groupNameSchema } from "../_lib/group-schemas";
+import { groupNameSchema, type InlineCreateGroupInput } from "../_lib/group-schemas";
 import { InlineCreateRow } from "./inline-create-row";
 import {
   Table,
@@ -71,12 +70,7 @@ interface GroupsTreeTableProps {
   onResetFilters: () => void;
   onStartAddRow: () => void;
   onCancelAddRow: () => void;
-  onCreateGroup: (data: {
-    name: string;
-    type: GroupType;
-    grade?: number | null;
-    linkedClassIds?: string[];
-  }) => Promise<boolean>;
+  onCreateGroup: (data: InlineCreateGroupInput) => Promise<boolean>;
   onRenameGroup: (id: string, name: string) => Promise<void>;
   onUpdateLinkedClasses: (id: string, linkedClassIds: string[]) => Promise<void>;
   onDeleteGroup: (group: GroupWithDetails) => Promise<void>;

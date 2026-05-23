@@ -1,6 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { useForm } from "@tanstack/react-form";
-import type { GroupType } from "@/generated/prisma/client";
 import {
   InlineCreateRowFrame,
   InlineCreateRowFrameActions,
@@ -16,11 +15,12 @@ import {
 import { TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
-  groupGradeInputSchema,
-  groupNameSchema,
+  inlineCreateGroupFormSchema,
+  type InlineCreateGroupInput,
   parseGroupGradeInput,
 } from "../_lib/group-schemas";
 import { flushSync } from "react-dom";
+import { getFieldErrorMessages } from "@/lib/form-errors";
 import {
   ClassGroupsMultiSelect,
   type ClassGroupOption,
@@ -37,12 +37,7 @@ const INLINE_CREATE_TYPE_ITEMS: Record<string, string> = Object.fromEntries(
 
 interface InlineCreateRowProps {
   classOptions: ClassGroupOption[];
-  onSave: (data: {
-    name: string;
-    type: GroupType;
-    grade?: number | null;
-    linkedClassIds?: string[];
-  }) => Promise<boolean>;
+  onSave: (data: InlineCreateGroupInput) => Promise<boolean>;
   onCancel: () => void;
 }
 
@@ -52,21 +47,39 @@ export function InlineCreateRow({
   onCancel,
 }: InlineCreateRowProps) {
   const nameRef = useRef<HTMLInputElement>(null);
+  const defaultValues: {
+    name: string;
+    type: InlineCreateGroupInput["type"];
+    grade: string;
+    linkedClassIds: string[];
+  } = {
+    name: "",
+    type: "CLASS",
+    grade: "",
+    linkedClassIds: [],
+  };
 
   const form = useForm({
-    defaultValues: {
-      name: "",
-      type: "CLASS" as GroupType,
-      grade: "" as string,
-      linkedClassIds: [] as string[],
+    defaultValues,
+    validators: {
+      onChange: inlineCreateGroupFormSchema,
     },
     onSubmit: async ({ value }) => {
-      const success = await onSave({
-        name: value.name,
-        type: value.type,
-        grade: parseGroupGradeInput(value.grade),
-        linkedClassIds: value.type === "ELECTIVE_GROUP" ? value.linkedClassIds : undefined,
-      });
+      const payload: InlineCreateGroupInput =
+        value.type === "ELECTIVE_GROUP"
+          ? {
+              name: value.name,
+              type: value.type,
+              grade: parseGroupGradeInput(value.grade),
+              linkedClassIds: value.linkedClassIds,
+            }
+          : {
+              name: value.name,
+              type: value.type,
+              grade: parseGroupGradeInput(value.grade),
+            };
+
+      const success = await onSave(payload);
       if (success) {
         flushSync(() => form.reset());
       }
@@ -77,7 +90,7 @@ export function InlineCreateRow({
     nameRef.current?.focus();
   }, []);
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const handleTextFieldKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
       form.handleSubmit();
@@ -92,12 +105,7 @@ export function InlineCreateRow({
     <InlineCreateRowFrame>
       <TableCell />
       <TableCell>
-        <form.Field
-          name="name"
-          validators={{
-            onBlur: groupNameSchema,
-          }}
-        >
+        <form.Field name="name">
           {(field) => (
             <div>
               <Input
@@ -106,7 +114,7 @@ export function InlineCreateRow({
                 value={field.state.value}
                 onChange={(event) => field.handleChange(event.target.value)}
                 onBlur={field.handleBlur}
-                onKeyDown={handleKeyDown}
+                onKeyDown={handleTextFieldKeyDown}
                 className={cn(
                   "h-7",
                   field.state.meta.errors.length > 0 && "border-destructive"
@@ -114,9 +122,7 @@ export function InlineCreateRow({
               />
               {field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
                 <p className="text-xs text-destructive mt-1">
-                  {field.state.meta.errors
-                    .flatMap((error) => (error ? [error.message] : []))
-                    .join(", ")}
+                  {getFieldErrorMessages(field).join(", ")}
                 </p>
               )}
             </div>
@@ -129,7 +135,17 @@ export function InlineCreateRow({
           {(field) => (
             <Select
               value={field.state.value}
-              onValueChange={(value) => field.handleChange(value as GroupType)}
+              onValueChange={(value) => {
+                const nextType = value as "CLASS" | "ELECTIVE_GROUP";
+                field.handleChange(nextType);
+
+                if (nextType === "CLASS") {
+                  form.setFieldValue("linkedClassIds", []);
+                  return;
+                }
+
+                form.setFieldValue("grade", "");
+              }}
               items={INLINE_CREATE_TYPE_ITEMS}
             >
               <SelectTrigger size="sm">
@@ -148,43 +164,32 @@ export function InlineCreateRow({
       </TableCell>
 
       <TableCell>
-        <form.Field
-          name="type"
-        >
-          {(typeField) =>
-            typeField.state.value === "ELECTIVE_GROUP" ? (
+        <form.Subscribe selector={(state) => state.values.type}>
+          {(type) =>
+            type === "ELECTIVE_GROUP" ? (
               <form.Field name="linkedClassIds">
-                {(field) => {
-                  const showError = field.state.meta.isTouched && field.state.value.length === 0;
-
-                  return (
-                    <div>
-                      <ClassGroupsMultiSelect
-                        options={classOptions}
-                        selectedIds={field.state.value}
-                        onChange={(next) => field.handleChange(next)}
-                        placeholder={
-                          classOptions.length > 0 ? "Классы для кружка" : "Сначала создайте классы"
-                        }
-                        invalid={showError}
-                        disabled={classOptions.length === 0}
-                      />
-                      {showError && (
-                        <p className="mt-1 text-xs text-destructive">
-                          Выберите хотя бы один класс
-                        </p>
-                      )}
-                    </div>
-                  );
-                }}
+                {(field) => (
+                  <div>
+                    <ClassGroupsMultiSelect
+                      options={classOptions}
+                      selectedIds={field.state.value}
+                      onChange={(next) => field.handleChange(next)}
+                      placeholder={
+                        classOptions.length > 0 ? "Классы для кружка" : "Сначала создайте классы"
+                      }
+                      invalid={field.state.meta.errors.length > 0}
+                      disabled={classOptions.length === 0}
+                    />
+                    {field.state.meta.isTouched && field.state.meta.errors.length > 0 ? (
+                      <p className="mt-1 text-xs text-destructive">
+                        {getFieldErrorMessages(field).join(", ")}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </form.Field>
             ) : (
-              <form.Field
-                name="grade"
-                validators={{
-                  onBlur: groupGradeInputSchema,
-                }}
-              >
+              <form.Field name="grade">
                 {(field) => (
                   <div>
                     <Input
@@ -193,48 +198,34 @@ export function InlineCreateRow({
                       value={field.state.value}
                       onChange={(event) => field.handleChange(event.target.value)}
                       onBlur={field.handleBlur}
-                      onKeyDown={handleKeyDown}
+                      onKeyDown={handleTextFieldKeyDown}
                       className={cn(
                         "h-7",
                         field.state.meta.errors.length > 0 && "border-destructive"
                       )}
                     />
-                    {field.state.meta.isTouched &&
-                      field.state.meta.errors.length > 0 && (
-                        <p className="mt-1 text-xs text-destructive">
-                          {field.state.meta.errors
-                            .flatMap((error) => (error ? [error.message] : []))
-                            .join(", ")}
-                        </p>
-                      )}
+                    {field.state.meta.isTouched && field.state.meta.errors.length > 0 ? (
+                      <p className="mt-1 text-xs text-destructive">
+                        {getFieldErrorMessages(field).join(", ")}
+                      </p>
+                    ) : null}
                   </div>
                 )}
               </form.Field>
             )
           }
-        </form.Field>
+        </form.Subscribe>
       </TableCell>
       <TableCell/>
       <TableCell>
         <form.Subscribe
-          selector={(state) =>
-            [
-              state.isSubmitting,
-              state.values.name,
-              state.values.type,
-              state.values.linkedClassIds,
-            ] as const
-          }
+          selector={(state) => [state.canSubmit, state.isSubmitting] as const}
         >
-          {([isSubmitting, name, type, linkedClassIds]) => (
+          {([canSubmit, isSubmitting]) => (
             <InlineCreateRowFrameActions
               onSave={() => form.handleSubmit()}
               onCancel={onCancel}
-              isSaveDisabled={
-                !name.trim() ||
-                isSubmitting ||
-                (type === "ELECTIVE_GROUP" && linkedClassIds.length === 0)
-              }
+              isSaveDisabled={isSubmitting || !canSubmit}
             />
           )}
         </form.Subscribe>
