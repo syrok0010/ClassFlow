@@ -14,19 +14,38 @@ export const groupNameSchema = z
   .max(512, "Максимум 512 символов");
 
 export const groupGradeSchema = z.number().int().min(1).max(11).nullable().optional();
+export const groupLinkedClassIdsSchema = z.array(z.string().min(1)).optional();
 
 export const createGroupSchema = z.object({
   name: groupNameSchema,
   type: groupTypeSchema,
   grade: groupGradeSchema,
+  linkedClassIds: groupLinkedClassIdsSchema,
   parentId: z.string().min(1).nullable().optional(),
   subjectId: z.string().min(1).nullable().optional(),
+}).superRefine((value, ctx) => {
+  if (value.type === "ELECTIVE_GROUP" && (!value.linkedClassIds || value.linkedClassIds.length === 0)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["linkedClassIds"],
+      message: "Выберите хотя бы один класс",
+    });
+  }
 });
 
 export const updateGroupSchema = z.object({
   name: groupNameSchema.optional(),
   type: groupTypeSchema.optional(),
   grade: groupGradeSchema,
+  linkedClassIds: groupLinkedClassIdsSchema,
+}).superRefine((value, ctx) => {
+  if (value.type === "ELECTIVE_GROUP" && value.linkedClassIds && value.linkedClassIds.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["linkedClassIds"],
+      message: "Выберите хотя бы один класс",
+    });
+  }
 });
 
 export const idSchema = z.string().min(1, "ID обязателен");

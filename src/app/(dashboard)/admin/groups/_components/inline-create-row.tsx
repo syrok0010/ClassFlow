@@ -20,7 +20,11 @@ import {
   groupNameSchema,
   parseGroupGradeInput,
 } from "../_lib/group-schemas";
-import {flushSync} from "react-dom";
+import { flushSync } from "react-dom";
+import {
+  ClassGroupsMultiSelect,
+  type ClassGroupOption,
+} from "./class-groups-multi-select";
 
 const INLINE_CREATE_TYPE_OPTIONS = [
   { value: "CLASS", label: "Класс" },
@@ -32,15 +36,21 @@ const INLINE_CREATE_TYPE_ITEMS: Record<string, string> = Object.fromEntries(
 );
 
 interface InlineCreateRowProps {
+  classOptions: ClassGroupOption[];
   onSave: (data: {
     name: string;
     type: GroupType;
     grade?: number | null;
+    linkedClassIds?: string[];
   }) => Promise<boolean>;
   onCancel: () => void;
 }
 
-export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
+export function InlineCreateRow({
+  classOptions,
+  onSave,
+  onCancel,
+}: InlineCreateRowProps) {
   const nameRef = useRef<HTMLInputElement>(null);
 
   const form = useForm({
@@ -48,12 +58,14 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
       name: "",
       type: "CLASS" as GroupType,
       grade: "" as string,
+      linkedClassIds: [] as string[],
     },
     onSubmit: async ({ value }) => {
       const success = await onSave({
         name: value.name,
         type: value.type,
         grade: parseGroupGradeInput(value.grade),
+        linkedClassIds: value.type === "ELECTIVE_GROUP" ? value.linkedClassIds : undefined,
       });
       if (success) {
         flushSync(() => form.reset());
@@ -137,44 +149,92 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
 
       <TableCell>
         <form.Field
-          name="grade"
-          validators={{
-            onBlur: groupGradeInputSchema,
-          }}
+          name="type"
         >
-          {(field) => (
-            <div>
-              <Input
-                placeholder="Параллель"
-                type="number"
-                value={field.state.value}
-                onChange={(event) => field.handleChange(event.target.value)}
-                onBlur={field.handleBlur}
-                onKeyDown={handleKeyDown}
-                className={cn(
-                  "h-7",
-                  field.state.meta.errors.length > 0 && "border-destructive"
+          {(typeField) =>
+            typeField.state.value === "ELECTIVE_GROUP" ? (
+              <form.Field name="linkedClassIds">
+                {(field) => {
+                  const showError = field.state.meta.isTouched && field.state.value.length === 0;
+
+                  return (
+                    <div>
+                      <ClassGroupsMultiSelect
+                        options={classOptions}
+                        selectedIds={field.state.value}
+                        onChange={(next) => field.handleChange(next)}
+                        placeholder={
+                          classOptions.length > 0 ? "Классы для кружка" : "Сначала создайте классы"
+                        }
+                        invalid={showError}
+                        disabled={classOptions.length === 0}
+                      />
+                      {showError && (
+                        <p className="mt-1 text-xs text-destructive">
+                          Выберите хотя бы один класс
+                        </p>
+                      )}
+                    </div>
+                  );
+                }}
+              </form.Field>
+            ) : (
+              <form.Field
+                name="grade"
+                validators={{
+                  onBlur: groupGradeInputSchema,
+                }}
+              >
+                {(field) => (
+                  <div>
+                    <Input
+                      placeholder="Параллель"
+                      type="number"
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
+                      onKeyDown={handleKeyDown}
+                      className={cn(
+                        "h-7",
+                        field.state.meta.errors.length > 0 && "border-destructive"
+                      )}
+                    />
+                    {field.state.meta.isTouched &&
+                      field.state.meta.errors.length > 0 && (
+                        <p className="mt-1 text-xs text-destructive">
+                          {field.state.meta.errors
+                            .flatMap((error) => (error ? [error.message] : []))
+                            .join(", ")}
+                        </p>
+                      )}
+                  </div>
                 )}
-              />
-              {field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
-                <p className="text-xs text-destructive mt-1">
-                  {field.state.meta.errors
-                    .flatMap((error) => (error ? [error.message] : []))
-                    .join(", ")}
-                </p>
-              )}
-            </div>
-          )}
+              </form.Field>
+            )
+          }
         </form.Field>
       </TableCell>
       <TableCell/>
       <TableCell>
-        <form.Subscribe selector={(state) => [state.isSubmitting, state.values.name] as const}>
-          {([isSubmitting, name]) => (
+        <form.Subscribe
+          selector={(state) =>
+            [
+              state.isSubmitting,
+              state.values.name,
+              state.values.type,
+              state.values.linkedClassIds,
+            ] as const
+          }
+        >
+          {([isSubmitting, name, type, linkedClassIds]) => (
             <InlineCreateRowFrameActions
               onSave={() => form.handleSubmit()}
               onCancel={onCancel}
-              isSaveDisabled={!name.trim() || isSubmitting}
+              isSaveDisabled={
+                !name.trim() ||
+                isSubmitting ||
+                (type === "ELECTIVE_GROUP" && linkedClassIds.length === 0)
+              }
             />
           )}
         </form.Subscribe>

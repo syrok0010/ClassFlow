@@ -29,6 +29,11 @@ type OptimisticAction =
       name: string;
     }
   | {
+      type: "updateLinkedClasses";
+      id: string;
+      linkedClasses: GroupWithDetails["linkedClasses"];
+    }
+  | {
       type: "remove";
       id: string;
     }
@@ -47,6 +52,18 @@ function applyRename(
     ...group,
     ...(group.id === id ? { name } : {}),
     subGroups: applyRename(group.subGroups, id, name),
+  }));
+}
+
+function applyLinkedClassesUpdate(
+  groups: GroupWithDetails[],
+  id: string,
+  linkedClasses: GroupWithDetails["linkedClasses"]
+): GroupWithDetails[] {
+  return groups.map((group) => ({
+    ...group,
+    ...(group.id === id ? { linkedClasses } : {}),
+    subGroups: applyLinkedClassesUpdate(group.subGroups, id, linkedClasses),
   }));
 }
 
@@ -88,6 +105,8 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
           return [action.group, ...state];
         case "rename":
           return applyRename(state, action.id, action.name);
+        case "updateLinkedClasses":
+          return applyLinkedClassesUpdate(state, action.id, action.linkedClasses);
         case "remove":
           return applyRemove(state, action.id);
         case "studentsDelta":
@@ -99,7 +118,21 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
   );
 
   const handleCreateGroup = useCallback(
-    async (data: { name: string; type: GroupType; grade?: number | null }) => {
+    async (data: {
+      name: string;
+      type: GroupType;
+      grade?: number | null;
+      linkedClassIds?: string[];
+    }) => {
+      const classMap = new Map(
+        groups
+          .filter((group) => group.type === "CLASS" && group.parentId === null)
+          .map((group) => [
+            group.id,
+            { id: group.id, name: group.name, grade: group.grade },
+          ])
+      );
+
       const optimisticGroup: GroupWithDetails = {
         id: `optimistic-${crypto.randomUUID()}`,
         name: data.name,
@@ -108,6 +141,9 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
         parentId: null,
         subjectId: null,
         subject: null,
+        linkedClasses: (data.linkedClassIds ?? [])
+          .map((id) => classMap.get(id))
+          .filter(Boolean) as GroupWithDetails["linkedClasses"],
         _count: { studentGroups: 0 },
         subGroups: [],
       };
@@ -127,7 +163,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
       toast.success(`Группа "${data.name}" создана`);
       return true;
     },
-    [dispatchOptimistic, router]
+    [dispatchOptimistic, groups, router]
   );
 
   const handleRenameGroup = useCallback(
@@ -150,6 +186,37 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
       toast.success("Группа переименована");
     },
     [dispatchOptimistic, router]
+  );
+
+  const handleUpdateLinkedClasses = useCallback(
+    async (id: string, linkedClassIds: string[]) => {
+      const nextLinkedClasses = groups
+        .filter((group) => linkedClassIds.includes(group.id) && group.type === "CLASS")
+        .map((group) => ({
+          id: group.id,
+          name: group.name,
+          grade: group.grade,
+        }));
+
+      startTransition(() => {
+        dispatchOptimistic({
+          type: "updateLinkedClasses",
+          id,
+          linkedClasses: nextLinkedClasses,
+        });
+      });
+
+      const response = await updateGroupAction(id, { linkedClassIds });
+      if (response.error) {
+        router.refresh();
+        toast.error(response.error);
+        return;
+      }
+
+      router.refresh();
+      toast.success("Список классов обновлен");
+    },
+    [dispatchOptimistic, groups, router]
   );
 
   const handleDeleteGroup = useCallback(
@@ -281,6 +348,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     groups,
     handleCreateGroup,
     handleRenameGroup,
+    handleUpdateLinkedClasses,
     handleDeleteGroup,
     handleTransferSave,
     loadStudentsForAssignment,

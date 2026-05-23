@@ -33,6 +33,79 @@ type GroupsTreeFilters = {
   type?: GroupType;
 };
 
+const groupTreeInclude = {
+  subject: { select: { id: true, name: true } },
+  _count: { select: { studentGroups: true } },
+  electiveClassLinks: {
+    select: {
+      classGroup: {
+        select: {
+          id: true,
+          name: true,
+          grade: true,
+        },
+      },
+    },
+  },
+} as const;
+
+function sortClassesByGradeAndName(
+  left: { grade: number | null; name: string },
+  right: { grade: number | null; name: string }
+) {
+  const gradeDelta =
+    (left.grade ?? Number.MAX_SAFE_INTEGER) - (right.grade ?? Number.MAX_SAFE_INTEGER);
+
+  if (gradeDelta !== 0) {
+    return gradeDelta;
+  }
+
+  return left.name.localeCompare(right.name, "ru");
+}
+
+function mapLinkedClasses(
+  links: Array<{
+    classGroup: {
+      id: string;
+      name: string;
+      grade: number | null;
+    };
+  }>
+) {
+  return links
+    .map((link) => ({
+      id: link.classGroup.id,
+      name: link.classGroup.name,
+      grade: link.classGroup.grade,
+    }))
+    .sort(sortClassesByGradeAndName);
+}
+
+async function validateLinkedClassIds(
+  linkedClassIds: string[] | undefined
+): Promise<Result<string[]>> {
+  const uniqueIds = [...new Set(linkedClassIds ?? [])];
+
+  if (uniqueIds.length === 0) {
+    return err("Выберите хотя бы один класс");
+  }
+
+  const classes = await prisma.group.findMany({
+    where: {
+      id: { in: uniqueIds },
+      type: "CLASS",
+      parentId: null,
+    },
+    select: { id: true },
+  });
+
+  if (classes.length !== uniqueIds.length) {
+    return err("Можно выбрать только существующие классы");
+  }
+
+  return ok(uniqueIds);
+}
+
 function filterGroupsTree(
   groups: GroupWithDetails[],
   filters: GroupsTreeFilters
@@ -44,9 +117,13 @@ function filterGroupsTree(
       .map(filterNodeBySearch)
       .filter((group): group is GroupWithDetails => group !== null);
 
+    const matchesLinkedClasses = node.linkedClasses.some((group) =>
+      group.name.toLowerCase().includes(search ?? "")
+    );
     const matchesSearch =
       !search ||
       node.name.toLowerCase().includes(search) ||
+      matchesLinkedClasses ||
       filteredSubGroups.length > 0;
 
     if (!matchesSearch) {
@@ -72,40 +149,38 @@ export async function getGroupsTree(
 
   try {
     const groups = await prisma.group.findMany({
-      include: {
-        subject: { select: { id: true, name: true } },
-        _count: { select: { studentGroups: true } },
-      },
+      include: groupTreeInclude,
       orderBy: [{ type: "asc" }, { grade: "asc" }, { name: "asc" }],
     });
 
-  type FlatGroup = (typeof groups)[number];
+    type FlatGroup = (typeof groups)[number];
 
-  const groupsByParentId = new Map<string | null, FlatGroup[]>();
+    const groupsByParentId = new Map<string | null, FlatGroup[]>();
 
-  for (const group of groups) {
-    const key = group.parentId;
-    const existing = groupsByParentId.get(key);
+    for (const group of groups) {
+      const key = group.parentId;
+      const existing = groupsByParentId.get(key);
 
-    if (existing) {
-      existing.push(group);
-      continue;
+      if (existing) {
+        existing.push(group);
+        continue;
+      }
+
+      groupsByParentId.set(key, [group]);
     }
 
-    groupsByParentId.set(key, [group]);
-  }
-
-  const buildTreeNode = (group: FlatGroup): GroupWithDetails => ({
-    id: group.id,
-    name: group.name,
-    type: group.type,
-    grade: group.grade,
-    parentId: group.parentId,
-    subjectId: group.subjectId,
-    subject: group.subject,
-    _count: { studentGroups: group._count.studentGroups },
-    subGroups: (groupsByParentId.get(group.id) ?? []).map(buildTreeNode),
-  });
+    const buildTreeNode = (group: FlatGroup): GroupWithDetails => ({
+      id: group.id,
+      name: group.name,
+      type: group.type,
+      grade: group.grade,
+      parentId: group.parentId,
+      subjectId: group.subjectId,
+      subject: group.subject,
+      linkedClasses: mapLinkedClasses(group.electiveClassLinks),
+      _count: { studentGroups: group._count.studentGroups },
+      subGroups: (groupsByParentId.get(group.id) ?? []).map(buildTreeNode),
+    });
 
     const rootGroups = (groupsByParentId.get(null) ?? []).map(buildTreeNode);
 
@@ -120,15 +195,39 @@ export async function createGroupAction(data: CreateGroupInput) {
 
   try {
     const validated = createGroupSchema.parse(data);
+    const linkedClassIds =
+      validated.type === "ELECTIVE_GROUP"
+        ? await validateLinkedClassIds(validated.linkedClassIds)
+        : ok<string[]>([]);
 
-    const group = await prisma.group.create({
-      data: {
-        name: validated.name,
-        type: validated.type,
-        grade: validated.grade ?? null,
-        parentId: validated.parentId ?? null,
-        subjectId: validated.subjectId ?? null,
-      },
+    if (linkedClassIds.error) {
+      return err(linkedClassIds.error);
+    }
+
+    const nextLinkedClassIds = linkedClassIds.result ?? [];
+
+    const group = await prisma.$transaction(async (tx) => {
+      const created = await tx.group.create({
+        data: {
+          name: validated.name,
+          type: validated.type,
+          grade: validated.grade ?? null,
+          parentId: validated.parentId ?? null,
+          subjectId: validated.subjectId ?? null,
+        },
+      });
+
+      if (nextLinkedClassIds.length > 0) {
+        await tx.electiveGroupClassLink.createMany({
+          data: nextLinkedClassIds.map((classGroupId) => ({
+            electiveGroupId: created.id,
+            classGroupId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return created;
     });
 
     revalidatePath("/admin/groups");
@@ -147,10 +246,55 @@ export async function updateGroupAction(
   try {
     idSchema.parse(id);
     const validated = updateGroupSchema.parse(data);
-
-    const group = await prisma.group.update({
+    const existingGroup = await prisma.group.findUnique({
       where: { id },
-      data: validated,
+      select: { id: true, type: true },
+    });
+
+    if (!existingGroup) {
+      return err("Группа не найдена");
+    }
+
+    const nextType = validated.type ?? existingGroup.type;
+    const linkedClassIds =
+      nextType === "ELECTIVE_GROUP" && validated.linkedClassIds
+        ? await validateLinkedClassIds(validated.linkedClassIds)
+        : ok<string[] | undefined>(validated.linkedClassIds);
+
+    if (linkedClassIds.error) {
+      return err(linkedClassIds.error);
+    }
+
+    const { linkedClassIds: _linkedClassIds, ...groupData } = validated;
+    void _linkedClassIds;
+    const nextLinkedClassIds = linkedClassIds.result;
+    const group = await prisma.$transaction(async (tx) => {
+      const updated = await tx.group.update({
+        where: { id },
+        data: groupData,
+      });
+
+      if (nextType !== "ELECTIVE_GROUP") {
+        await tx.electiveGroupClassLink.deleteMany({
+          where: { electiveGroupId: id },
+        });
+      } else if (nextLinkedClassIds) {
+        await tx.electiveGroupClassLink.deleteMany({
+          where: { electiveGroupId: id },
+        });
+
+        if (nextLinkedClassIds.length > 0) {
+          await tx.electiveGroupClassLink.createMany({
+            data: nextLinkedClassIds.map((classGroupId) => ({
+              electiveGroupId: id,
+              classGroupId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      return updated;
     });
 
     revalidatePath("/admin/groups");
@@ -270,89 +414,109 @@ export async function getStudentsForAssignment(
     let availableWhere: Record<string, unknown> = {};
 
     if (groupType === "CLASS") {
-    const studentsInClasses = await prisma.studentGroups.findMany({
-      where: {
-        group: { type: "CLASS" },
-        NOT: { groupId },
-      },
-      select: { studentId: true },
-    });
-    const inClassIds = new Set(studentsInClasses.map((s) => s.studentId));
-
-    availableWhere = {
-      id: {
-        notIn: [...assignedIds, ...inClassIds],
-      },
-    };
-    } else if (groupType === "ELECTIVE_GROUP") {
-    availableWhere = {
-      id: { notIn: [...assignedIds] },
-    };
-    } else if (groupType === "SUBJECT_SUBGROUP") {
-    const subgroup = await prisma.group.findUnique({
-      where: { id: groupId },
-      select: { parentId: true, subjectId: true },
-    });
-
-    if (subgroup?.parentId) {
-      const parentStudentRows = await prisma.studentGroups.findMany({
-        where: { groupId: subgroup.parentId },
+      const studentsInClasses = await prisma.studentGroups.findMany({
+        where: {
+          group: { type: "CLASS" },
+          NOT: { groupId },
+        },
         select: { studentId: true },
       });
-      const parentStudentIds = parentStudentRows.map((r) => r.studentId);
-
-      const siblingSubgroups = await prisma.group.findMany({
-        where: {
-          parentId: subgroup.parentId,
-          subjectId: subgroup.subjectId,
-          id: { not: groupId },
-          type: "SUBJECT_SUBGROUP",
-        },
-        select: { id: true },
-      });
-      const siblingIds = siblingSubgroups.map((s) => s.id);
-
-      const siblingStudentRows = siblingIds.length > 0
-        ? await prisma.studentGroups.findMany({
-            where: { groupId: { in: siblingIds } },
-            select: { studentId: true },
-          })
-        : [];
-      const siblingStudentIds = siblingStudentRows.map((r) => r.studentId);
+      const inClassIds = new Set(studentsInClasses.map((s) => s.studentId));
 
       availableWhere = {
         id: {
-          in: parentStudentIds,
-          notIn: [...assignedIds, ...siblingStudentIds],
+          notIn: [...assignedIds, ...inClassIds],
         },
       };
-    } else {
-      availableWhere = { id: { in: [] } };
+    } else if (groupType === "ELECTIVE_GROUP") {
+      const linkedClassRows = await prisma.electiveGroupClassLink.findMany({
+        where: { electiveGroupId: groupId },
+        select: { classGroupId: true },
+      });
+      const linkedClassIds = linkedClassRows.map((item) => item.classGroupId);
+
+      if (linkedClassIds.length === 0) {
+        availableWhere = { id: { in: [] } };
+      } else {
+        const linkedStudents = await prisma.studentGroups.findMany({
+          where: {
+            groupId: { in: linkedClassIds },
+          },
+          select: { studentId: true },
+        });
+
+        availableWhere = {
+          id: {
+            in: linkedStudents.map((item) => item.studentId),
+            notIn: [...assignedIds],
+          },
+        };
+      }
+    } else if (groupType === "SUBJECT_SUBGROUP") {
+      const subgroup = await prisma.group.findUnique({
+        where: { id: groupId },
+        select: { parentId: true, subjectId: true },
+      });
+
+      if (subgroup?.parentId) {
+        const parentStudentRows = await prisma.studentGroups.findMany({
+          where: { groupId: subgroup.parentId },
+          select: { studentId: true },
+        });
+        const parentStudentIds = parentStudentRows.map((r) => r.studentId);
+
+        const siblingSubgroups = await prisma.group.findMany({
+          where: {
+            parentId: subgroup.parentId,
+            subjectId: subgroup.subjectId,
+            id: { not: groupId },
+            type: "SUBJECT_SUBGROUP",
+          },
+          select: { id: true },
+        });
+        const siblingIds = siblingSubgroups.map((s) => s.id);
+
+        const siblingStudentRows = siblingIds.length > 0
+          ? await prisma.studentGroups.findMany({
+              where: { groupId: { in: siblingIds } },
+              select: { studentId: true },
+            })
+          : [];
+        const siblingStudentIds = siblingStudentRows.map((r) => r.studentId);
+
+        availableWhere = {
+          id: {
+            in: parentStudentIds,
+            notIn: [...assignedIds, ...siblingStudentIds],
+          },
+        };
+      } else {
+        availableWhere = { id: { in: [] } };
+      }
     }
-  }
 
     const studentInclude = {
-    user: {
-      select: { id: true, name: true, surname: true, patronymicName: true },
-    },
-    studentGroups: {
-      include: {
-        group: { select: { name: true, type: true } },
+      user: {
+        select: { id: true, name: true, surname: true, patronymicName: true },
       },
-    },
-  } as const;
+      studentGroups: {
+        include: {
+          group: { select: { name: true, type: true } },
+        },
+      },
+    } as const;
 
     const assigned = await prisma.student.findMany({
-    where: { id: { in: [...assignedIds] } },
-    include: studentInclude,
-    orderBy: { user: { surname: "asc" } },
-  });
+      where: { id: { in: [...assignedIds] } },
+      include: studentInclude,
+      orderBy: { user: { surname: "asc" } },
+    });
 
     const available = await prisma.student.findMany({
-    where: availableWhere,
-    include: studentInclude,
-    orderBy: { user: { surname: "asc" } },
-  });
+      where: availableWhere,
+      include: studentInclude,
+      orderBy: { user: { surname: "asc" } },
+    });
 
     const mapStudent = (s: (typeof assigned)[0]): StudentForAssignment => ({
       id: s.id,
@@ -380,6 +544,39 @@ export async function assignStudentsToGroupAction(
 
   try {
     const validated = assignStudentsSchema.parse({ groupId, studentIds });
+    const targetGroup = await prisma.group.findUnique({
+      where: { id: validated.groupId },
+      select: { id: true, type: true },
+    });
+
+    if (!targetGroup) {
+      return err("Группа не найдена");
+    }
+
+    if (targetGroup.type === "ELECTIVE_GROUP") {
+      const linkedClassRows = await prisma.electiveGroupClassLink.findMany({
+        where: { electiveGroupId: validated.groupId },
+        select: { classGroupId: true },
+      });
+      const linkedClassIds = linkedClassRows.map((item) => item.classGroupId);
+
+      if (linkedClassIds.length === 0) {
+        return err("Для кружка не настроены доступные классы");
+      }
+
+      const eligibleRows = await prisma.studentGroups.findMany({
+        where: {
+          groupId: { in: linkedClassIds },
+          studentId: { in: validated.studentIds },
+        },
+        select: { studentId: true },
+      });
+      const eligibleIds = new Set(eligibleRows.map((item) => item.studentId));
+
+      if (validated.studentIds.some((studentId) => !eligibleIds.has(studentId))) {
+        return err("Можно добавлять только учеников из привязанных классов");
+      }
+    }
 
     await prisma.studentGroups.createMany({
       data: validated.studentIds.map((studentId) => ({

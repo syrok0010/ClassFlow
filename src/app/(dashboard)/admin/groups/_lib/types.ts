@@ -8,6 +8,11 @@ export type GroupWithDetails = {
   parentId: string | null;
   subjectId: string | null;
   subject: { id: string; name: string } | null;
+  linkedClasses: {
+    id: string;
+    name: string;
+    grade: number | null;
+  }[];
   _count: { studentGroups: number };
   subGroups: GroupWithDetails[];
 };
