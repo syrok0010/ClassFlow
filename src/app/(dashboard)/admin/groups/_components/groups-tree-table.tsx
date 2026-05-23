@@ -172,6 +172,14 @@ export function GroupsTreeTable({
     handleStartRename(group);
   }, [handleStartRename]);
 
+  const handleDoubleClickLinkedClasses = useCallback((group: GroupWithDetails) => {
+    if (group.type !== "ELECTIVE_GROUP") {
+      return;
+    }
+
+    handleStartEditLinkedClasses(group);
+  }, [handleStartEditLinkedClasses]);
+
   const columns = useMemo<ColumnDef<GroupWithDetails>[]>(
     () => [
       {
@@ -268,9 +276,17 @@ export function GroupsTreeTable({
               );
             }
 
-            return group.linkedClasses.length > 0
-              ? group.linkedClasses.map((item) => item.name).join(", ")
-              : "—";
+            return (
+              <span
+                className="cursor-default"
+                onDoubleClick={() => handleDoubleClickLinkedClasses(group)}
+                title="Двойной клик для изменения классов"
+              >
+                {group.linkedClasses.length > 0
+                  ? group.linkedClasses.map((item) => item.name).join(", ")
+                  : "—"}
+              </span>
+            );
           }
 
           return group.grade ? `${group.grade} класс` : "—";
@@ -357,6 +373,7 @@ export function GroupsTreeTable({
       classOptions,
       handleCancelEditLinkedClasses,
       handleCancelRename,
+      handleDoubleClickLinkedClasses,
       handleDoubleClickName,
       handleSaveLinkedClasses,
       handleSaveRename,
