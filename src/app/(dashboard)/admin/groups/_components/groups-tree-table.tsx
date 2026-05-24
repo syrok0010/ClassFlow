@@ -6,7 +6,7 @@ import {
   useCallback,
   type FocusEvent,
 } from "react";
-import type { GroupWithDetails } from "../_lib/types";
+import type { GroupWithDetails, SubjectOption } from "../_lib/types";
 import {
   useReactTable,
   getCoreRowModel,
@@ -26,6 +26,13 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -54,6 +61,7 @@ import {
   FolderOpen,
   School,
   X,
+  BookOpen,
 } from "lucide-react";
 import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import { cn } from "@/lib/utils";
@@ -65,6 +73,7 @@ import {
 interface GroupsTreeTableProps {
   groups: GroupWithDetails[];
   classOptions: ClassGroupOption[];
+  electiveSubjects: SubjectOption[];
   isAddingRow: boolean;
   hasActiveFilters: boolean;
   onResetFilters: () => void;
@@ -73,6 +82,7 @@ interface GroupsTreeTableProps {
   onCreateGroup: (data: InlineCreateGroupInput) => Promise<boolean>;
   onRenameGroup: (id: string, name: string) => Promise<void>;
   onUpdateLinkedClasses: (id: string, linkedClassIds: string[]) => Promise<void>;
+  onUpdateElectiveSubject: (id: string, subject: SubjectOption) => Promise<boolean>;
   onDeleteGroup: (group: GroupWithDetails) => Promise<void>;
   onOpenTransferList: (group: GroupWithDetails) => void;
   onOpenSplitter: (group: GroupWithDetails) => void;
@@ -96,6 +106,7 @@ const TYPE_STYLES: Record<string, string> = {
 export function GroupsTreeTable({
   groups,
   classOptions,
+  electiveSubjects,
   isAddingRow,
   hasActiveFilters,
   onResetFilters,
@@ -104,6 +115,7 @@ export function GroupsTreeTable({
   onCreateGroup,
   onRenameGroup,
   onUpdateLinkedClasses,
+  onUpdateElectiveSubject,
   onDeleteGroup,
   onOpenTransferList,
   onOpenSplitter,
@@ -111,6 +123,7 @@ export function GroupsTreeTable({
 }: GroupsTreeTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingLinkedClassesId, setEditingLinkedClassesId] = useState<string | null>(null);
+  const [editingElectiveSubjectId, setEditingElectiveSubjectId] = useState<string | null>(null);
   const [confirmDeleteGroup, setConfirmDeleteGroup] =
     useState<GroupWithDetails | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -120,12 +133,20 @@ export function GroupsTreeTable({
 
   const handleStartRename = useCallback((group: GroupWithDetails) => {
     setEditingLinkedClassesId(null);
+    setEditingElectiveSubjectId(null);
     setEditingId(group.id);
   }, []);
 
   const handleStartEditLinkedClasses = useCallback((group: GroupWithDetails) => {
     setEditingId(null);
+    setEditingElectiveSubjectId(null);
     setEditingLinkedClassesId(group.id);
+  }, []);
+
+  const handleStartEditElectiveSubject = useCallback((group: GroupWithDetails) => {
+    setEditingId(null);
+    setEditingLinkedClassesId(null);
+    setEditingElectiveSubjectId(group.id);
   }, []);
 
   const handleSaveRename = useCallback(
@@ -156,6 +177,30 @@ export function GroupsTreeTable({
     setEditingLinkedClassesId(null);
   }, []);
 
+  const handleSaveElectiveSubject = useCallback(
+    async (subjectId: string) => {
+      if (!editingElectiveSubjectId) {
+        return;
+      }
+
+      const subject = electiveSubjects.find((item) => item.id === subjectId);
+      if (!subject) {
+        setEditingElectiveSubjectId(null);
+        return;
+      }
+
+      const ok = await onUpdateElectiveSubject(editingElectiveSubjectId, subject);
+      if (ok) {
+        setEditingElectiveSubjectId(null);
+      }
+    },
+    [editingElectiveSubjectId, electiveSubjects, onUpdateElectiveSubject]
+  );
+
+  const handleCancelEditElectiveSubject = useCallback(() => {
+    setEditingElectiveSubjectId(null);
+  }, []);
+
   const handleConfirmDelete = async () => {
     if (confirmDeleteGroup) {
       setIsDeleting(true);
@@ -179,6 +224,14 @@ export function GroupsTreeTable({
 
     handleStartEditLinkedClasses(group);
   }, [handleStartEditLinkedClasses]);
+
+  const handleDoubleClickElectiveSubject = useCallback((group: GroupWithDetails) => {
+    if (group.type !== "ELECTIVE_GROUP") {
+      return;
+    }
+
+    handleStartEditElectiveSubject(group);
+  }, [handleStartEditElectiveSubject]);
 
   const columns = useMemo<ColumnDef<GroupWithDetails>[]>(
     () => [
@@ -345,6 +398,39 @@ export function GroupsTreeTable({
               </Button>
             );
           }
+          if (group.type === "ELECTIVE_GROUP") {
+            if (editingElectiveSubjectId === group.id) {
+              return (
+                <InlineElectiveSubjectInput
+                  defaultValue={group.subjectId}
+                  options={electiveSubjects}
+                  onSave={handleSaveElectiveSubject}
+                  onCancel={handleCancelEditElectiveSubject}
+                />
+              );
+            }
+
+            return (
+              group.subject ? (
+                <span
+                  className="inline-flex max-w-full cursor-default items-center gap-1 rounded-md border bg-muted px-2 py-0.5 text-xs font-medium"
+                  onDoubleClick={() => handleDoubleClickElectiveSubject(group)}
+                  title="Двойной клик для изменения допа"
+                >
+                  <BookOpen data-icon="inline-start" className="size-4" />
+                  <span className="truncate">{group.subject.name}</span>
+                </span>
+              ) : (
+                <span
+                  className="cursor-default text-sm text-muted-foreground"
+                  onDoubleClick={() => handleDoubleClickElectiveSubject(group)}
+                  title="Двойной клик для привязки допа"
+                >
+                  Доп не привязан
+                </span>
+              )
+            );
+          }
           return null;
         },
       },
@@ -359,6 +445,7 @@ export function GroupsTreeTable({
               group={group}
               onRename={() => handleStartRename(group)}
               onEditLinkedClasses={() => handleStartEditLinkedClasses(group)}
+              onBindElectiveSubject={() => handleStartEditElectiveSubject(group)}
               onManageStudents={() => onOpenTransferList(group)}
               onEditSubgroups={() => onOpenSubgroupEditor(group)}
               onDelete={() => setConfirmDeleteGroup(group)}
@@ -369,14 +456,20 @@ export function GroupsTreeTable({
     ],
     [
       editingId,
+      editingElectiveSubjectId,
       editingLinkedClassesId,
       classOptions,
+      electiveSubjects,
+      handleCancelEditElectiveSubject,
       handleCancelEditLinkedClasses,
       handleCancelRename,
+      handleDoubleClickElectiveSubject,
       handleDoubleClickLinkedClasses,
       handleDoubleClickName,
+      handleSaveElectiveSubject,
       handleSaveLinkedClasses,
       handleSaveRename,
+      handleStartEditElectiveSubject,
       handleStartEditLinkedClasses,
       handleStartRename,
       onOpenTransferList,
@@ -582,6 +675,7 @@ function GroupActionMenu({
   group,
   onRename,
   onEditLinkedClasses,
+  onBindElectiveSubject,
   onManageStudents,
   onEditSubgroups,
   onDelete,
@@ -589,6 +683,7 @@ function GroupActionMenu({
   group: GroupWithDetails;
   onRename: () => void;
   onEditLinkedClasses: () => void;
+  onBindElectiveSubject: () => void;
   onManageStudents: () => void;
   onEditSubgroups: () => void;
   onDelete: () => void;
@@ -611,6 +706,12 @@ function GroupActionMenu({
           <DropdownMenuItem onClick={onEditLinkedClasses}>
             <School className="size-4" />
             Изменить классы
+          </DropdownMenuItem>
+        )}
+        {group.type === "ELECTIVE_GROUP" && (
+          <DropdownMenuItem onClick={onBindElectiveSubject}>
+            <BookOpen className="size-4" />
+            Привязать доп
           </DropdownMenuItem>
         )}
         {group.type !== "SUBJECT_SUBGROUP" && (
@@ -688,6 +789,74 @@ function InlineLinkedClassesInput({
           onClick={handleSave}
           title="Сохранить"
           disabled={value.length === 0}
+        >
+          <Check className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onCancel}
+          title="Отмена"
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function InlineElectiveSubjectInput({
+  defaultValue,
+  options,
+  onSave,
+  onCancel,
+}: {
+  defaultValue: string | null;
+  options: SubjectOption[];
+  onSave: (subjectId: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(defaultValue ?? "");
+  const subjectItems = useMemo(
+    () => Object.fromEntries(options.map((subject) => [subject.id, subject.name])),
+    [options]
+  );
+
+  const selectedSubject = options.find((option) => option.id === value) ?? null;
+  const hasChanges = value !== (defaultValue ?? "");
+
+  return (
+    <div className="flex items-center gap-2">
+      <Select
+        value={value}
+        onValueChange={(nextValue) => setValue(nextValue ?? "")}
+        items={subjectItems}
+      >
+        <SelectTrigger size="sm" className="w-64">
+          <SelectValue placeholder="Выберите доп по выбору" />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((subject) => (
+            <SelectItem key={subject.id} value={subject.id}>
+              {subject.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={() => {
+            if (!selectedSubject || !hasChanges) {
+              onCancel();
+              return;
+            }
+
+            onSave(selectedSubject.id);
+          }}
+          title="Сохранить"
+          disabled={!selectedSubject}
         >
           <Check className="size-3.5" />
         </Button>

@@ -3,7 +3,7 @@
 import { startTransition, useCallback, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
 import type { GroupType } from "@/generated/prisma/client";
-import type { GroupWithDetails } from "../_lib/types";
+import type { GroupWithDetails, SubjectOption } from "../_lib/types";
 import type { InlineCreateGroupInput } from "../_lib/group-schemas";
 import {
   assignStudentsToGroupAction,
@@ -33,6 +33,12 @@ type OptimisticAction =
       type: "updateLinkedClasses";
       id: string;
       linkedClasses: GroupWithDetails["linkedClasses"];
+    }
+  | {
+      type: "updateSubject";
+      id: string;
+      subject: GroupWithDetails["subject"];
+      subjectId: string | null;
     }
   | {
       type: "remove";
@@ -65,6 +71,19 @@ function applyLinkedClassesUpdate(
     ...group,
     ...(group.id === id ? { linkedClasses } : {}),
     subGroups: applyLinkedClassesUpdate(group.subGroups, id, linkedClasses),
+  }));
+}
+
+function applySubjectUpdate(
+  groups: GroupWithDetails[],
+  id: string,
+  subject: GroupWithDetails["subject"],
+  subjectId: string | null
+): GroupWithDetails[] {
+  return groups.map((group) => ({
+    ...group,
+    ...(group.id === id ? { subject, subjectId } : {}),
+    subGroups: applySubjectUpdate(group.subGroups, id, subject, subjectId),
   }));
 }
 
@@ -108,6 +127,8 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
           return applyRename(state, action.id, action.name);
         case "updateLinkedClasses":
           return applyLinkedClassesUpdate(state, action.id, action.linkedClasses);
+        case "updateSubject":
+          return applySubjectUpdate(state, action.id, action.subject, action.subjectId);
         case "remove":
           return applyRemove(state, action.id);
         case "studentsDelta":
@@ -234,6 +255,31 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     [dispatchOptimistic, router]
   );
 
+  const handleUpdateElectiveSubject = useCallback(
+    async (id: string, subject: SubjectOption) => {
+      startTransition(() => {
+        dispatchOptimistic({
+          type: "updateSubject",
+          id,
+          subject: { id: subject.id, name: subject.name },
+          subjectId: subject.id,
+        });
+      });
+
+      const response = await updateGroupAction(id, { subjectId: subject.id });
+      if (response.error) {
+        router.refresh();
+        toast.error(response.error);
+        return false;
+      }
+
+      router.refresh();
+      toast.success("Доп привязан к группе");
+      return true;
+    },
+    [dispatchOptimistic, router]
+  );
+
   const handleTransferSave = useCallback(
     async (
       transferGroup: GroupWithDetails,
@@ -345,6 +391,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     handleCreateGroup,
     handleRenameGroup,
     handleUpdateLinkedClasses,
+    handleUpdateElectiveSubject,
     handleDeleteGroup,
     handleTransferSave,
     loadStudentsForAssignment,

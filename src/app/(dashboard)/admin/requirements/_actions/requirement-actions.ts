@@ -84,6 +84,7 @@ export async function upsertRequirementAction(
       select: {
         id: true,
         type: true,
+        subjectId: true,
       },
     });
 
@@ -98,6 +99,16 @@ export async function upsertRequirementAction(
 
     if (!subjectExists) {
       return err("Предмет не найден");
+    }
+
+    if (baseGroup.type === "ELECTIVE_GROUP") {
+      if (!baseGroup.subjectId) {
+        return err("Сначала привяжите к кружку конкретный доп на странице групп");
+      }
+
+      if (baseGroup.subjectId !== validated.subjectId) {
+        return err("Для кружка можно задавать часы только по привязанному допу");
+      }
     }
 
     const targetGroupIds =

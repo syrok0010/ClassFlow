@@ -1,4 +1,4 @@
-import type { GroupType } from "@/generated/prisma/client";
+import type { GroupType, SubjectType } from "@/generated/prisma/client";
 
 export type GroupWithDetails = {
   id: string;
@@ -34,4 +34,5 @@ export type StudentForAssignment = {
 export type SubjectOption = {
   id: string;
   name: string;
+  type: SubjectType;
 };

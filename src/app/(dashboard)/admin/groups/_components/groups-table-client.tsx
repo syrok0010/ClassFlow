@@ -24,6 +24,7 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
     handleCreateGroup,
     handleRenameGroup,
     handleUpdateLinkedClasses,
+    handleUpdateElectiveSubject,
     handleDeleteGroup,
     handleTransferSave,
     loadStudentsForAssignment,
@@ -78,6 +79,10 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
   const [subgroupEditorOpen, setSubgroupEditorOpen] = useState(false);
   const [subgroupEditorData, setSubgroupEditorData] = useState<SubgroupEditorData | null>(null);
   const [subgroupEditorLoading, setSubgroupEditorLoading] = useState(false);
+  const electiveSubjects = useMemo(
+    () => subjects.filter((subject) => subject.type === "ELECTIVE_OPTIONAL"),
+    [subjects]
+  );
 
   const handleOpenTransferList = useCallback(
     async (group: GroupWithDetails) => {
@@ -193,6 +198,8 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
         onCreateGroup={handleCreateGroup}
         onRenameGroup={handleRenameGroup}
         onUpdateLinkedClasses={handleUpdateLinkedClasses}
+        electiveSubjects={electiveSubjects}
+        onUpdateElectiveSubject={handleUpdateElectiveSubject}
         onDeleteGroup={handleDeleteGroup}
         onOpenTransferList={handleOpenTransferList}
         onOpenSplitter={handleOpenSplitter}

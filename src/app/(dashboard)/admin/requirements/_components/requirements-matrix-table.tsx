@@ -394,6 +394,9 @@ export function RequirementsMatrixTable({
 
                 const isActive = activeCell?.groupId === row.id && activeCell.subjectId === subject.id;
                 const isEditing = editingCell?.groupId === row.id && editingCell.subjectId === subject.id;
+                const isLockedForElective =
+                  row.type === "ELECTIVE_GROUP" &&
+                  (!row.subjectId || row.subjectId !== subject.id);
 
                 return (
                   <RequirementGridCell
@@ -407,11 +410,14 @@ export function RequirementsMatrixTable({
                       instanceId: editingCell.instanceId
                     } : null}
                     quickInputMode={quickInputMode}
+                    disabled={isLockedForElective}
                     onActivate={() => {
+                      if (isLockedForElective) return;
                       setActiveCell({ groupId: row.id, subjectId: subject.id });
                       if (editingCell) setEditingCell(null);
                     }}
                     onStartEditing={(lessons) => {
+                      if (isLockedForElective) return;
                       setActiveCell({ groupId: row.id, subjectId: subject.id });
                       setEditingCell({
                         groupId: row.id,

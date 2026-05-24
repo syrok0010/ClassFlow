@@ -29,6 +29,7 @@ const createGroupBaseSchema = z.object({
 const updateGroupBaseSchema = z.object({
   name: groupNameSchema.optional(),
   grade: groupGradeSchema,
+  subjectId: z.string().min(1).nullable().optional(),
 });
 
 export const createGroupSchema = z.discriminatedUnion("type", [

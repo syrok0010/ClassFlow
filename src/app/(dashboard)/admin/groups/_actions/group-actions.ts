@@ -294,6 +294,15 @@ export async function updateGroupAction(
         }
       }
 
+      if (nextType === "ELECTIVE_GROUP" && updated.subjectId) {
+        await tx.groupSubjectRequirement.deleteMany({
+          where: {
+            groupId: id,
+            subjectId: { not: updated.subjectId },
+          },
+        });
+      }
+
       return updated;
     });
 
@@ -792,7 +801,7 @@ export async function getSubjects(): Promise<Result<SubjectOption[]>> {
 
   try {
     const subjects = await prisma.subject.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, type: true },
       orderBy: { name: "asc" },
     });
     return ok(subjects);
