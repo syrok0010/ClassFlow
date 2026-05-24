@@ -59,6 +59,8 @@ interface ScheduleEventEditorDialogProps {
   teacherOptions: AdminScheduleTeacherOption[];
   classRows: AdminScheduleClassRow[];
   lessonDurationByGroupSubject: Record<string, number>;
+  lockDaySelection?: boolean;
+  fixedDayLabel?: string | null;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: ScheduleEditorDraft) => Promise<string | null>;
 }
@@ -76,6 +78,8 @@ export function ScheduleEventEditorDialog({
   teacherOptions,
   classRows,
   lessonDurationByGroupSubject,
+  lockDaySelection = false,
+  fixedDayLabel = null,
   onOpenChange,
   onSave,
 }: ScheduleEventEditorDialogProps) {
@@ -118,6 +122,8 @@ export function ScheduleEventEditorDialog({
           initialValues={initialValues}
           formContext={formContext}
           classOptions={classOptions}
+          lockDaySelection={lockDaySelection}
+          fixedDayLabel={fixedDayLabel}
           onOpenChange={onOpenChange}
           onSave={onSave}
         />
@@ -128,7 +134,13 @@ export function ScheduleEventEditorDialog({
 
 type ScheduleEventEditorDialogContentProps = Pick<
   ScheduleEventEditorDialogProps,
-  "title" | "description" | "classOptions" | "onOpenChange" | "onSave"
+  | "title"
+  | "description"
+  | "classOptions"
+  | "lockDaySelection"
+  | "fixedDayLabel"
+  | "onOpenChange"
+  | "onSave"
 > & {
   initialValues: ScheduleStepperFormValue;
   formContext: ScheduleEditorFormContext;
@@ -140,12 +152,15 @@ function ScheduleEventEditorDialogContent({
   initialValues,
   formContext,
   classOptions,
+  lockDaySelection,
+  fixedDayLabel,
   onOpenChange,
   onSave,
 }: ScheduleEventEditorDialogContentProps) {
   const controller = useScheduleEditorController({
     initialValues,
     formContext,
+    lockDaySelection,
     onOpenChange,
     onSave,
   });
@@ -197,6 +212,7 @@ function ScheduleEventEditorDialogContent({
                   teacherOptions={formContext.teacherOptions}
                   subjectOptions={formContext.subjectOptions}
                   durationMinutes={durationMinutes}
+                  fixedDayLabel={fixedDayLabel ?? null}
                 />
 
                 <CurrentStepContent
@@ -213,6 +229,8 @@ function ScheduleEventEditorDialogContent({
                   availableTeacherOptions={availableTeacherOptions}
                   durationMinutes={durationMinutes}
                   stepError={visibleCurrentStepError}
+                  lockDaySelection={lockDaySelection ?? false}
+                  fixedDayLabel={fixedDayLabel ?? null}
                   onPatch={(patch) => controller.applyPatch(values, patch)}
                 />
 
@@ -283,6 +301,8 @@ function CurrentStepContent({
   availableTeacherOptions,
   durationMinutes,
   stepError,
+  lockDaySelection,
+  fixedDayLabel,
   onPatch,
 }: {
   stepId: ScheduleEditorStepId;
@@ -298,6 +318,8 @@ function CurrentStepContent({
   availableTeacherOptions: AdminScheduleTeacherOption[];
   durationMinutes: number | null;
   stepError: string | null;
+  lockDaySelection: boolean;
+  fixedDayLabel: string | null;
   onPatch: (patch: Partial<ScheduleStepperFormValue>) => void;
 }) {
   return (
@@ -358,6 +380,8 @@ function CurrentStepContent({
           durationMinutes={durationMinutes}
           onPatch={onPatch}
           error={stepError}
+          lockDaySelection={lockDaySelection}
+          fixedDayLabel={fixedDayLabel}
         />
       ) : null}
     </FieldGroup>
@@ -413,7 +437,10 @@ function EditorProgress({
   );
 }
 
-function getTimeSummaryLabel(values: Pick<ScheduleStepperFormValue, "dayOfWeek" | "startMinutes" | "endMinutes">) {
+function getTimeSummaryLabel(
+  values: Pick<ScheduleStepperFormValue, "dayOfWeek" | "startMinutes" | "endMinutes">,
+  fixedDayLabel: string | null,
+) {
   if (values.startMinutes === null) {
     return "Временная область";
   }
@@ -422,7 +449,9 @@ function getTimeSummaryLabel(values: Pick<ScheduleStepperFormValue, "dayOfWeek" 
     return null;
   }
 
-  const dayLabel = DAY_OPTIONS.find((option) => Number(option.value) === values.dayOfWeek)?.label;
+  const dayLabel =
+    fixedDayLabel
+    ?? DAY_OPTIONS.find((option) => Number(option.value) === values.dayOfWeek)?.label;
   if (!dayLabel) {
     return null;
   }
@@ -443,6 +472,7 @@ function EditorSummaryStrip({
   teacherOptions,
   subjectOptions,
   durationMinutes,
+  fixedDayLabel,
 }: {
   values: ScheduleStepperFormValue;
   classRows: AdminScheduleClassRow[];
@@ -452,12 +482,13 @@ function EditorSummaryStrip({
   teacherOptions: AdminScheduleTeacherOption[];
   subjectOptions: ScheduleEditorSubject[];
   durationMinutes: number | null;
+  fixedDayLabel: string | null;
 }) {
   const audienceLabel = getAudienceSummaryLabel(values, classRows, directGroupOptions, electiveGroupOptions);
   const subjectName = subjectOptions.find((option) => option.id === values.subjectId)?.name ?? null;
   const roomName = roomOptions.find((option) => option.id === values.roomId)?.name ?? null;
   const teacherName = teacherOptions.find((option) => option.id === values.teacherId)?.name ?? null;
-  const timeLabel = getTimeSummaryLabel(values);
+  const timeLabel = getTimeSummaryLabel(values, fixedDayLabel);
   const summaryItems = [
     values.cardKind ? CARD_KIND_LABELS[values.cardKind] : null,
     audienceLabel,
