@@ -1,7 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
 function groupRow(page: Page, name: string) {
-  return page.getByRole("row").filter({ hasText: name });
+  return page
+    .getByTitle("Двойной клик для переименования")
+    .filter({ hasText: name })
+    .locator("xpath=ancestor::tr");
 }
 
 test.describe("Admin groups", () => {
@@ -21,24 +24,24 @@ test.describe("Admin groups", () => {
       page.getByPlaceholder("Поиск по названию...")
     ).toBeVisible();
 
-    await expect(page.getByText("10 А")).toBeVisible();
-    await expect(page.getByText("10 Б")).toBeVisible();
-    await expect(page.getByText("Робототехника")).toBeVisible();
+    await expect(groupRow(page, "10 А")).toBeVisible();
+    await expect(groupRow(page, "10 Б")).toBeVisible();
+    await expect(groupRow(page, "Робототехника")).toBeVisible();
 
     await page.getByRole("radio", { name: "Кружки" }).click();
     await expect(page).toHaveURL(/type=ELECTIVE_GROUP/);
-    await expect(page.getByText("Робототехника")).toBeVisible();
-    await expect(page.getByText("10 А")).not.toBeVisible();
-    await expect(page.getByText("10 Б")).not.toBeVisible();
+    await expect(groupRow(page, "Робототехника")).toBeVisible();
+    await expect(groupRow(page, "10 А")).not.toBeVisible();
+    await expect(groupRow(page, "10 Б")).not.toBeVisible();
 
     await page.getByRole("radio", { name: "Все" }).click();
     await expect(page).toHaveURL(/\/admin\/groups$/);
 
     await page.getByPlaceholder("Поиск по названию...").fill("10 Б");
     await expect(page).toHaveURL(/search=10\+%D0%91|search=10%20%D0%91/);
-    await expect(page.getByText("10 Б")).toBeVisible();
-    await expect(page.getByText("10 А")).not.toBeVisible();
-    await expect(page.getByText("Робототехника")).not.toBeVisible();
+    await expect(groupRow(page, "10 Б")).toBeVisible();
+    await expect(groupRow(page, "10 А")).not.toBeVisible();
+    await expect(groupRow(page, "Робототехника")).toBeVisible();
   });
 
   test("creates a class with inline row", async ({ page }) => {
@@ -179,7 +182,7 @@ test.describe("Admin groups", () => {
     await expect(
       dialog.getByRole("heading", { name: "Состав: Робототехника" })
     ).toBeVisible();
-    await expect(dialog.getByText("Все ученики")).toBeVisible();
+    await expect(dialog.getByText("Доступные ученики")).toBeVisible();
     await expect(dialog.getByText("Состав Робототехника")).toBeVisible();
 
     await dialog.locator('[data-slot="select-trigger"]').click();

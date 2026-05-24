@@ -199,7 +199,7 @@ async function seedAuthAndUsers() {
     data: {
       groupId: parentScheduleGroup.id,
       subjectId: parentScheduleSubject.id,
-      lessonsPerWeek: 5,
+      lessonsPerWeek: 1,
       durationInMinutes: 45,
       breakDuration: 10,
     },
@@ -451,7 +451,15 @@ async function seedGroupsPageFixtures(teacherId: string) {
     data: {
       name: "Робототехника",
       type: "ELECTIVE_GROUP",
+      subjectId: roboticsSubject.id,
     },
+  });
+
+  await prisma.electiveGroupClassLink.createMany({
+    data: [
+      { electiveGroupId: roboticsGroup.id, classGroupId: class10A.id },
+      { electiveGroupId: roboticsGroup.id, classGroupId: class10B.id },
+    ],
   });
 
   await prisma.studentGroups.createMany({
