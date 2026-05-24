@@ -22,6 +22,7 @@ export type ScheduleConflictCode =
   | "AUDIENCE_SHARED_DIRECT_SUBGROUP_OVERLAP"
   | "AUDIENCE_ELECTIVE_GROUP_OVERLAP"
   | "ROOM_CAPACITY_OVERFLOW"
+  | "INSUFFICIENT_BREAK_AFTER_LESSON"
   | "MULTIPLE_SUBJECT_TEACHERS_ASSIGNED";
 
 export type ScheduleConflictLinkedClass = {
@@ -61,6 +62,7 @@ export interface ScheduleConflictProjectionInput {
   parentClassName: string | null;
   parentClassGrade: number | null;
   parentClassStudentCount: number | null;
+  minimumBreakAfterMinutes?: number | null;
 }
 
 export interface ScheduleConflict {
@@ -113,6 +115,7 @@ export function analyzeScheduleTemplateConflicts(
     }
   }
 
+  conflicts.push(...analyzeBreakDurationConflicts(projections));
   conflicts.push(...analyzeSubjectTeacherConsistencyWarnings(items));
 
   return buildScheduleConflictAnalysis(conflicts);
@@ -261,6 +264,82 @@ function analyzePairConflicts(left: ScheduleConflictItem, right: ScheduleConflic
 
   if (audienceConflict) {
     conflicts.push(audienceConflict);
+  }
+
+  return conflicts;
+}
+
+function analyzeBreakDurationConflicts(
+  projections: readonly ScheduleConflictProjectionInput[],
+) {
+  const projectionsByClassDay = new Map<string, ScheduleConflictProjectionInput[]>();
+
+  for (const projection of projections) {
+    if (
+      projection.detached
+      || projection.dayOfWeek === null
+      || projection.startMinutes === null
+      || projection.endMinutes === null
+    ) {
+      continue;
+    }
+
+    const key = `${projection.projectionClassId}:${projection.dayOfWeek}`;
+    const current = projectionsByClassDay.get(key) ?? [];
+    current.push(projection);
+    projectionsByClassDay.set(key, current);
+  }
+
+  const conflicts: ScheduleConflict[] = [];
+
+  for (const dayProjections of projectionsByClassDay.values()) {
+    const sortedProjections = [...dayProjections].sort((left, right) => {
+      if (left.startMinutes !== right.startMinutes) {
+        return (left.startMinutes ?? 0) - (right.startMinutes ?? 0);
+      }
+
+      if (left.endMinutes !== right.endMinutes) {
+        return (left.endMinutes ?? 0) - (right.endMinutes ?? 0);
+      }
+
+      return left.id.localeCompare(right.id, "ru");
+    });
+
+    for (let index = 0; index < sortedProjections.length - 1; index += 1) {
+      const current = sortedProjections[index];
+      const next = sortedProjections[index + 1];
+      const minimumBreakAfterMinutes = current.minimumBreakAfterMinutes ?? 0;
+
+      if (
+        minimumBreakAfterMinutes <= 0
+        || current.endMinutes === null
+        || next.startMinutes === null
+      ) {
+        continue;
+      }
+
+      const actualBreak = next.startMinutes - current.endMinutes;
+
+      if (actualBreak >= minimumBreakAfterMinutes) {
+        continue;
+      }
+
+      conflicts.push({
+        code: "INSUFFICIENT_BREAK_AFTER_LESSON",
+        severity: "hard",
+        message:
+          `После ${formatConflictProjectionLabel(current)} слишком короткая перемена: ` +
+          `${Math.max(actualBreak, 0)} мин., требуется минимум ${minimumBreakAfterMinutes} мин. ` +
+          `до ${formatConflictProjectionLabel(next)}.`,
+        fields: ["time"],
+        affectedTemplateIds: [current.templateId],
+        affectedProjectionIds: [current.id],
+        relatedTemplateIds: toSortedUnique([current.templateId, next.templateId]),
+        relatedProjectionIds: toSortedUnique([current.id, next.id]),
+        classIds: [current.projectionClassId],
+        deliveryGroupId: current.deliveryGroupId,
+      });
+    }
   }
 
   return conflicts;
@@ -544,6 +623,10 @@ function analyzeSubjectTeacherConsistencyWarnings(items: readonly ScheduleConfli
   }
 
   return warnings;
+}
+
+function formatConflictProjectionLabel(projection: ScheduleConflictProjectionInput) {
+  return `${projection.subjectName} (${projection.groupName})`;
 }
 
 function buildScheduleConflictAnalysis(

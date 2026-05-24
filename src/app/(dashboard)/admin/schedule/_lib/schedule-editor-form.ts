@@ -253,7 +253,11 @@ export function createScheduleEditorFormSchema(context: ScheduleEditorFormContex
       return;
     }
 
-    const durationMinutes = getDurationMinutes(value, context.lessonDurationByGroupSubject);
+    const durationMinutes = getDurationMinutes(
+      value,
+      context.lessonDurationByGroupSubject,
+      context.directGroupOptions,
+    );
     if (durationMinutes === null) {
       ctx.addIssue({
         code: "custom",
@@ -351,7 +355,11 @@ export function buildScheduleEditorDerivedState({
     audienceSelection,
     value.subjectId,
   );
-  const durationMinutes = getDurationMinutes(value, context.lessonDurationByGroupSubject);
+  const durationMinutes = getDurationMinutes(
+    value,
+    context.lessonDurationByGroupSubject,
+    context.directGroupOptions,
+  );
   const stepErrors = getScheduleEditorStepErrors(value, context);
   const currentStepIndex = Math.max(
     0,
@@ -424,7 +432,11 @@ export function normalizeScheduleEditorValue(
     ...baseValue,
     subjectId,
   } satisfies ScheduleStepperFormValue;
-  const durationMinutes = getDurationMinutes(normalizedValue, context.lessonDurationByGroupSubject);
+  const durationMinutes = getDurationMinutes(
+    normalizedValue,
+    context.lessonDurationByGroupSubject,
+    context.directGroupOptions,
+  );
   const endMinutes = getDerivedEndMinutes(normalizedValue.startMinutes, durationMinutes);
   const audienceSelection = getAudienceSelection(
     normalizedValue,

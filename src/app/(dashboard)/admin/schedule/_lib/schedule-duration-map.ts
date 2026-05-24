@@ -1,3 +1,5 @@
+import type { GroupType } from "@/generated/prisma/enums";
+
 type RequirementDurationRecord = {
   groupId: string;
   subjectId: string;
@@ -9,6 +11,11 @@ type TemplateDurationRecord = {
   deliveryGroupId: string | null;
   startTime: number | null;
   endTime: number | null;
+  deliveryGroup?: {
+    type: GroupType;
+    parentId?: string | null;
+    parentGroup?: { id: string } | null;
+  } | null;
   coveredClasses: { classGroupId: string }[];
 };
 
@@ -30,11 +37,7 @@ export function buildLessonDurationByGroupSubject(
     }
 
     const duration = template.endTime - template.startTime;
-    const groupIds = template.coveredClasses.length > 0
-      ? template.coveredClasses.map((coveredClass) => coveredClass.classGroupId)
-      : template.deliveryGroupId
-        ? [template.deliveryGroupId]
-        : [];
+    const groupIds = getTemplateRequirementGroupIds(template);
 
     for (const groupId of groupIds) {
       const key = `${groupId}:${template.subjectId}`;
@@ -55,4 +58,23 @@ export function buildLessonDurationByGroupSubject(
   }
 
   return durationByGroupSubject;
+}
+
+function getTemplateRequirementGroupIds(template: TemplateDurationRecord) {
+  if (template.coveredClasses.length > 0) {
+    return template.coveredClasses.map((coveredClass) => coveredClass.classGroupId);
+  }
+
+  if (!template.deliveryGroupId) {
+    return [];
+  }
+
+  if (template.deliveryGroup?.type === "SUBJECT_SUBGROUP") {
+    return Array.from(new Set([
+      template.deliveryGroupId,
+      template.deliveryGroup.parentId ?? template.deliveryGroup.parentGroup?.id ?? null,
+    ].filter((groupId): groupId is string => Boolean(groupId))));
+  }
+
+  return [template.deliveryGroupId];
 }

@@ -276,6 +276,7 @@ export function getAvailableTeacherOptions(
 export function getDurationMinutes(
   value: Pick<ScheduleStepperFormValue, "cardKind" | "deliveryGroupId" | "coveredClassIds" | "subjectId">,
   lessonDurationByGroupSubject: Record<string, number>,
+  directGroupOptions: Pick<AdminScheduleGroupOption, "id" | "type" | "parentId">[] = [],
 ) {
   if (!value.subjectId) {
     return null;
@@ -301,7 +302,15 @@ export function getDurationMinutes(
     return null;
   }
 
-  return lessonDurationByGroupSubject[`${value.deliveryGroupId}:${value.subjectId}`] ?? null;
+  const directGroup = directGroupOptions.find((option) => option.id === value.deliveryGroupId) ?? null;
+  const requirementGroupId =
+    directGroup?.type === "SUBJECT_SUBGROUP" && directGroup.parentId
+      ? directGroup.parentId
+      : value.deliveryGroupId;
+
+  return lessonDurationByGroupSubject[`${requirementGroupId}:${value.subjectId}`]
+    ?? lessonDurationByGroupSubject[`${value.deliveryGroupId}:${value.subjectId}`]
+    ?? null;
 }
 
 export function getDerivedEndMinutes(startMinutes: number | null, durationMinutes: number | null) {
