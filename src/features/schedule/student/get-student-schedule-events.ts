@@ -46,6 +46,7 @@ export async function getStudentScheduleEvents({
   });
 
   const groupIds = studentGroups.map((membership) => membership.groupId);
+  const enrolledDeliveryGroupIds = new Set(groupIds);
   const classId = studentGroups.find((membership) => membership.group.type === "CLASS")?.groupId ?? null;
 
   if (groupIds.length === 0 || !classId) {
@@ -58,6 +59,16 @@ export async function getStudentScheduleEvents({
       OR: [
         {
           deliveryGroupId: { in: groupIds },
+        },
+        {
+          deliveryGroup: {
+            type: "ELECTIVE_GROUP",
+            electiveClassLinks: {
+              some: {
+                classGroupId: classId,
+              },
+            },
+          },
         },
         {
           coveredClasses: {
@@ -77,6 +88,8 @@ export async function getStudentScheduleEvents({
   });
 
   return {
-    events: scheduleEntries.map(mapScheduleEntryToStudentScheduleEvent),
+    events: scheduleEntries.map((entry) =>
+      mapScheduleEntryToStudentScheduleEvent(entry, enrolledDeliveryGroupIds)
+    ),
   };
 }

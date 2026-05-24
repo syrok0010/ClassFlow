@@ -106,6 +106,29 @@ async function validateLinkedClassIds(
   return ok(uniqueIds);
 }
 
+async function getEligibleElectiveStudentIds(
+  electiveGroupId: string
+): Promise<Result<string[]>> {
+  const linkedClassRows = await prisma.electiveGroupClassLink.findMany({
+    where: { electiveGroupId },
+    select: { classGroupId: true },
+  });
+  const linkedClassIds = linkedClassRows.map((item) => item.classGroupId);
+
+  if (linkedClassIds.length === 0) {
+    return err("Для кружка не настроены доступные классы");
+  }
+
+  const linkedStudents = await prisma.studentGroups.findMany({
+    where: {
+      groupId: { in: linkedClassIds },
+    },
+    select: { studentId: true },
+  });
+
+  return ok([...new Set(linkedStudents.map((item) => item.studentId))]);
+}
+
 function filterGroupsTree(
   groups: GroupWithDetails[],
   filters: GroupsTreeFilters
@@ -438,25 +461,14 @@ export async function getStudentsForAssignment(
         },
       };
     } else if (groupType === "ELECTIVE_GROUP") {
-      const linkedClassRows = await prisma.electiveGroupClassLink.findMany({
-        where: { electiveGroupId: groupId },
-        select: { classGroupId: true },
-      });
-      const linkedClassIds = linkedClassRows.map((item) => item.classGroupId);
+      const eligibleStudentIds = await getEligibleElectiveStudentIds(groupId);
 
-      if (linkedClassIds.length === 0) {
+      if (eligibleStudentIds.error) {
         availableWhere = { id: { in: [] } };
       } else {
-        const linkedStudents = await prisma.studentGroups.findMany({
-          where: {
-            groupId: { in: linkedClassIds },
-          },
-          select: { studentId: true },
-        });
-
         availableWhere = {
           id: {
-            in: linkedStudents.map((item) => item.studentId),
+            in: eligibleStudentIds.result ?? [],
             notIn: [...assignedIds],
           },
         };
@@ -563,24 +575,12 @@ export async function assignStudentsToGroupAction(
     }
 
     if (targetGroup.type === "ELECTIVE_GROUP") {
-      const linkedClassRows = await prisma.electiveGroupClassLink.findMany({
-        where: { electiveGroupId: validated.groupId },
-        select: { classGroupId: true },
-      });
-      const linkedClassIds = linkedClassRows.map((item) => item.classGroupId);
-
-      if (linkedClassIds.length === 0) {
-        return err("Для кружка не настроены доступные классы");
+      const eligibleStudentIds = await getEligibleElectiveStudentIds(validated.groupId);
+      if (eligibleStudentIds.error) {
+        return err(eligibleStudentIds.error);
       }
 
-      const eligibleRows = await prisma.studentGroups.findMany({
-        where: {
-          groupId: { in: linkedClassIds },
-          studentId: { in: validated.studentIds },
-        },
-        select: { studentId: true },
-      });
-      const eligibleIds = new Set(eligibleRows.map((item) => item.studentId));
+      const eligibleIds = new Set(eligibleStudentIds.result ?? []);
 
       if (validated.studentIds.some((studentId) => !eligibleIds.has(studentId))) {
         return err("Можно добавлять только учеников из привязанных классов");
@@ -596,6 +596,7 @@ export async function assignStudentsToGroupAction(
     });
 
     revalidatePath("/admin/groups");
+    revalidatePath("/parent/schedule");
     return ok(true);
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при добавлении учеников в группу"));
@@ -638,6 +639,7 @@ export async function removeStudentsFromGroupAction(
     ]);
 
     revalidatePath("/admin/groups");
+    revalidatePath("/parent/schedule");
     return ok(true);
   } catch (error) {
     return err(getActionErrorMessage(error, "Ошибка при удалении учеников из группы"));
