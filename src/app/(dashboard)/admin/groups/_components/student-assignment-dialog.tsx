@@ -1,7 +1,11 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
 import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
+import {
+  useStudentBucketDnd,
+  type StudentBucketMap,
+} from "../_hooks/use-student-bucket-dnd";
 import { getStudentDisplayName } from "../_lib/utils";
 import {
   Dialog,
@@ -24,13 +28,7 @@ import { Loader2, Search } from "lucide-react";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   DragOverlay,
-  type DragStartEvent,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import { StudentBucketsBoard } from "./student-buckets-board";
 
@@ -51,8 +49,6 @@ function getStudentClassInfo(s: StudentForAssignment) {
   return classGroup ? classGroup.group.name : null;
 }
 
-type AssignmentBuckets = Record<"unassigned" | "assigned", string[]>;
-
 export function StudentAssignmentDialog({
   open,
   onOpenChange,
@@ -61,11 +57,10 @@ export function StudentAssignmentDialog({
   loading,
   command,
 }: StudentAssignmentDialogProps) {
-  const [buckets, setBuckets] = useState<AssignmentBuckets>(() => ({
+  const [buckets, setBuckets] = useState<StudentBucketMap>(() => ({
     unassigned: students?.available.map((student) => student.id) ?? [],
     assigned: students?.assigned.map((student) => student.id) ?? [],
   }));
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [leftSearch, setLeftSearch] = useState("");
   const [debouncedLeftSearch] = useDebouncedValue(leftSearch, { wait: 350 });
   const [leftClassFilter, setLeftClassFilter] = useState("ALL");
@@ -78,12 +73,18 @@ export function StudentAssignmentDialog({
   }, [students]);
 
   const leftStudents = useMemo(
-    () => buckets.unassigned.map((id) => studentById.get(id)).filter(Boolean) as StudentForAssignment[],
+    () =>
+      (buckets.unassigned ?? [])
+        .map((id) => studentById.get(id))
+        .filter(Boolean) as StudentForAssignment[],
     [buckets.unassigned, studentById]
   );
 
   const rightStudents = useMemo(
-    () => buckets.assigned.map((id) => studentById.get(id)).filter(Boolean) as StudentForAssignment[],
+    () =>
+      (buckets.assigned ?? [])
+        .map((id) => studentById.get(id))
+        .filter(Boolean) as StudentForAssignment[],
     [buckets.assigned, studentById]
   );
 
@@ -110,60 +111,19 @@ export function StudentAssignmentDialog({
     return Array.from(classes).sort();
   }, [leftStudents]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor)
-  );
-
-  const findBucketOfStudent = useCallback(
-    (studentId: string): "unassigned" | "assigned" | null => {
-      if (buckets.unassigned.includes(studentId)) return "unassigned";
-      if (buckets.assigned.includes(studentId)) return "assigned";
-      return null;
-    },
-    [buckets]
-  );
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-
-    if (!over) return;
-
-    const studentId = active.id as string;
-    const targetBucket =
-      ((over.data.current?.bucketId as string) ?? (over.id as string)) as
-        | "unassigned"
-        | "assigned";
-    const sourceBucket = findBucketOfStudent(studentId);
-
-    if (!sourceBucket) return;
-    if (targetBucket !== "unassigned" && targetBucket !== "assigned") return;
-
-    setBuckets((prev) => {
-      const next = {
-        unassigned: [...prev.unassigned],
-        assigned: [...prev.assigned],
-      };
-
-      next[sourceBucket] = next[sourceBucket].filter((id) => id !== studentId);
-      if (!next[targetBucket].includes(studentId)) {
-        next[targetBucket] = [...next[targetBucket], studentId];
-      }
-
-      return next;
+  const { activeId, handleDragEnd, handleDragStart, sensors } =
+    useStudentBucketDnd({
+      bucketIds: ["unassigned", "assigned"],
+      buckets,
+      canMove: ({ sourceBucket }) => Boolean(sourceBucket),
+      setBuckets,
     });
-  };
 
   const handleSave = async () => {
     if (!group || !students) return;
 
     const initialAssigned = new Set(students.assigned.map((s) => s.id));
-    const currentAssigned = new Set(buckets.assigned);
+    const currentAssigned = new Set(buckets.assigned ?? []);
 
     const toAssign = Array.from(currentAssigned).filter((id) => !initialAssigned.has(id));
     const toRemove = Array.from(initialAssigned).filter((id) => !currentAssigned.has(id));
@@ -187,8 +147,9 @@ export function StudentAssignmentDialog({
   const hasChanges = useMemo(() => {
     if (!students) return false;
     const initial = students.assigned.map((s) => s.id);
-    if (initial.length !== buckets.assigned.length) return true;
-    const currentSet = new Set(buckets.assigned);
+    const assigned = buckets.assigned ?? [];
+    if (initial.length !== assigned.length) return true;
+    const currentSet = new Set(assigned);
     return initial.some((id) => !currentSet.has(id));
   }, [students, buckets.assigned]);
 

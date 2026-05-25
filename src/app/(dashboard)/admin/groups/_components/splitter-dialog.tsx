@@ -1,11 +1,18 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import type {
   GroupWithDetails,
   StudentForAssignment,
   SubjectOption,
 } from "../_lib/types";
 import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
-import { getStudentDisplayName } from "../_lib/utils";
+import {
+  useStudentBucketDnd,
+  type StudentBucketMap,
+} from "../_hooks/use-student-bucket-dnd";
+import {
+  distributeStudentIdsEvenly,
+  getStudentDisplayName,
+} from "../_lib/utils";
 import { groupNameSchema } from "../_lib/group-schemas";
 import {
   Dialog,
@@ -30,13 +37,7 @@ import { z } from "zod/v4";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   DragOverlay,
-  type DragStartEvent,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import { StudentBucketsBoard } from "./student-buckets-board";
 
@@ -51,8 +52,6 @@ interface SplitterDialogProps {
 
 type SplitterStep = "settings" | "distribute";
 
-type BucketMap = Record<string, string[]>;
-
 export function SplitterDialog({
   open,
   onOpenChange,
@@ -62,12 +61,9 @@ export function SplitterDialog({
   command,
 }: SplitterDialogProps) {
   const [step, setStep] = useState<SplitterStep>("settings");
+  const [buckets, setBuckets] = useState<StudentBucketMap>({});
 
-  const [buckets, setBuckets] = useState<BucketMap>({});
-  const [activeId, setActiveId] = useState<string | null>(null);
-
-
-  const settingsForm = useForm({
+  const form = useForm({
     defaultValues: {
       subjectId: "",
       subgroupCount: 2,
@@ -77,7 +73,7 @@ export function SplitterDialog({
         { length: value.subgroupCount },
         (_, i) => `group-${i + 1}`
       );
-      const initial: BucketMap = {};
+      const initial: StudentBucketMap = {};
       keys.forEach((key) => (initial[key] = []));
       setBuckets(initial);
       setStep("distribute");
@@ -89,8 +85,8 @@ export function SplitterDialog({
     [subjects]
   );
 
-  const subjectId = settingsForm.state.values.subjectId;
-  const subgroupCount = settingsForm.state.values.subgroupCount;
+  const subjectId = form.state.values.subjectId;
+  const subgroupCount = form.state.values.subgroupCount;
   const subjectName = subjects.find((s) => s.id === subjectId)?.name ?? "";
 
   const bucketKeys = useMemo(
@@ -116,73 +112,20 @@ export function SplitterDialog({
     [bucketKeys, buckets]
   );
 
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor)
-  );
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const findBucketOfStudent = useCallback(
-    (studentId: string): string | null => {
-      for (const [key, ids] of Object.entries(buckets)) {
-        if (ids.includes(studentId)) return key;
-      }
-      return null;
-    },
-    [buckets]
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-
-    if (!over) return;
-
-    const studentId = active.id as string;
-    const targetBucket = (over.data.current?.bucketId as string) ?? (over.id as string);
-    const sourceBucket = findBucketOfStudent(studentId);
-
-    if (targetBucket === "unassigned") {
-      if (sourceBucket) {
-        setBuckets((prev) => ({
-          ...prev,
-          [sourceBucket]: prev[sourceBucket].filter((id) => id !== studentId),
-        }));
-      }
-      return;
-    }
-
-    if (!bucketKeys.includes(targetBucket)) return;
-
-    setBuckets((prev) => {
-      const next = { ...prev };
-
-      if (sourceBucket) {
-        next[sourceBucket] = next[sourceBucket].filter((id) => id !== studentId);
-      }
-
-      if (!next[targetBucket]) next[targetBucket] = [];
-      if (!next[targetBucket].includes(studentId)) {
-        next[targetBucket] = [...next[targetBucket], studentId];
-      }
-
-      return next;
+  const { activeId, handleDragEnd, handleDragStart, sensors } =
+    useStudentBucketDnd({
+      bucketIds: ["unassigned", ...bucketKeys],
+      buckets,
+      setBuckets,
     });
-  };
 
   const handleAutoSplit = () => {
-    const shuffled = [...students].sort(() => Math.random() - 0.5);
-    const newBuckets: BucketMap = {};
-    bucketKeys.forEach((key) => (newBuckets[key] = []));
-    shuffled.forEach((s, i) => {
-      const bucketKey = bucketKeys[i % bucketKeys.length];
-      newBuckets[bucketKey].push(s.id);
-    });
-    setBuckets(newBuckets);
+    setBuckets(
+      distributeStudentIdsEvenly(
+        students.map((student) => student.id),
+        bucketKeys
+      )
+    );
   };
 
   const handleBack = () => {
@@ -207,19 +150,7 @@ export function SplitterDialog({
       return;
     }
 
-    setStep("settings");
-    setBuckets({});
-    settingsForm.reset();
-    handleOpenChange(false);
-  };
-
-  const handleOpenChange = (v: boolean) => {
-    if (!v) {
-      setStep("settings");
-      setBuckets({});
-      settingsForm.reset();
-    }
-    onOpenChange(v);
+    onOpenChange(false);
   };
 
   const activeStudent = activeId
@@ -253,7 +184,7 @@ export function SplitterDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -268,7 +199,7 @@ export function SplitterDialog({
 
         {step === "settings" ? (
           <div className="flex flex-col gap-4 py-4">
-            <settingsForm.Field
+            <form.Field
               name="subjectId"
               validators={{
                 onBlur: z.string().min(1, "Выберите предмет"),
@@ -303,9 +234,9 @@ export function SplitterDialog({
                   )}
                 </div>
               )}
-            </settingsForm.Field>
+            </form.Field>
 
-            <settingsForm.Field
+            <form.Field
               name="subgroupCount"
               validators={{
                 onChange: z.number().int().min(2, "Минимум 2").max(10, "Максимум 10"),
@@ -335,26 +266,26 @@ export function SplitterDialog({
                   )}
                 </div>
               )}
-            </settingsForm.Field>
+            </form.Field>
 
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => handleOpenChange(false)}
+                onClick={() => onOpenChange(false)}
               >
                 Отмена
               </Button>
-              <settingsForm.Subscribe selector={(s) => s.canSubmit}>
+              <form.Subscribe selector={(s) => s.canSubmit}>
                 {(canSubmit) => (
                   <Button
                     disabled={!canSubmit}
-                    onClick={() => settingsForm.handleSubmit()}
+                    onClick={() => form.handleSubmit()}
                   >
                     Далее
                     <ArrowRight className="size-4" data-icon="inline-end" />
                   </Button>
                 )}
-              </settingsForm.Subscribe>
+              </form.Subscribe>
             </DialogFooter>
           </div>
         ) : (

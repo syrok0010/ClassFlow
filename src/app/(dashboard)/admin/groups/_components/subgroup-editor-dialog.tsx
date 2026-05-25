@@ -1,8 +1,15 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import type { StudentForAssignment } from "../_lib/types";
 import type { SubgroupEditorData } from "../_actions/group-actions";
 import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
-import { getStudentDisplayName } from "../_lib/utils";
+import {
+  useStudentBucketDnd,
+  type StudentBucketMap,
+} from "../_hooks/use-student-bucket-dnd";
+import {
+  distributeStudentIdsEvenly,
+  getStudentDisplayName,
+} from "../_lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -16,13 +23,7 @@ import { Shuffle, Loader2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   DragOverlay,
-  type DragStartEvent,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import { StudentBucketsBoard } from "./student-buckets-board";
 
@@ -34,8 +35,6 @@ interface SubgroupEditorDialogProps {
   command: GroupsCrudCommands["redistributeSubgroups"];
 }
 
-type BucketMap = Record<string, string[]>;
-
 export function SubgroupEditorDialog({
   open,
   onOpenChange,
@@ -43,82 +42,35 @@ export function SubgroupEditorDialog({
   loading,
   command,
 }: SubgroupEditorDialogProps) {
-  const [buckets, setBuckets] = useState<BucketMap>(() =>
+  const [buckets, setBuckets] = useState<StudentBucketMap>(() =>
     Object.fromEntries(
       data?.sibling.map((sibling) => [sibling.id, [...sibling.studentIds]]) ??
         []
     )
   );
-  const [activeId, setActiveId] = useState<string | null>(null);
   const students = useMemo(() => data?.students ?? [], [data]);
   const siblings = useMemo(() => data?.sibling ?? [], [data]);
 
   const siblingIds = useMemo(() => siblings.map((s) => s.id), [siblings]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor)
-  );
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const findBucketOfStudent = useCallback(
-    (studentId: string): string | null => {
-      for (const [key, ids] of Object.entries(buckets)) {
-        if (ids.includes(studentId)) return key;
-      }
-      return null;
-    },
-    [buckets]
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-
-    if (!over) return;
-
-    const studentId = active.id as string;
-    const targetBucket =
-      (over.data.current?.bucketId as string) ?? (over.id as string);
-
-    if (!siblingIds.includes(targetBucket)) return;
-
-    const sourceBucket = findBucketOfStudent(studentId);
-
-    if (!sourceBucket || sourceBucket === targetBucket) {
-      return;
-    }
-
-    if ((buckets[sourceBucket]?.length ?? 0) <= 1) {
-      return;
-    }
-
-    setBuckets((prev) => {
-      const next = { ...prev };
-
-      next[sourceBucket] = next[sourceBucket].filter((id) => id !== studentId);
-
-      if (!next[targetBucket]) next[targetBucket] = [];
-      if (!next[targetBucket].includes(studentId)) {
-        next[targetBucket] = [...next[targetBucket], studentId];
-      }
-
-      return next;
+  const { activeId, handleDragEnd, handleDragStart, sensors } =
+    useStudentBucketDnd({
+      bucketIds: siblingIds,
+      buckets,
+      canMove: ({ sourceBucket, targetBucket }) =>
+        Boolean(sourceBucket) &&
+        sourceBucket !== targetBucket &&
+        (buckets[sourceBucket ?? ""]?.length ?? 0) > 1,
+      setBuckets,
     });
-  };
 
   const handleAutoSplit = () => {
-    const shuffled = [...students].sort(() => Math.random() - 0.5);
-    const newBuckets: BucketMap = {};
-    siblingIds.forEach((key) => (newBuckets[key] = []));
-    shuffled.forEach((s, i) => {
-      const bucketKey = siblingIds[i % siblingIds.length];
-      newBuckets[bucketKey].push(s.id);
-    });
-    setBuckets(newBuckets);
+    setBuckets(
+      distributeStudentIdsEvenly(
+        students.map((student) => student.id),
+        siblingIds
+      )
+    );
   };
 
   const handleSave = async () => {
