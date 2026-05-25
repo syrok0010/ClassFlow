@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ClassFlow
 
-## Getting Started
+ClassFlow - платформа для управления учебными процессами образовательной организации с акцентом на планирование и публикацию расписания.
 
-First, run the development server:
+Система помогает собрать в одном месте данные о пользователях, группах, предметах, помещениях, учебной нагрузке и доступности преподавателей. На основе этих данных администратор может формировать недельный шаблон расписания, переносить его в фактическое расписание и вносить точечные изменения.
+
+## Для кого
+
+- **Администратор** управляет учебными сущностями, пользователями, нагрузкой и расписанием.
+- **Преподаватель** указывает доступность, видит свои предметы и персональное расписание.
+- **Обучающийся** получает доступ к актуальному расписанию занятий.
+- **Родитель** видит расписание связанных с ним обучающихся.
+
+## Основные возможности
+
+- единая база пользователей, групп, предметов и помещений;
+- настройка учебной нагрузки и преподавательских компетенций;
+- учет доступности преподавателей;
+- недельный шаблон расписания;
+- фактическое расписание на конкретные даты;
+- ручная корректировка занятий;
+- автоматическая генерация расписания через FET;
+- ролевой доступ к данным для разных категорий пользователей.
+
+## Технологии
+
+Next.js, React, TypeScript, PostgreSQL, Prisma, Better Auth, Tailwind CSS, Playwright.
+
+## Запуск
+
+Установите зависимости:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Запустите базу данных:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+docker compose up -d
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Создайте файл `.env` в корне проекта:
 
-## Learn More
+```env
+DATABASE_URL="postgresql://prisma:prisma_password@localhost:5433/classflow"
+DATABASE_URL_E2E="postgresql://prisma:prisma_password@localhost:5433/classflow_e2e"
 
-To learn more about Next.js, take a look at the following resources:
+APP_URL="http://localhost:3000"
+BETTER_AUTH_URL="http://localhost:3000"
+BETTER_AUTH_SECRET="replace-with-local-secret"
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+FET_CLI_PATH="fet-cl"
+FET_WORK_DIR=".classflow/fet-runs"
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Примените миграции и заполните базу тестовыми данными:
 
-## Deploy on Vercel
+```bash
+pnpm prisma migrate dev
+pnpm prisma db seed
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Запустите приложение:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm dev
+```
+
+Приложение будет доступно по адресу [http://localhost:3000](http://localhost:3000).
+
+## Документация
+
+Дополнительные материалы находятся в папке `docs`.
