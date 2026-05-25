@@ -4,6 +4,7 @@ import type {
   StudentForAssignment,
   SubjectOption,
 } from "../_lib/types";
+import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
 import { getStudentDisplayName } from "../_lib/utils";
 import { groupNameSchema } from "../_lib/group-schemas";
 import {
@@ -45,11 +46,7 @@ interface SplitterDialogProps {
   group: GroupWithDetails | null;
   students: StudentForAssignment[];
   subjects: SubjectOption[];
-  onSave: (data: {
-    parentGroupId: string;
-    subjectId: string;
-    subgroups: { name: string; studentIds: string[] }[];
-  }) => Promise<void>;
+  command: GroupsCrudCommands["splitGroup"];
 }
 
 type SplitterStep = "settings" | "distribute";
@@ -62,10 +59,9 @@ export function SplitterDialog({
   group,
   students,
   subjects,
-  onSave,
+  command,
 }: SplitterDialogProps) {
   const [step, setStep] = useState<SplitterStep>("settings");
-  const [saving, setSaving] = useState(false);
 
   const [buckets, setBuckets] = useState<BucketMap>({});
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -196,23 +192,25 @@ export function SplitterDialog({
 
   const handleSave = async () => {
     if (!group || !subjectId) return;
-    setSaving(true);
+
     try {
       const subgroupsData = bucketKeys.map((key, i) => ({
         name: groupNameSchema.parse(`${group.name} ${subjectName} ${i + 1}`),
         studentIds: buckets[key] ?? [],
       }));
-      await onSave({
+      await command.mutateAsync({
         parentGroupId: group.id,
         subjectId,
         subgroups: subgroupsData,
       });
-      setStep("settings");
-      setBuckets({});
-      settingsForm.reset();
-    } finally {
-      setSaving(false);
+    } catch {
+      return;
     }
+
+    setStep("settings");
+    setBuckets({});
+    settingsForm.reset();
+    handleOpenChange(false);
   };
 
   const handleOpenChange = (v: boolean) => {
@@ -391,7 +389,7 @@ export function SplitterDialog({
                   Назад
                 </Button>
                 <Button
-                  disabled={!allAssigned || hasEmptySubgroup || saving}
+                  disabled={!allAssigned || hasEmptySubgroup || command.isPending}
                   onClick={handleSave}
                   title={
                     !allAssigned
@@ -401,7 +399,7 @@ export function SplitterDialog({
                         : undefined
                   }
                 >
-                  {saving && <Loader2 className="size-4 animate-spin" />}
+                  {command.isPending && <Loader2 className="size-4 animate-spin" />}
                   Сохранить и создать подгруппы
                 </Button>
               </DialogFooter>

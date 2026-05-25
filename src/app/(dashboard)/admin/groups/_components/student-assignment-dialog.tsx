@@ -1,11 +1,7 @@
-import {
-  useMemo,
-  useState,
-  useEffect,
-  useCallback,
-} from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
+import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
 import { getStudentDisplayName } from "../_lib/utils";
 import {
   Dialog,
@@ -47,7 +43,7 @@ interface StudentAssignmentDialogProps {
     available: StudentForAssignment[];
   } | null;
   loading: boolean;
-  onSave: (toAssign: string[], toRemove: string[]) => Promise<void>;
+  command: GroupsCrudCommands["transferStudents"];
 }
 
 function getStudentClassInfo(s: StudentForAssignment) {
@@ -55,37 +51,24 @@ function getStudentClassInfo(s: StudentForAssignment) {
   return classGroup ? classGroup.group.name : null;
 }
 
+type AssignmentBuckets = Record<"unassigned" | "assigned", string[]>;
+
 export function StudentAssignmentDialog({
   open,
   onOpenChange,
   group,
   students,
   loading,
-  onSave,
+  command,
 }: StudentAssignmentDialogProps) {
-  const [buckets, setBuckets] = useState<Record<"unassigned" | "assigned", string[]>>({
-    unassigned: [],
-    assigned: [],
-  });
+  const [buckets, setBuckets] = useState<AssignmentBuckets>(() => ({
+    unassigned: students?.available.map((student) => student.id) ?? [],
+    assigned: students?.assigned.map((student) => student.id) ?? [],
+  }));
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [initializedFrom, setInitializedFrom] = useState<string | null>(null);
   const [leftSearch, setLeftSearch] = useState("");
   const [debouncedLeftSearch] = useDebouncedValue(leftSearch, { wait: 350 });
   const [leftClassFilter, setLeftClassFilter] = useState("ALL");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!open || !group || !students) return;
-    const assignedKey = students.assigned.map((s) => s.id).join("|");
-    const availableKey = students.available.map((s) => s.id).join("|");
-    const nextKey = `${group.id}:${assignedKey}:${availableKey}`;
-    if (initializedFrom === nextKey) return;
-    setBuckets({
-      unassigned: students.available.map((s) => s.id),
-      assigned: students.assigned.map((s) => s.id),
-    });
-    setInitializedFrom(nextKey);
-  }, [open, group, students, initializedFrom]);
 
   const studentById = useMemo(() => {
     if (!students) return new Map<string, StudentForAssignment>();
@@ -177,7 +160,7 @@ export function StudentAssignmentDialog({
   };
 
   const handleSave = async () => {
-    if (!students) return;
+    if (!group || !students) return;
 
     const initialAssigned = new Set(students.assigned.map((s) => s.id));
     const currentAssigned = new Set(buckets.assigned);
@@ -185,25 +168,20 @@ export function StudentAssignmentDialog({
     const toAssign = Array.from(currentAssigned).filter((id) => !initialAssigned.has(id));
     const toRemove = Array.from(initialAssigned).filter((id) => !currentAssigned.has(id));
 
-    setSaving(true);
-    try {
-      await onSave(toAssign, toRemove);
-      setLeftSearch("");
-      setLeftClassFilter("ALL");
-    } finally {
-      setSaving(false);
+    if (toAssign.length === 0 && toRemove.length === 0) {
+      onOpenChange(false);
+      return;
     }
-  };
 
-  const handleOpenChange = (v: boolean) => {
-    if (!v) {
-      setBuckets({ unassigned: [], assigned: [] });
-      setActiveId(null);
-      setInitializedFrom(null);
-      setLeftSearch("");
-      setLeftClassFilter("ALL");
+    try {
+      await command.mutateAsync({ group, toAssign, toRemove });
+    } catch {
+      return;
     }
-    onOpenChange(v);
+
+    setLeftSearch("");
+    setLeftClassFilter("ALL");
+    onOpenChange(false);
   };
 
   const hasChanges = useMemo(() => {
@@ -312,7 +290,7 @@ export function StudentAssignmentDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-3xl"
         showCloseButton
@@ -337,7 +315,7 @@ export function StudentAssignmentDialog({
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex flex-col gap-3 min-h-[350px]">
+            <div className="flex flex-col gap-3 min-h-87.5">
               <StudentBucketsBoard
                 columns={boardColumns}
                 getStudentDisplayName={getStudentDisplayName}
@@ -357,15 +335,15 @@ export function StudentAssignmentDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => handleOpenChange(false)}
+            onClick={() => onOpenChange(false)}
           >
             Отмена
           </Button>
           <Button
-            disabled={!hasChanges || saving}
+            disabled={!hasChanges || command.isPending}
             onClick={handleSave}
           >
-            {saving && <Loader2 className="size-4 animate-spin" />}
+            {command.isPending && <Loader2 className="size-4 animate-spin" />}
             Сохранить
           </Button>
         </DialogFooter>

@@ -20,7 +20,8 @@ import {
   groupNameSchema,
   parseGroupGradeInput,
 } from "../_lib/group-schemas";
-import {flushSync} from "react-dom";
+import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
+import { flushSync } from "react-dom";
 
 const INLINE_CREATE_TYPE_OPTIONS = [
   { value: "CLASS", label: "Класс" },
@@ -32,15 +33,11 @@ const INLINE_CREATE_TYPE_ITEMS: Record<string, string> = Object.fromEntries(
 );
 
 interface InlineCreateRowProps {
-  onSave: (data: {
-    name: string;
-    type: GroupType;
-    grade?: number | null;
-  }) => Promise<boolean>;
+  command: GroupsCrudCommands["createGroup"];
   onCancel: () => void;
 }
 
-export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
+export function InlineCreateRow({ command, onCancel }: InlineCreateRowProps) {
   const nameRef = useRef<HTMLInputElement>(null);
 
   const form = useForm({
@@ -50,13 +47,15 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
       grade: "" as string,
     },
     onSubmit: async ({ value }) => {
-      const success = await onSave({
-        name: value.name,
-        type: value.type,
-        grade: parseGroupGradeInput(value.grade),
-      });
-      if (success) {
+      try {
+        await command.mutateAsync({
+          name: value.name,
+          type: value.type,
+          grade: parseGroupGradeInput(value.grade),
+        });
         flushSync(() => form.reset());
+      } catch {
+        return;
       }
     },
   });
@@ -68,7 +67,7 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      form.handleSubmit();
+      void form.handleSubmit();
     }
 
     if (event.key === "Escape") {
@@ -174,7 +173,7 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
             <InlineCreateRowFrameActions
               onSave={() => form.handleSubmit()}
               onCancel={onCancel}
-              isSaveDisabled={!name.trim() || isSubmitting}
+              isSaveDisabled={!name.trim() || isSubmitting || command.isPending}
             />
           )}
         </form.Subscribe>

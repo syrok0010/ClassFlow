@@ -6,8 +6,8 @@ import {
   useCallback,
   type FocusEvent,
 } from "react";
-import type { GroupType } from "@/generated/prisma/client";
 import type { GroupWithDetails } from "../_lib/types";
+import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
 import {
   useReactTable,
   getCoreRowModel,
@@ -64,13 +64,7 @@ interface GroupsTreeTableProps {
   onResetFilters: () => void;
   onStartAddRow: () => void;
   onCancelAddRow: () => void;
-  onCreateGroup: (data: {
-    name: string;
-    type: GroupType;
-    grade?: number | null;
-  }) => Promise<boolean>;
-  onRenameGroup: (id: string, name: string) => Promise<void>;
-  onDeleteGroup: (group: GroupWithDetails) => Promise<void>;
+  commands: GroupsCrudCommands;
   onOpenTransferList: (group: GroupWithDetails) => void;
   onOpenSplitter: (group: GroupWithDetails) => void;
   onOpenSubgroupEditor: (group: GroupWithDetails) => void;
@@ -97,9 +91,7 @@ export function GroupsTreeTable({
   onResetFilters,
   onStartAddRow,
   onCancelAddRow,
-  onCreateGroup,
-  onRenameGroup,
-  onDeleteGroup,
+  commands,
   onOpenTransferList,
   onOpenSplitter,
   onOpenSubgroupEditor,
@@ -119,11 +111,18 @@ export function GroupsTreeTable({
   const handleSaveRename = useCallback(
     async (newName: string) => {
       if (editingId && newName.trim()) {
-        await onRenameGroup(editingId, newName.trim());
+        try {
+          await commands.renameGroup.mutateAsync({
+            id: editingId,
+            name: newName.trim(),
+          });
+        } catch {
+          return;
+        }
       }
       setEditingId(null);
     },
-    [editingId, onRenameGroup]
+    [commands.renameGroup, editingId]
   );
 
   const handleCancelRename = useCallback(() => {
@@ -134,7 +133,9 @@ export function GroupsTreeTable({
     if (confirmDeleteGroup) {
       setIsDeleting(true);
       try {
-        await onDeleteGroup(confirmDeleteGroup);
+        await commands.deleteGroup.mutateAsync(confirmDeleteGroup);
+      } catch {
+        return;
       } finally {
         setIsDeleting(false);
         setConfirmDeleteGroup(null);
@@ -353,7 +354,7 @@ export function GroupsTreeTable({
           <TableBody>
             {isAddingRow && (
               <InlineCreateRow
-                onSave={onCreateGroup}
+                command={commands.createGroup}
                 onCancel={onCancelAddRow}
               />
             )}
@@ -496,7 +497,7 @@ function InlineRenameInput({
           if (e.key === "Escape") onCancel();
         }}
         onBlur={handleBlur}
-        className="h-7 min-w-[8rem] max-w-xs"
+        className="h-7 min-w-32 max-w-xs"
       />
       <Button
         variant="ghost"

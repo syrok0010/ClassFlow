@@ -1,11 +1,7 @@
-import {
-  useState,
-  useMemo,
-  useCallback,
-  useEffect,
-} from "react";
+import { useState, useMemo, useCallback } from "react";
 import type { StudentForAssignment } from "../_lib/types";
 import type { SubgroupEditorData } from "../_actions/group-actions";
+import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
 import { getStudentDisplayName } from "../_lib/utils";
 import {
   Dialog,
@@ -35,7 +31,7 @@ interface SubgroupEditorDialogProps {
   onOpenChange: (open: boolean) => void;
   data: SubgroupEditorData | null;
   loading: boolean;
-  onSave: (assignments: Record<string, string[]>) => Promise<void>;
+  command: GroupsCrudCommands["redistributeSubgroups"];
 }
 
 type BucketMap = Record<string, string[]>;
@@ -45,25 +41,17 @@ export function SubgroupEditorDialog({
   onOpenChange,
   data,
   loading,
-  onSave,
+  command,
 }: SubgroupEditorDialogProps) {
-  const [saving, setSaving] = useState(false);
-  const [buckets, setBuckets] = useState<BucketMap>({});
+  const [buckets, setBuckets] = useState<BucketMap>(() =>
+    Object.fromEntries(
+      data?.sibling.map((sibling) => [sibling.id, [...sibling.studentIds]]) ??
+        []
+    )
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [initializedFrom, setInitializedFrom] = useState<SubgroupEditorData | null>(null);
   const students = useMemo(() => data?.students ?? [], [data]);
   const siblings = useMemo(() => data?.sibling ?? [], [data]);
-
-  useEffect(() => {
-    if (data && data !== initializedFrom) {
-      const initial: BucketMap = {};
-      for (const sib of data.sibling) {
-        initial[sib.id] = [...sib.studentIds];
-      }
-      setBuckets(initial);
-      setInitializedFrom(data);
-    }
-  }, [data, initializedFrom]);
 
   const siblingIds = useMemo(() => siblings.map((s) => s.id), [siblings]);
 
@@ -134,20 +122,13 @@ export function SubgroupEditorDialog({
   };
 
   const handleSave = async () => {
-    setSaving(true);
     try {
-      await onSave(buckets);
-    } finally {
-      setSaving(false);
+      await command.mutateAsync(buckets);
+    } catch {
+      return;
     }
-  };
 
-  const handleOpenChange = (v: boolean) => {
-    if (!v) {
-      setBuckets({});
-      setInitializedFrom(null);
-    }
-    onOpenChange(v);
+    onOpenChange(false);
   };
 
   const hasChanges = useMemo(() => {
@@ -185,7 +166,7 @@ export function SubgroupEditorDialog({
     : null;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -232,15 +213,15 @@ export function SubgroupEditorDialog({
               <DialogFooter>
                 <Button
                   variant="outline"
-                  onClick={() => handleOpenChange(false)}
+                  onClick={() => onOpenChange(false)}
                 >
                   Отмена
                 </Button>
                 <Button
-                  disabled={!hasChanges || saving}
+                  disabled={!hasChanges || command.isPending}
                   onClick={handleSave}
                 >
-                  {saving && <Loader2 className="size-4 animate-spin" />}
+                  {command.isPending && <Loader2 className="size-4 animate-spin" />}
                   Сохранить
                 </Button>
               </DialogFooter>
