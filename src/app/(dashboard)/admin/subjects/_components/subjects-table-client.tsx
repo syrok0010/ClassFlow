@@ -18,10 +18,7 @@ interface SubjectsTableClientProps {
 export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProps) {
   const {
     subjects,
-    handleCreateSubject,
-    handleRenameSubject,
-    handleDeleteSubject,
-    loadDeleteGuards,
+    commands,
   } = useSubjectsCrud(initialSubjects);
 
   const [searchQuery, setSearchQuery] = useQueryState("search", {
@@ -36,7 +33,6 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
 
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [deleteSubject, setDeleteSubject] = useState<SubjectWithUsage | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const safeType =
     filterType === "ACADEMIC" ||
@@ -59,22 +55,6 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
 
   const handleDeleteRequest = async (subject: SubjectWithUsage) => {
     setDeleteSubject(subject);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deleteSubject) {
-      return;
-    }
-
-    setDeleteLoading(true);
-    try {
-      const success = await handleDeleteSubject(deleteSubject);
-      if (success) {
-        setDeleteSubject(null);
-      }
-    } finally {
-      setDeleteLoading(false);
-    }
   };
 
   const resetFilters = () => {
@@ -109,8 +89,7 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
         subjects={visibleSubjects}
         isAddingRow={isAddingRow}
         hasActiveFilters={hasActiveFilters}
-        onCreateSubject={handleCreateSubject}
-        onRenameSubject={handleRenameSubject}
+        commands={commands}
         onDeleteRequest={handleDeleteRequest}
         onCancelAddRow={() => setIsAddingRow(false)}
         onCreateFirst={() => setIsAddingRow(true)}
@@ -121,14 +100,12 @@ export function SubjectsTableClient({ initialSubjects }: SubjectsTableClientProp
         <SubjectDeleteDialog
           key={deleteSubject.id}
           subject={deleteSubject}
-          isDeleting={deleteLoading}
-          loadDeleteGuards={loadDeleteGuards}
+          command={commands.deleteSubject}
           onOpenChange={(open) => {
             if (!open) {
               setDeleteSubject(null);
             }
           }}
-          onConfirm={handleDeleteConfirm}
         />
       )}
     </div>

@@ -26,11 +26,3 @@ export type SubjectUsageDetails = {
   requirements: string[];
 };
 
-export type SubjectDeleteGuards = {
-  roomsCount: number;
-  requirementsCount: number;
-  teachersCount: number;
-  scheduleTemplatesCount: number;
-  scheduleEntriesCount: number;
-};
-

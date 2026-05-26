@@ -1,6 +1,7 @@
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef } from "react";
 import type { SubjectType } from "@/generated/prisma/client";
 import { useForm } from "@tanstack/react-form";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import {
   InlineCreateRowFrame,
   InlineCreateRowFrameActions,
@@ -14,20 +15,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TableCell } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { Field, FieldError } from "@/components/ui/field";
 import { SUBJECT_LABELS, SUBJECT_TYPE_OPTIONS } from "@/lib/constants";
+import type { SubjectsCrudCommands } from "../_hooks/use-subjects-crud";
 import {
+  createSubjectSchema,
   subjectNameSchema,
   subjectTypeSchema,
 } from "../_lib/subject-schemas";
-import {flushSync} from "react-dom";
+import { flushSync } from "react-dom";
 
 interface InlineCreateRowProps {
-  onSave: (data: { name: string; type: SubjectType }) => Promise<boolean>;
+  command: SubjectsCrudCommands["createSubject"];
   onCancel: () => void;
 }
 
-export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
+export function InlineCreateRow({ command, onCancel }: InlineCreateRowProps) {
   const nameRef = useRef<HTMLInputElement>(null);
 
   const form = useForm({
@@ -35,14 +38,15 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
       name: "",
       type: "ACADEMIC" as SubjectType,
     },
+    validators: {
+      onSubmit: createSubjectSchema,
+    },
     onSubmit: async ({ value }) => {
-      const success = await onSave({
-        name: value.name,
-        type: value.type,
-      });
-
-      if (success) {
+      try {
+        await command.mutateAsync(createSubjectSchema.parse(value));
         flushSync(() => form.reset());
+      } catch {
+        // Toast is shown by the mutation.
       }
     },
   });
@@ -51,45 +55,45 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
     nameRef.current?.focus();
   }, []);
 
-  const handleNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onCancel();
-      return;
+  useHotkey(
+    "Escape", 
+    onCancel,
+    {
+      target: nameRef,
+      enabled: true,
+      preventDefault: true,
     }
+  );
 
-    if (event.key === "Enter") {
-      event.preventDefault();
-      form.handleSubmit();
+  useHotkey(
+    "Enter",
+    () => void form.handleSubmit(),
+    {
+      target: nameRef,
+      enabled: true,
+      preventDefault: true,
     }
-  };
+  );
 
   return (
     <InlineCreateRowFrame>
       <TableCell>
         <form.Field name="name" validators={{ onBlur: subjectNameSchema }}>
           {(field) => (
-            <div>
+            <Field data-invalid={field.state.meta.errors.length > 0}>
               <Input
                 ref={nameRef}
                 placeholder="Название предмета"
                 value={field.state.value}
                 onChange={(event) => field.handleChange(event.target.value)}
                 onBlur={field.handleBlur}
-                onKeyDown={handleNameKeyDown}
-                className={cn(
-                  "h-7",
-                  field.state.meta.errors.length > 0 && "border-destructive"
-                )}
+                aria-invalid={field.state.meta.errors.length > 0}
+                className="h-7"
               />
-              {field.state.meta.isTouched && field.state.meta.errors.length > 0 ? (
-                <p className="mt-1 text-xs text-destructive">
-                  {field.state.meta.errors
-                    .flatMap((error) => (error ? [error.message] : []))
-                    .join(", ")}
-                </p>
+              {field.state.meta.isTouched ? (
+                <FieldError errors={field.state.meta.errors} className="text-xs" />
               ) : null}
-            </div>
+            </Field>
           )}
         </form.Field>
       </TableCell>
@@ -120,12 +124,12 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
       <TableCell />
 
       <TableCell>
-        <form.Subscribe selector={(state) => [state.isSubmitting, state.values.name] as const}>
-          {([isSubmitting, name]) => (
+        <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
+          {([canSubmit, isSubmitting]) => (
             <InlineCreateRowFrameActions
               onSave={() => form.handleSubmit()}
               onCancel={onCancel}
-              isSaveDisabled={!name.trim() || isSubmitting}
+              isSaveDisabled={!canSubmit || isSubmitting}
               align="end"
             />
           )}

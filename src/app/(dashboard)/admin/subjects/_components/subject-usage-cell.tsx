@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import {
   Popover,
@@ -8,15 +9,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { getSubjectUsageDetailsAction } from "../_actions/subject-actions";
-import type { SubjectUsage, SubjectUsageDetails } from "../_lib/types";
+import type { SubjectUsage } from "../_lib/types";
 
 interface SubjectUsageCellProps {
   subjectId: string;
   usage: SubjectUsage;
 }
-
-const usageDetailsCache = new Map<string, SubjectUsageDetails>();
-const usageDetailsRequests = new Map<string, Promise<SubjectUsageDetails>>();
 
 function renderPreviewList(items: string[]) {
   if (items.length === 0) {
@@ -34,42 +32,9 @@ function renderPreviewList(items: string[]) {
   );
 }
 
-async function loadSubjectUsageDetails(subjectId: string): Promise<SubjectUsageDetails> {
-  const cached = usageDetailsCache.get(subjectId);
-  if (cached) {
-    return cached;
-  }
-
-  const existingRequest = usageDetailsRequests.get(subjectId);
-  if (existingRequest) {
-    return existingRequest;
-  }
-
-  const request = getSubjectUsageDetailsAction(subjectId).then((response) => {
-    if (response.error || !response.result) {
-      throw new Error(response.error ?? "Не удалось загрузить детали");
-    }
-
-    usageDetailsCache.set(subjectId, response.result);
-    return response.result;
-  });
-
-  usageDetailsRequests.set(subjectId, request);
-
-  try {
-    return await request;
-  } finally {
-    usageDetailsRequests.delete(subjectId);
-  }
-}
-
 export function SubjectUsageCell({ subjectId, usage }: SubjectUsageCellProps) {
   const [open, setOpen] = useState(false);
-  const [details, setDetails] = useState<SubjectUsageDetails | null>(
-    () => usageDetailsCache.get(subjectId) ?? null
-  );
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [hasRequestedDetails, setHasRequestedDetails] = useState(false);
 
   const total =
     usage.roomsCount +
@@ -78,27 +43,20 @@ export function SubjectUsageCell({ subjectId, usage }: SubjectUsageCellProps) {
     usage.scheduleTemplatesCount +
     usage.scheduleEntriesCount;
 
-  const loadDetails = useCallback(async () => {
-    if (total === 0 || details || isLoading) {
-      return;
-    }
+  const usageDetailsQuery = useQuery({
+    queryKey: ["subject-usage-details", subjectId],
+    queryFn: async () => {
+      const response = await getSubjectUsageDetailsAction(subjectId);
+      if (response.error || !response.result) {
+        throw new Error(response.error ?? "Не удалось загрузить детали");
+      }
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const nextDetails = await loadSubjectUsageDetails(subjectId);
-      setDetails(nextDetails);
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Не удалось загрузить детали"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [details, isLoading, subjectId, total]);
+      return response.result;
+    },
+    enabled: total > 0 && (open || hasRequestedDetails),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
 
   if (total === 0) {
     return <span className="text-sm text-muted-foreground">Не используется</span>;
@@ -109,32 +67,28 @@ export function SubjectUsageCell({ subjectId, usage }: SubjectUsageCellProps) {
       <PopoverTrigger
         openOnHover={true}
         delay={0}
-        onPointerEnter={() => {
-          void loadDetails();
-        }}
-        onFocus={() => {
-          void loadDetails();
-        }}
+        onPointerEnter={() => setHasRequestedDetails(true)}
+        onFocus={() => setHasRequestedDetails(true)}
         className="text-left text-sm text-muted-foreground underline decoration-dotted underline-offset-4"
       >
         Кабинеты: {usage.roomsCount} · Требования: {usage.requirementsCount} · Учителя: {usage.teachersCount}
       </PopoverTrigger>
       <PopoverContent align="start" side="top" className="w-96 gap-2">
-        {error ? (
-          <p className="text-sm text-destructive">{error}</p>
-        ) : details ? (
+        {usageDetailsQuery.error ? (
+          <p className="text-sm text-destructive">{usageDetailsQuery.error.message}</p>
+        ) : usageDetailsQuery.data ? (
           <div className="space-y-1.5 text-sm">
             <p>
               <span className="font-medium">Кабинеты: </span>
-              {renderPreviewList(details.rooms)}
+              {renderPreviewList(usageDetailsQuery.data.rooms)}
             </p>
             <p>
               <span className="font-medium">Учителя: </span>
-              {renderPreviewList(details.teachers)}
+              {renderPreviewList(usageDetailsQuery.data.teachers)}
             </p>
             <p>
               <span className="font-medium">Требования: </span>
-              {renderPreviewList(details.requirements)}
+              {renderPreviewList(usageDetailsQuery.data.requirements)}
             </p>
           </div>
         ) : (

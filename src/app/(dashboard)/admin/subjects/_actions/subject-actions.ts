@@ -15,11 +15,12 @@ import {
   type UpdateSubjectInput,
 } from "../_lib/subject-schemas";
 import type {
-  SubjectDeleteGuards,
   SubjectListFilters,
+  SubjectUsage,
   SubjectUsageDetails,
   SubjectWithUsage,
 } from "../_lib/types";
+import { hasSubjectDependencies } from "../_lib/subject-usage";
 
 const SUBJECTS_PATH = "/admin/subjects";
 
@@ -78,26 +79,6 @@ function toSubjectWithUsage(
       scheduleEntriesCount: subject._count.scheduleEntries,
     },
   };
-}
-
-function getDeleteGuardsFromUsage(usage: SubjectWithUsage["usage"]): SubjectDeleteGuards {
-  return {
-    roomsCount: usage.roomsCount,
-    requirementsCount: usage.requirementsCount,
-    teachersCount: usage.teachersCount,
-    scheduleTemplatesCount: usage.scheduleTemplatesCount,
-    scheduleEntriesCount: usage.scheduleEntriesCount,
-  };
-}
-
-function hasDeleteDependencies(guards: SubjectDeleteGuards): boolean {
-  return (
-    guards.roomsCount > 0 ||
-    guards.requirementsCount > 0 ||
-    guards.teachersCount > 0 ||
-    guards.scheduleTemplatesCount > 0 ||
-    guards.scheduleEntriesCount > 0
-  );
 }
 
 export async function getSubjectsAction(
@@ -200,7 +181,7 @@ export async function updateSubjectAction(id: IdInput, data: UpdateSubjectInput)
 
 export async function getSubjectDeleteGuardsAction(
   id: IdInput
-): Promise<Result<SubjectDeleteGuards>> {
+): Promise<Result<SubjectUsage>> {
   await requireAdminContext();
 
   try {
@@ -225,15 +206,13 @@ export async function getSubjectDeleteGuardsAction(
       return err("Предмет не найден");
     }
 
-    return ok(
-      getDeleteGuardsFromUsage({
+    return ok({
         roomsCount: subject._count.roomSubjects,
         requirementsCount: subject._count.groupSubjectRequirements,
         teachersCount: subject._count.teacherSubjects,
         scheduleTemplatesCount: subject._count.weeklyScheduleTemplates,
         scheduleEntriesCount: subject._count.scheduleEntries,
-      })
-    );
+    });
   } catch (error) {
     return err(getActionErrorMessage(error, "Не удалось проверить связи предмета"));
   }
@@ -323,12 +302,12 @@ export async function deleteSubjectAction(id: IdInput): Promise<Result<true>> {
   try {
     idSchema.parse(id);
 
-    const guardsResponse = await getSubjectDeleteGuardsAction(id);
-    if (guardsResponse.error || !guardsResponse.result) {
-      return err(guardsResponse.error ?? "Не удалось проверить связи предмета");
+    const usageResponse = await getSubjectDeleteGuardsAction(id);
+    if (usageResponse.error || !usageResponse.result) {
+      return err(usageResponse.error ?? "Не удалось проверить связи предмета");
     }
 
-    if (hasDeleteDependencies(guardsResponse.result)) {
+    if (hasSubjectDependencies(usageResponse.result)) {
       return err(
         "Невозможно удалить предмет, пока он используется в других разделах системы."
       );

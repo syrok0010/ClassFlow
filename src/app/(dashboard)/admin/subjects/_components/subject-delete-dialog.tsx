@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,86 +13,63 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Loader2 } from "lucide-react";
-import type { SubjectDeleteGuards, SubjectWithUsage } from "../_lib/types";
+import type { SubjectsCrudCommands } from "../_hooks/use-subjects-crud";
+import { getSubjectDeleteGuardsAction } from "../_actions/subject-actions";
+import { hasSubjectDependencies } from "../_lib/subject-usage";
+import type { SubjectWithUsage } from "../_lib/types";
 
 interface SubjectDeleteDialogProps {
   subject: SubjectWithUsage;
-  isDeleting: boolean;
-  loadDeleteGuards: (id: string) => Promise<SubjectDeleteGuards | null>;
+  command: SubjectsCrudCommands["deleteSubject"];
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => Promise<void>;
-}
-
-function hasDependencies(guards: SubjectDeleteGuards | null): boolean {
-  if (!guards) {
-    return false;
-  }
-
-  return (
-    guards.roomsCount > 0 ||
-    guards.requirementsCount > 0 ||
-    guards.teachersCount > 0 ||
-    guards.scheduleTemplatesCount > 0 ||
-    guards.scheduleEntriesCount > 0
-  );
 }
 
 export function SubjectDeleteDialog({
   subject,
-  isDeleting,
-  loadDeleteGuards,
+  command,
   onOpenChange,
-  onConfirm,
 }: SubjectDeleteDialogProps) {
-  const [guards, setGuards] = useState<SubjectDeleteGuards | null>(null);
-  const [isLoadingGuards, setIsLoadingGuards] = useState(false);
-
-  useEffect(() => {
-    setGuards(null);
-    setIsLoadingGuards(false);
-
-    let active = true;
-
-    const loadGuards = async () => {
-      setIsLoadingGuards(true);
-
-      try {
-        const nextGuards = await loadDeleteGuards(subject.id);
-        if (!active) {
-          return;
-        }
-
-        setGuards(nextGuards ?? subject.usage);
-      } finally {
-        if (active) {
-          setIsLoadingGuards(false);
-        }
+  const usageQuery = useQuery({
+    queryKey: ["subject-usage", subject.id],
+    queryFn: async () => {
+      const response = await getSubjectDeleteGuardsAction(subject.id);
+      if (response.error || !response.result) {
+        toast.error(response.error);
+        throw new Error(response.error ?? "Не удалось проверить связи предмета");
       }
-    };
 
-    void loadGuards();
+      return response.result;
+    },
+    retry: false,
+  });
 
-    return () => {
-      active = false;
-    };
-  }, [loadDeleteGuards, subject]);
+  const usage = usageQuery.data ?? subject.usage;
+  const isDeleting = command.isPending;
+  const blocked = hasSubjectDependencies(usage);
+  const disableDelete = usageQuery.isPending || blocked || isDeleting;
 
-  const blocked = hasDependencies(guards);
-  const disableDelete = isLoadingGuards || blocked || isDeleting;
+  const handleConfirm = async () => {
+    try {
+      await command.mutateAsync(subject);
+      onOpenChange(false);
+    } catch {
+      // Toast is shown by the mutation.
+    }
+  };
 
   return (
     <AlertDialog open={true} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {isLoadingGuards
+            {usageQuery.isPending
               ? `Проверяем связи предмета \"${subject.name}\"`
               : blocked
               ? `Невозможно удалить предмет \"${subject.name}\"`
               : `Удалить предмет \"${subject.name}\"?`}
           </AlertDialogTitle>
           <AlertDialogDescription className="space-y-1">
-            {isLoadingGuards ? (
+            {usageQuery.isPending ? (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="size-4 animate-spin" />
                 Проверяем, где используется предмет...
@@ -99,24 +77,24 @@ export function SubjectDeleteDialog({
             ) : blocked ? (
               <>
                 <span className="block">Невозможно удалить предмет, пока он используется в других разделах системы.</span>
-                {guards && guards.roomsCount > 0 ? (
-                  <span className="block">Используется в {guards.roomsCount} кабинетах</span>
+                {usage.roomsCount > 0 ? (
+                  <span className="block">Используется в {usage.roomsCount} кабинетах</span>
                 ) : null}
-                {guards && guards.requirementsCount > 0 ? (
+                {usage.requirementsCount > 0 ? (
                   <span className="block">
-                    Используется в {guards.requirementsCount} требованиях учебного плана
+                    Используется в {usage.requirementsCount} требованиях учебного плана
                   </span>
                 ) : null}
-                {guards && guards.teachersCount > 0 ? (
-                  <span className="block">Назначен {guards.teachersCount} преподавателям</span>
+                {usage.teachersCount > 0 ? (
+                  <span className="block">Назначен {usage.teachersCount} преподавателям</span>
                 ) : null}
-                {guards && guards.scheduleTemplatesCount > 0 ? (
+                {usage.scheduleTemplatesCount > 0 ? (
                   <span className="block">
-                    Используется в {guards.scheduleTemplatesCount} шаблонах расписания
+                    Используется в {usage.scheduleTemplatesCount} шаблонах расписания
                   </span>
                 ) : null}
-                {guards && guards.scheduleEntriesCount > 0 ? (
-                  <span className="block">Используется в {guards.scheduleEntriesCount} записях расписания</span>
+                {usage.scheduleEntriesCount > 0 ? (
+                  <span className="block">Используется в {usage.scheduleEntriesCount} записях расписания</span>
                 ) : null}
               </>
             ) : (
@@ -129,8 +107,9 @@ export function SubjectDeleteDialog({
           <AlertDialogAction
             variant="destructive"
             disabled={disableDelete}
-            onClick={() => {
-              void onConfirm();
+            onClick={(event) => {
+              event.preventDefault();
+              void handleConfirm();
             }}
           >
             Удалить

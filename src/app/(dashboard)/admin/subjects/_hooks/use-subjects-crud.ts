@@ -1,19 +1,49 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
+import type { UseMutationResult } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { SubjectType } from "@/generated/prisma/client";
+import type { Result } from "@/lib/result";
 import {
   createSubjectAction,
   deleteSubjectAction,
-  getSubjectDeleteGuardsAction,
   updateSubjectAction,
 } from "../_actions/subject-actions";
 import type {
-  SubjectDeleteGuards,
   SubjectUsage,
   SubjectWithUsage,
 } from "../_lib/types";
+import type { CreateSubjectInput } from "@/app/(dashboard)/admin/subjects/_lib/subject-schemas";
+
+type SubjectMutationCommand<TVariables, TData = unknown> = Pick<
+  UseMutationResult<TData, Error, TVariables>,
+  "error" | "isPending" | "mutate" | "mutateAsync" | "reset" | "status" | "variables"
+>;
+
+type CreatedSubject = {
+  id: string;
+  name: string;
+  type: SubjectType;
+};
+
+export type RenameSubjectVariables = {
+  id: string;
+  name: string;
+};
+
+export type SubjectsCrudCommands = {
+  createSubject: SubjectMutationCommand<CreateSubjectInput, CreatedSubject>;
+  renameSubject: SubjectMutationCommand<RenameSubjectVariables>;
+  deleteSubject: SubjectMutationCommand<SubjectWithUsage>;
+};
+
+type SubjectsCrudState = {
+  subjects: SubjectWithUsage[];
+  commands: SubjectsCrudCommands;
+};
 
 const EMPTY_USAGE: SubjectUsage = {
   roomsCount: 0,
@@ -23,88 +53,131 @@ const EMPTY_USAGE: SubjectUsage = {
   scheduleEntriesCount: 0,
 };
 
-export function useSubjectsCrud(initialSubjects: SubjectWithUsage[]) {
-  const [subjects, setSubjects] = useState(initialSubjects);
+function assertActionSuccess<T>(response: Result<T>, fallback: string): T {
+  if (response.error || response.result === null) {
+    throw new Error(response.error ?? fallback);
+  }
 
-  const handleCreateSubject = useCallback(
-    async (data: { name: string; type: SubjectType }) => {
-      const response = await createSubjectAction(data);
-      if (response.error || !response.result) {
-        toast.error(response.error);
-        return false;
-      }
+  return response.result;
+}
 
-      setSubjects((prev) => [
-        {
-          id: response.result.id,
-          name: response.result.name,
-          type: response.result.type,
-          usage: EMPTY_USAGE,
-        },
-        ...prev,
-      ]);
+export function useSubjectsCrud(
+  initialSubjects: SubjectWithUsage[]
+): SubjectsCrudState {
+  const router = useRouter();
+  const [subjectsState, setSubjectsState] = useState({
+    source: initialSubjects,
+    subjects: initialSubjects,
+  });
 
-      toast.success(`Предмет \"${data.name.trim()}\" создан`);
-      return true;
+  if (subjectsState.source !== initialSubjects) {
+    setSubjectsState({ source: initialSubjects, subjects: initialSubjects });
+  }
+
+  const subjects =
+    subjectsState.source === initialSubjects
+      ? subjectsState.subjects
+      : initialSubjects;
+
+  const updateSubjects = useCallback(
+    (updater: (current: SubjectWithUsage[]) => SubjectWithUsage[]) => {
+      setSubjectsState((current) => {
+        const next = updater(current.subjects);
+        return { source: current.source, subjects: next };
+      });
     },
     []
   );
 
-  const handleRenameSubject = useCallback(
-    async (id: string, name: string) => {
+  const refreshServerState = useCallback(() => router.refresh(), [router]);
+
+  const createSubjectMutation = useMutation<
+    CreatedSubject,
+    Error, 
+    CreateSubjectInput
+  >({
+    mutationFn: async (data) => {
+      const response = await createSubjectAction(data);
+      return assertActionSuccess(response, "Не удалось создать предмет");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: (created, data) => {
+      updateSubjects((current) => [
+        {
+          id: created.id,
+          name: created.name,
+          type: created.type,
+          usage: EMPTY_USAGE,
+        },
+        ...current,
+      ]);
+      toast.success(`Предмет "${data.name.trim()}" создан`);
+    },
+    onSettled: refreshServerState,
+  });
+
+  const renameSubjectMutation = useMutation<
+    unknown,
+    Error,
+    RenameSubjectVariables
+  >({
+    mutationFn: async ({ id, name }) => {
       const nextName = name.trim();
       if (!nextName) {
-        return;
+        throw new Error("Название предмета не может быть пустым");
       }
 
       const response = await updateSubjectAction(id, { name: nextName });
-      if (response.error) {
-        toast.error(response.error);
-        return;
-      }
-
-      setSubjects((prev) =>
-        prev.map((subject) =>
+      return assertActionSuccess(response, "Не удалось обновить предмет");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: (_result, { id, name }) => {
+      const nextName = name.trim();
+      updateSubjects((current) =>
+        current.map((subject) =>
           subject.id === id ? { ...subject, name: nextName } : subject
         )
       );
 
       toast.success("Название предмета обновлено");
     },
-    []
-  );
+    onSettled: refreshServerState,
+  });
 
-  const handleDeleteSubject = useCallback(
-    async (subject: SubjectWithUsage) => {
+  const deleteSubjectMutation = useMutation<
+    unknown,
+    Error,
+    SubjectWithUsage
+  >({
+    mutationFn: async (subject) => {
       const response = await deleteSubjectAction(subject.id);
-      if (response.error) {
-        toast.error(response.error);
-        return false;
-      }
-
-      setSubjects((prev) => prev.filter((item) => item.id !== subject.id));
-
-      toast.success(`Предмет \"${subject.name}\" удален`);
-      return true;
+      return assertActionSuccess(response, "Не удалось удалить предмет");
     },
-    []
-  );
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: (_result, subject) => {
+      updateSubjects((current) =>
+        current.filter((item) => item.id !== subject.id)
+      );
 
-  const loadDeleteGuards = useCallback(async (id: string): Promise<SubjectDeleteGuards | null> => {
-    const response = await getSubjectDeleteGuardsAction(id);
-    if (response.error) {
-      toast.error(response.error);
-      return null;
-    }
+      toast.success(`Предмет "${subject.name}" удален`);
+    },
+    onSettled: refreshServerState,
+  });
 
-    return response.result;
-  }, []);
+  const commands: SubjectsCrudCommands = {
+    createSubject: createSubjectMutation,
+    renameSubject: renameSubjectMutation,
+    deleteSubject: deleteSubjectMutation,
+  };
 
   return {
     subjects,
-    handleCreateSubject,
-    handleRenameSubject,
-    handleDeleteSubject,
-    loadDeleteGuards,
+    commands,
   };
 }

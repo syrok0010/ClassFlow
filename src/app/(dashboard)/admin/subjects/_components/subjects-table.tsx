@@ -34,16 +34,13 @@ import {
 import { SubjectUsageCell } from "./subject-usage-cell";
 import { InlineCreateRow } from "./inline-create-row";
 import { InlineNameCell } from "./inline-name-cell";
+import type { SubjectsCrudCommands } from "../_hooks/use-subjects-crud";
 
 interface SubjectsTableProps {
   subjects: SubjectWithUsage[];
   isAddingRow: boolean;
   hasActiveFilters: boolean;
-  onCreateSubject: (data: {
-    name: string;
-    type: SubjectWithUsage["type"];
-  }) => Promise<boolean>;
-  onRenameSubject: (id: string, name: string) => Promise<void>;
+  commands: SubjectsCrudCommands;
   onDeleteRequest: (subject: SubjectWithUsage) => void;
   onCancelAddRow: () => void;
   onCreateFirst: () => void;
@@ -54,8 +51,7 @@ export function SubjectsTable({
   subjects,
   isAddingRow,
   hasActiveFilters,
-  onCreateSubject,
-  onRenameSubject,
+  commands,
   onDeleteRequest,
   onCancelAddRow,
   onCreateFirst,
@@ -77,10 +73,9 @@ export function SubjectsTable({
               <InlineNameCell
                 defaultValue={subject.name}
                 onCancel={() => setEditingId(null)}
-                onSave={(name) => {
-                  void onRenameSubject(subject.id, name);
-                  setEditingId(null);
-                }}
+                command={commands.renameSubject}
+                subjectId={subject.id}
+                onSaved={() => setEditingId(null)}
               />
             );
           }
@@ -126,7 +121,7 @@ export function SubjectsTable({
         ),
       },
     ],
-    [editingId, onDeleteRequest, onRenameSubject]
+    [commands.renameSubject, editingId, onDeleteRequest]
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -168,7 +163,7 @@ export function SubjectsTable({
         </TableHeader>
         <TableBody>
           {isAddingRow ? (
-            <InlineCreateRow onSave={onCreateSubject} onCancel={onCancelAddRow} />
+            <InlineCreateRow command={commands.createSubject} onCancel={onCancelAddRow} />
           ) : null}
 
           {!hasRows && !isAddingRow ? (
