@@ -114,6 +114,7 @@ export function MultiTeacherMatrix({
                       },
                 );
               }}
+              className="h-28"
             >
               <div className="absolute inset-0">
                 {day.countSegments.map((segment) => {

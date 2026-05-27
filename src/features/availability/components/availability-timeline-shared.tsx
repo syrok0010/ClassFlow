@@ -85,7 +85,7 @@ export function AvailabilityTimelineCanvas({
       <TooltipTrigger
         render={
           <div
-            className={cn("relative h-28", className)}
+            className={cn("relative", className)}
             onMouseLeave={() => onHoverMinuteChange(null)}
             onMouseMove={(event) => {
               const rect = event.currentTarget.getBoundingClientRect();

@@ -122,6 +122,7 @@ export function TeacherAvailabilityPreview({
               onHoverMinuteChange={(minute) => {
                 setHovered(minute === null ? null : { dayOfWeek: day.dayOfWeek, minute });
               }}
+              className="h-28"
             >
               <div className="absolute inset-0">
                 {day.segments.map((segment) => {
