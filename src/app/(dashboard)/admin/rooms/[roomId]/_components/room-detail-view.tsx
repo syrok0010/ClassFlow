@@ -1,13 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { ArrowLeft, Building2, Save } from "lucide-react";
-import { toast } from "sonner";
 import type { Prisma } from "@/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
-import { updateRoomAction } from "../../_actions/room-actions";
 import { RoomSubjectsTransfer } from "../../_components/room-subjects-transfer";
 import { useRoomsData } from "../../_components/rooms-data-context";
 import { updateRoomSchema } from "../../_lib/schemas";
@@ -34,34 +33,43 @@ type RoomDetailViewProps = {
 export function RoomDetailView({ room }: RoomDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { subjects } = useRoomsData();
+  const { buildings, commands } = useRoomsData();
+  const currentRoom = useMemo(
+    () =>
+      buildings
+        .flatMap((building) =>
+          building.rooms.map((item) => ({
+            ...item,
+            building,
+          }))
+        )
+        .find((item) => item.id === room.id),
+    [buildings, room.id]
+  );
+  const activeRoom = currentRoom ?? room;
 
   const form = useForm({
     defaultValues: {
-      name: room.name,
-      seatsCount: room.seatsCount,
+      name: activeRoom.name,
+      seatsCount: activeRoom.seatsCount,
     },
     validators: {
       onChange: updateRoomSchema.omit({ id: true }),
     },
     onSubmit: async ({ value }) => {
-      const result = await updateRoomAction({
-        id: room.id,
-        name: value.name.trim(),
-        seatsCount: value.seatsCount,
-      });
-
-      if (result.error) {
-        toast.error(result.error);
-        return;
+      try {
+        await commands.updateRoom.mutateAsync({
+          id: room.id,
+          name: value.name.trim(),
+          seatsCount: value.seatsCount,
+        });
+      } catch {
+        // Toast is shown by the mutation.
       }
-
-      toast.success("Кабинет обновлен");
-      router.refresh();
     },
   });
 
-  const selectedSubjectIds = room.roomSubjects.map((item) => item.subject.id);
+  const selectedSubjectIds = activeRoom.roomSubjects.map((item) => item.subject.id);
 
   return (
     <div className="flex flex-col gap-4">
@@ -79,10 +87,10 @@ export function RoomDetailView({ room }: RoomDetailViewProps) {
               <ArrowLeft className="h-4 w-4" />
               Назад к таблице
             </Button>
-            <h1 className="text-2xl font-bold tracking-tight">{room.name}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{activeRoom.name}</h1>
             <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
               <Building2 className="h-4 w-4" />
-              {room.building?.name ?? "Без привязки к зданию"}
+              {activeRoom.building?.name ?? "Без привязки к зданию"}
             </p>
           </div>
         </div>
@@ -118,10 +126,12 @@ export function RoomDetailView({ room }: RoomDetailViewProps) {
                 <Button
                   className="w-52 h-8.5 mt-4.5"
                   onClick={() => void form.handleSubmit()}
-                  disabled={!canSubmit || isSubmitting}
+                  disabled={!canSubmit || isSubmitting || commands.updateRoom.isPending}
                 >
                   <Save className="h-4 w-4" />
-                  {isSubmitting ? "Сохраняем..." : "Сохранить изменения"}
+                  {isSubmitting || commands.updateRoom.isPending
+                    ? "Сохраняем..."
+                    : "Сохранить изменения"}
                 </Button>
               )}
             </form.Subscribe>
@@ -130,11 +140,9 @@ export function RoomDetailView({ room }: RoomDetailViewProps) {
 
       <div className="rounded-xl border bg-card p-4 shadow-sm">
         <RoomSubjectsTransfer
-          roomId={room.id}
-          roomName={room.name}
-          allSubjects={subjects}
+          roomId={activeRoom.id}
+          roomName={activeRoom.name}
           selectedSubjectIds={selectedSubjectIds}
-          queryKey={["rooms", "detail", room.id]}
         />
       </div>
     </div>

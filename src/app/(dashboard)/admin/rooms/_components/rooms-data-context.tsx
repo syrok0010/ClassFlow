@@ -2,10 +2,12 @@
 
 import { createContext, useContext } from "react";
 import type { BuildingWithRooms, SubjectLite } from "../_lib/types";
+import type { RoomsCrudCommands } from "../_hooks/use-rooms-crud";
 
 type RoomsData = {
   buildings: BuildingWithRooms[];
   subjects: SubjectLite[];
+  commands: RoomsCrudCommands;
 };
 
 const RoomsDataContext = createContext<RoomsData | null>(null);

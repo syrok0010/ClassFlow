@@ -105,9 +105,6 @@ export function RoomsTableView() {
         const query = new URLSearchParams(searchParams.toString());
         router.push(`/admin/rooms/${roomId}?${query.toString()}`);
       },
-      onDelete: () => {
-        router.refresh();
-      },
     },
   });
 
@@ -202,9 +199,7 @@ export function RoomsTableView() {
                   if (configureSubjects) {
                     const query = new URLSearchParams(searchParams.toString());
                     router.push(`/admin/rooms/${roomId}?${query.toString()}`);
-                    return;
                   }
-                  router.refresh();
                 }}
               />
             ) : null}

@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { Building2, Plus } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import {
@@ -16,15 +14,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { createBuildingAction } from "../_actions/room-actions";
 import { CreateBuildingInput, createBuildingSchema } from "@/app/(dashboard)/admin/rooms/_lib/schemas";
+import { useRoomsData } from "./rooms-data-context";
 
 type CreateBuildingDialogProps = {
   triggerVariant?: "icon" | "button";
 };
 
 export function CreateBuildingDialog({ triggerVariant = "icon" }: CreateBuildingDialogProps) {
-  const router = useRouter();
+  const { commands } = useRoomsData();
   const [open, setOpen] = useState(false);
 
   const form = useForm({
@@ -36,22 +34,13 @@ export function CreateBuildingDialog({ triggerVariant = "icon" }: CreateBuilding
       onChange: createBuildingSchema,
     },
     onSubmit: async ({ value }) => {
-      const result = await createBuildingAction(value);
-
-      if (result.error) {
-        toast.error(result.error);
-        return;
+      try {
+        await commands.createBuilding.mutateAsync(createBuildingSchema.parse(value));
+        setOpen(false);
+        form.reset();
+      } catch {
+        // Toast is shown by the mutation.
       }
-
-      if (!result.result) {
-        toast.error("Не удалось создать здание");
-        return;
-      }
-
-      toast.success(`Здание '${result.result.name}' успешно добавлено`);
-      setOpen(false);
-      form.reset();
-      router.refresh();
     },
   });
 
@@ -102,8 +91,13 @@ export function CreateBuildingDialog({ triggerVariant = "icon" }: CreateBuilding
         <DialogFooter>
           <form.Subscribe selector={(state) => ({ canSubmit: state.canSubmit, isSubmitting: state.isSubmitting })}>
             {({ canSubmit, isSubmitting }) => (
-              <Button disabled={!canSubmit || isSubmitting} onClick={() => void form.handleSubmit()}>
-                {isSubmitting ? "Сохраняем..." : "Сохранить"}
+              <Button
+                disabled={!canSubmit || isSubmitting || commands.createBuilding.isPending}
+                onClick={() => void form.handleSubmit()}
+              >
+                {isSubmitting || commands.createBuilding.isPending
+                  ? "Сохраняем..."
+                  : "Сохранить"}
               </Button>
             )}
           </form.Subscribe>

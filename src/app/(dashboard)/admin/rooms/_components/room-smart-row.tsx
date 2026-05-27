@@ -2,12 +2,11 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import { useForm } from "@tanstack/react-form";
 import { flushSync } from "react-dom";
 import { Plus, Link2, X, Loader2 } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { createRoomAction } from "../_actions/room-actions";
 import { createRoomSchema } from "../_lib/schemas";
+import { useRoomsData } from "./rooms-data-context";
 
 type RoomSmartRowProps = {
   buildingId: string;
@@ -17,7 +16,8 @@ type RoomSmartRowProps = {
 
 export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartRowProps) {
   const nameRef = useRef<HTMLInputElement>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { commands } = useRoomsData();
+  const [isConfiguringSubjects, setIsConfiguringSubjects] = useState(false);
   const roomFormSchema = createRoomSchema.omit({ buildingId: true });
 
   const form = useForm({
@@ -32,35 +32,23 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
 
   const submitCreateRoom = async (configureSubjects: boolean) => {
     const parsed = roomFormSchema.safeParse(form.state.values);
-    if (!parsed.success || isSubmitting) {
+    if (!parsed.success || commands.createRoom.isPending) {
       return;
     }
 
-    setIsSubmitting(true);
     try {
-      const result = await createRoomAction({
+      setIsConfiguringSubjects(configureSubjects);
+      const result = await commands.createRoom.mutateAsync({
         buildingId,
         name: parsed.data.name.trim(),
         seatsCount: parsed.data.seatsCount,
       });
 
-      if (result.error) {
-        toast.error(result.error);
-        return;
-      }
-
-      if (!result.result) {
-        toast.error("Не удалось создать кабинет");
-        return;
-      }
-
-      toast.success(`Кабинет '${result.result.name}' добавлен`);
-
       // Use flushSync to ensure form is reset before we attempt to focus
       flushSync(() => form.reset());
 
       if (configureSubjects) {
-        onCreated(result.result.id, true);
+        onCreated(result.id, true);
         return;
       }
 
@@ -68,9 +56,11 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
         nameRef.current?.focus();
       });
 
-      onCreated(result.result.id, false);
+      onCreated(result.id, false);
+    } catch {
+      // Toast is shown by the mutation.
     } finally {
-      setIsSubmitting(false);
+      setIsConfiguringSubjects(false);
     }
   };
 
@@ -96,7 +86,7 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
       <TableCell className="pl-5 align-top py-4">
         <div className="flex gap-2">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-primary/40 text-primary">
-            {isSubmitting ? (
+            {commands.createRoom.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Plus className="h-4 w-4" />
@@ -160,11 +150,13 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
                     if (!canSubmit) return;
                     void submitCreateRoom(false);
                   }}
-                  disabled={!canSubmit || isSubmitting}
+                  disabled={!canSubmit || commands.createRoom.isPending}
                   className="h-8"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Добавить
+                  {commands.createRoom.isPending && !isConfiguringSubjects
+                    ? "Добавляем..."
+                    : "Добавить"}
                 </Button>
                 <Button
                   size="sm"
@@ -174,11 +166,13 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
                     if (!canSubmit) return;
                     void submitCreateRoom(true);
                   }}
-                  disabled={!canSubmit || isSubmitting}
+                  disabled={!canSubmit || commands.createRoom.isPending}
                   className="h-8"
                 >
                   <Link2 className="h-3.5 w-3.5" />
-                  Настроить предметы
+                  {commands.createRoom.isPending && isConfiguringSubjects
+                    ? "Переходим..."
+                    : "Настроить предметы"}
                 </Button>
               </>
               );
