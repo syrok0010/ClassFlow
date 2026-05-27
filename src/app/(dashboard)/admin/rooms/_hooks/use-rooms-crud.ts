@@ -29,7 +29,9 @@ import type {
 type RoomMutationCommand<TVariables, TData = unknown> = Pick<
   UseMutationResult<TData, Error, TVariables>,
   "error" | "isPending" | "mutate" | "mutateAsync" | "reset" | "status" | "variables"
->;
+> & {
+  execute: (variables: TVariables) => Promise<TData | null>;
+};
 
 type BuildingEntity = BuildingWithRooms;
 type RoomEntity = BuildingWithRooms["rooms"][number];
@@ -59,6 +61,27 @@ function assertActionSuccess<T>(response: Result<T>, fallback: string): T {
   }
 
   return response.result;
+}
+
+function withExecute<TVariables, TData>(
+  mutation: UseMutationResult<TData, Error, TVariables>
+): RoomMutationCommand<TVariables, TData> {
+  return {
+    error: mutation.error,
+    isPending: mutation.isPending,
+    mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync,
+    reset: mutation.reset,
+    status: mutation.status,
+    variables: mutation.variables,
+    execute: async (variables) => {
+      try {
+        return await mutation.mutateAsync(variables);
+      } catch {
+        return null;
+      }
+    },
+  };
 }
 
 function sortByName<T extends { name: string }>(items: T[]): T[] {
@@ -145,7 +168,7 @@ export function useRoomsCrud(
     CreateBuildingInput
   >({
     mutationFn: async (input) => {
-      const building = await assertActionSuccess(
+      const building = assertActionSuccess(
         await createBuildingAction(input),
         "Не удалось создать здание"
       );
@@ -167,7 +190,7 @@ export function useRoomsCrud(
 
   const createRoomMutation = useMutation<RoomEntity, Error, CreateRoomInput>({
     mutationFn: async (input) => {
-      const room = await assertActionSuccess(
+      const room = assertActionSuccess(
         await createRoomAction(input),
         "Не удалось создать кабинет"
       );
@@ -196,7 +219,7 @@ export function useRoomsCrud(
 
   const updateRoomMutation = useMutation<RoomEntity, Error, UpdateRoomInput>({
     mutationFn: async (input) => {
-      const room = await assertActionSuccess(
+      const room = assertActionSuccess(
         await updateRoomAction(input),
         "Не удалось обновить кабинет"
       );
@@ -295,11 +318,11 @@ export function useRoomsCrud(
   });
 
   const commands: RoomsCrudCommands = {
-    createBuilding: createBuildingMutation,
-    createRoom: createRoomMutation,
-    updateRoom: updateRoomMutation,
-    deleteRoom: deleteRoomMutation,
-    updateRoomSubjects: updateRoomSubjectsMutation,
+    createBuilding: withExecute(createBuildingMutation),
+    createRoom: withExecute(createRoomMutation),
+    updateRoom: withExecute(updateRoomMutation),
+    deleteRoom: withExecute(deleteRoomMutation),
+    updateRoomSubjects: withExecute(updateRoomSubjectsMutation),
   };
 
   return {

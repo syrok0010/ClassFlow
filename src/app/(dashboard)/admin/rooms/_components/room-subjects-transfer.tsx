@@ -113,11 +113,9 @@ export function RoomSubjectsTransfer({
       ? selectedSubjectIds.filter((id) => id !== subjectId)
       : [...selectedSubjectIds, subjectId];
 
-    void commands.updateRoomSubjects.mutateAsync({
+    void commands.updateRoomSubjects.execute({
       roomId,
       subjectIds: next,
-    }).catch(() => {
-      // Toast is shown by the mutation.
     });
   };
 
@@ -131,26 +129,18 @@ export function RoomSubjectsTransfer({
     if (!over) return;
 
     if (over === "allowed" && !selectedSubjectIds.includes(activeId)) {
-      void commands.updateRoomSubjects
-        .mutateAsync({
-          roomId,
-          subjectIds: [...selectedSubjectIds, activeId],
-        })
-        .catch(() => {
-          // Toast is shown by the mutation.
-        });
+      void commands.updateRoomSubjects.execute({
+        roomId,
+        subjectIds: [...selectedSubjectIds, activeId],
+      });
       return;
     }
 
     if (over === "available" && selectedSubjectIds.includes(activeId)) {
-      void commands.updateRoomSubjects
-        .mutateAsync({
-          roomId,
-          subjectIds: selectedSubjectIds.filter((id) => id !== activeId),
-        })
-        .catch(() => {
-          // Toast is shown by the mutation.
-        });
+      void commands.updateRoomSubjects.execute({
+        roomId,
+        subjectIds: selectedSubjectIds.filter((id) => id !== activeId),
+      });
     }
   };
 

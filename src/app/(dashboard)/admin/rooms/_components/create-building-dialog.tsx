@@ -34,12 +34,15 @@ export function CreateBuildingDialog({ triggerVariant = "icon" }: CreateBuilding
       onChange: createBuildingSchema,
     },
     onSubmit: async ({ value }) => {
-      try {
-        await commands.createBuilding.mutateAsync(createBuildingSchema.parse(value));
+      const parsed = createBuildingSchema.safeParse(value);
+      if (!parsed.success) {
+        return;
+      }
+
+      const result = await commands.createBuilding.execute(parsed.data);
+      if (result) {
         setOpen(false);
         form.reset();
-      } catch {
-        // Toast is shown by the mutation.
       }
     },
   });
@@ -92,12 +95,10 @@ export function CreateBuildingDialog({ triggerVariant = "icon" }: CreateBuilding
           <form.Subscribe selector={(state) => ({ canSubmit: state.canSubmit, isSubmitting: state.isSubmitting })}>
             {({ canSubmit, isSubmitting }) => (
               <Button
-                disabled={!canSubmit || isSubmitting || commands.createBuilding.isPending}
+                disabled={!canSubmit || isSubmitting}
                 onClick={() => void form.handleSubmit()}
               >
-                {isSubmitting || commands.createBuilding.isPending
-                  ? "Сохраняем..."
-                  : "Сохранить"}
+                {isSubmitting ? "Сохраняем..." : "Сохранить"}
               </Button>
             )}
           </form.Subscribe>

@@ -23,11 +23,7 @@ export function RoomActionsMenu({ room, onEdit }: RoomActionsMenuProps) {
     commands.deleteRoom.variables?.id === room.id;
 
   const handleDelete = async () => {
-    try {
-      await commands.deleteRoom.mutateAsync(room);
-    } catch {
-      // Toast is shown by the mutation.
-    }
+    await commands.deleteRoom.execute(room);
   };
 
   return (

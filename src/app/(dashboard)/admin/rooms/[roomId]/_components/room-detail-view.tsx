@@ -57,15 +57,16 @@ export function RoomDetailView({ room }: RoomDetailViewProps) {
       onChange: updateRoomSchema.omit({ id: true }),
     },
     onSubmit: async ({ value }) => {
-      try {
-        await commands.updateRoom.mutateAsync({
-          id: room.id,
-          name: value.name.trim(),
-          seatsCount: value.seatsCount,
-        });
-      } catch {
-        // Toast is shown by the mutation.
+      const parsed = updateRoomSchema.safeParse({
+        id: room.id,
+        name: value.name.trim(),
+        seatsCount: value.seatsCount,
+      });
+      if (!parsed.success) {
+        return;
       }
+
+      await commands.updateRoom.execute(parsed.data);
     },
   });
 
@@ -126,12 +127,10 @@ export function RoomDetailView({ room }: RoomDetailViewProps) {
                 <Button
                   className="w-52 h-8.5 mt-4.5"
                   onClick={() => void form.handleSubmit()}
-                  disabled={!canSubmit || isSubmitting || commands.updateRoom.isPending}
+                  disabled={!canSubmit || isSubmitting}
                 >
                   <Save className="h-4 w-4" />
-                  {isSubmitting || commands.updateRoom.isPending
-                    ? "Сохраняем..."
-                    : "Сохранить изменения"}
+                  {isSubmitting ? "Сохраняем..." : "Сохранить изменения"}
                 </Button>
               )}
             </form.Subscribe>

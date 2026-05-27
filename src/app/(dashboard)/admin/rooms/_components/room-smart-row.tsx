@@ -36,18 +36,19 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
       return;
     }
 
-    try {
-      setIsConfiguringSubjects(configureSubjects);
-      const result = await commands.createRoom.mutateAsync({
-        buildingId,
-        name: parsed.data.name.trim(),
-        seatsCount: parsed.data.seatsCount,
-      });
+    setIsConfiguringSubjects(configureSubjects);
+    const result = await commands.createRoom.execute({
+      buildingId,
+      name: parsed.data.name.trim(),
+      seatsCount: parsed.data.seatsCount,
+    });
 
+    if (result) {
       // Use flushSync to ensure form is reset before we attempt to focus
       flushSync(() => form.reset());
 
       if (configureSubjects) {
+        setIsConfiguringSubjects(false);
         onCreated(result.id, true);
         return;
       }
@@ -57,11 +58,9 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
       });
 
       onCreated(result.id, false);
-    } catch {
-      // Toast is shown by the mutation.
-    } finally {
-      setIsConfiguringSubjects(false);
     }
+
+    setIsConfiguringSubjects(false);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
