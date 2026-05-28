@@ -12,10 +12,10 @@ type RoomsWorkspaceProps = {
 };
 
 export function RoomsWorkspace({ buildings, subjects, children }: RoomsWorkspaceProps) {
-  const roomsData = useRoomsCrud(buildings, subjects);
+  const commands = useRoomsCrud();
 
   return (
-    <RoomsDataProvider value={roomsData}>
+    <RoomsDataProvider value={{buildings, subjects, commands}}>
       <div className="flex flex-col gap-4 md:flex-row md:items-stretch h-full">
         <RoomsBuildingSidebar />
         <section className="min-w-0 flex-1">{children}</section>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -94,9 +94,14 @@ export function RoomSubjectsTransfer({
   const { commands, subjects } = useRoomsData();
   const isSaving = commands.updateRoomSubjects.isPending;
   const [search, setSearch] = useState("");
+  const [optimisticSelectedSubjectIds, setOptimisticSelectedSubjectIds] = useState(selectedSubjectIds);
   const [debouncedSearch] = useDebouncedValue(search, { wait: 350 });
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  useEffect(() => {
+    setOptimisticSelectedSubjectIds(selectedSubjectIds);
+  }, [selectedSubjectIds]);
 
   const filteredSubjects = useMemo(() => {
     const needle = debouncedSearch.trim().toLowerCase();
@@ -104,19 +109,38 @@ export function RoomSubjectsTransfer({
     return subjects.filter((subject) => subject.name.toLowerCase().includes(needle));
   }, [debouncedSearch, subjects]);
 
-  const available = filteredSubjects.filter((subject) => !selectedSubjectIds.includes(subject.id));
-  const allowed = filteredSubjects.filter((subject) => selectedSubjectIds.includes(subject.id));
+  const available = filteredSubjects.filter(
+    (subject) => !optimisticSelectedSubjectIds.includes(subject.id)
+  );
+  const allowed = filteredSubjects.filter(
+    (subject) => optimisticSelectedSubjectIds.includes(subject.id)
+  );
+
+  const updateSelectedSubjects = async (nextSubjectIds: string[]) => {
+    const previousSubjectIds = optimisticSelectedSubjectIds;
+    setOptimisticSelectedSubjectIds(nextSubjectIds);
+
+    const result = await commands.updateRoomSubjects.execute({
+      roomId,
+      subjectIds: nextSubjectIds,
+    });
+
+    if (!result) {
+      setOptimisticSelectedSubjectIds(previousSubjectIds);
+    }
+  };
 
   const toggleSubject = (subjectId: string) => {
-    const exists = selectedSubjectIds.includes(subjectId);
-    const next = exists
-      ? selectedSubjectIds.filter((id) => id !== subjectId)
-      : [...selectedSubjectIds, subjectId];
+    if (isSaving) {
+      return;
+    }
 
-    void commands.updateRoomSubjects.execute({
-      roomId,
-      subjectIds: next,
-    });
+    const exists = optimisticSelectedSubjectIds.includes(subjectId);
+    const next = exists
+      ? optimisticSelectedSubjectIds.filter((id) => id !== subjectId)
+      : [...optimisticSelectedSubjectIds, subjectId];
+
+    void updateSelectedSubjects(next);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -128,19 +152,15 @@ export function RoomSubjectsTransfer({
     const activeId = String(event.active.id);
     if (!over) return;
 
-    if (over === "allowed" && !selectedSubjectIds.includes(activeId)) {
-      void commands.updateRoomSubjects.execute({
-        roomId,
-        subjectIds: [...selectedSubjectIds, activeId],
-      });
+    if (over === "allowed" && !optimisticSelectedSubjectIds.includes(activeId)) {
+      void updateSelectedSubjects([...optimisticSelectedSubjectIds, activeId]);
       return;
     }
 
-    if (over === "available" && selectedSubjectIds.includes(activeId)) {
-      void commands.updateRoomSubjects.execute({
-        roomId,
-        subjectIds: selectedSubjectIds.filter((id) => id !== activeId),
-      });
+    if (over === "available" && optimisticSelectedSubjectIds.includes(activeId)) {
+      void updateSelectedSubjects(
+        optimisticSelectedSubjectIds.filter((id) => id !== activeId)
+      );
     }
   };
 
