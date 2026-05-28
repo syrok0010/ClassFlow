@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import type { UseMutationResult } from "@tanstack/react-query";
 import type { GroupType } from "@/generated/prisma/client";
@@ -20,10 +19,6 @@ import {
 } from "../_actions/group-actions";
 import { toast } from "sonner";
 import type { Result } from "@/lib/result";
-
-type MutationContext = {
-  previousGroups: GroupWithDetails[];
-};
 
 type GroupsCrudState = {
   groups: GroupWithDetails[];
@@ -66,59 +61,19 @@ export type SplitGroupVariables = {
 
 export type RedistributeSubgroupsVariables = Record<string, string[]>;
 
-type MutationCommand<TVariables, TContext = unknown> = Pick<
-  UseMutationResult<unknown, Error, TVariables, TContext>,
+type MutationCommand<TVariables> = Pick<
+  UseMutationResult<unknown, Error, TVariables>,
   "error" | "isPending" | "mutate" | "mutateAsync" | "reset" | "status" | "variables"
 >;
 
 export type GroupsCrudCommands = {
-  createGroup: MutationCommand<CreateGroupVariables, MutationContext>;
-  renameGroup: MutationCommand<RenameGroupVariables, MutationContext>;
-  deleteGroup: MutationCommand<GroupWithDetails, MutationContext>;
-  transferStudents: MutationCommand<TransferStudentsVariables, MutationContext>;
+  createGroup: MutationCommand<CreateGroupVariables>;
+  renameGroup: MutationCommand<RenameGroupVariables>;
+  deleteGroup: MutationCommand<GroupWithDetails>;
+  transferStudents: MutationCommand<TransferStudentsVariables>;
   splitGroup: MutationCommand<SplitGroupVariables>;
   redistributeSubgroups: MutationCommand<RedistributeSubgroupsVariables>;
 };
-
-function applyRename(
-  groups: GroupWithDetails[],
-  id: string,
-  name: string
-): GroupWithDetails[] {
-  return groups.map((group) => ({
-    ...group,
-    ...(group.id === id ? { name } : {}),
-    subGroups: applyRename(group.subGroups, id, name),
-  }));
-}
-
-function applyRemove(groups: GroupWithDetails[], id: string): GroupWithDetails[] {
-  return groups
-    .filter((group) => group.id !== id)
-    .map((group) => ({
-      ...group,
-      subGroups: applyRemove(group.subGroups, id),
-    }));
-}
-
-function applyStudentsDelta(
-  groups: GroupWithDetails[],
-  id: string,
-  delta: number
-): GroupWithDetails[] {
-  return groups.map((group) => {
-    const nextCount =
-      group.id === id
-        ? Math.max(0, group._count.studentGroups + delta)
-        : group._count.studentGroups;
-
-    return {
-      ...group,
-      _count: { studentGroups: nextCount },
-      subGroups: applyStudentsDelta(group.subGroups, id, delta),
-    };
-  });
-}
 
 function assertActionSuccess<T>(
   response: Result<T>,
@@ -132,146 +87,49 @@ function assertActionSuccess<T>(
 }
 
 export function useGroupsCrud(initialGroups: GroupWithDetails[]): GroupsCrudState {
-  const router = useRouter();
-  const [groupsState, setGroupsState] = useState({
-    source: initialGroups,
-    groups: initialGroups,
-  });
-  const groupsRef = useRef(initialGroups);
-
-  if (groupsState.source !== initialGroups) {
-    setGroupsState({ source: initialGroups, groups: initialGroups });
-  }
-
-  const groups =
-    groupsState.source === initialGroups ? groupsState.groups : initialGroups;
-
-  useEffect(() => {
-    groupsRef.current = groups;
-  }, [groups]);
-
-  const updateGroups = useCallback(
-    (updater: (current: GroupWithDetails[]) => GroupWithDetails[]) => {
-      setGroupsState((current) => {
-        const next = updater(current.groups);
-        groupsRef.current = next;
-        return { source: current.source, groups: next };
-      });
-    },
-    []
-  );
-
-  const restoreGroups = useCallback((previousGroups: GroupWithDetails[]) => {
-    groupsRef.current = previousGroups;
-    setGroupsState((current) => ({
-      source: current.source,
-      groups: previousGroups,
-    }));
-  }, []);
-
-  const refreshServerState = useCallback(() => router.refresh(), [router]);
-
-  const createGroupMutation = useMutation<
-    unknown,
-    Error,
-    CreateGroupVariables,
-    MutationContext
-  >({
+  const createGroupMutation = useMutation<unknown, Error, CreateGroupVariables>({
     mutationFn: async (data) => {
       const response = await createGroupAction(data);
       return assertActionSuccess(response, "Не удалось создать группу");
     },
-    onMutate: (data) => {
-      const previousGroups = groupsRef.current;
-      const optimisticGroup: GroupWithDetails = {
-        id: `optimistic-${crypto.randomUUID()}`,
-        name: data.name,
-        type: data.type,
-        grade: data.grade ?? null,
-        parentId: null,
-        subjectId: null,
-        subject: null,
-        _count: { studentGroups: 0 },
-        subGroups: [],
-      };
-
-      updateGroups((current) => [optimisticGroup, ...current]);
-      return { previousGroups };
-    },
-    onError: (error, _data, context) => {
-      if (context) {
-        restoreGroups(context.previousGroups);
-      }
-
+    onError: (error) => {
       toast.error(error.message);
     },
     onSuccess: (_result, data) => {
       toast.success(`Группа "${data.name}" создана`);
     },
-    onSettled: refreshServerState,
   });
 
-  const renameGroupMutation = useMutation<
-    unknown,
-    Error,
-    RenameGroupVariables,
-    MutationContext
-  >({
+  const renameGroupMutation = useMutation<unknown, Error, RenameGroupVariables>({
     mutationFn: async ({ id, name }) => {
       const response = await updateGroupAction(id, { name });
       return assertActionSuccess(response, "Не удалось переименовать группу");
     },
-    onMutate: ({ id, name }) => {
-      const previousGroups = groupsRef.current;
-      updateGroups((current) => applyRename(current, id, name));
-      return { previousGroups };
-    },
-    onError: (error, _data, context) => {
-      if (context) {
-        restoreGroups(context.previousGroups);
-      }
-
+    onError: (error) => {
       toast.error(error.message);
     },
     onSuccess: () => {
       toast.success("Группа переименована");
     },
-    onSettled: refreshServerState,
   });
 
-  const deleteGroupMutation = useMutation<
-    unknown,
-    Error,
-    GroupWithDetails,
-    MutationContext
-  >({
+  const deleteGroupMutation = useMutation<unknown, Error, GroupWithDetails>({
     mutationFn: async (group) => {
       const response = await deleteGroupAction(group.id);
       return assertActionSuccess(response, "Не удалось удалить группу");
     },
-    onMutate: (group) => {
-      const previousGroups = groupsRef.current;
-      updateGroups((current) => applyRemove(current, group.id));
-      return { previousGroups };
-    },
-    onError: (error, _group, context) => {
-      if (context) {
-        restoreGroups(context.previousGroups);
-      }
-
+    onError: (error) => {
       toast.error(error.message);
     },
     onSuccess: (_result, group) => {
       toast.success(`Группа "${group.name}" удалена`);
     },
-    onSettled: refreshServerState,
   });
 
   const transferStudentsMutation = useMutation<
     unknown,
     Error,
-    TransferStudentsVariables,
-    MutationContext
+    TransferStudentsVariables
   >({
     mutationFn: async ({ group, toAssign, toRemove }) => {
       const response = await updateGroupStudentsAction({
@@ -282,24 +140,12 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]): GroupsCrudStat
 
       return assertActionSuccess(response, "Не удалось обновить состав группы");
     },
-    onMutate: ({ group, toAssign, toRemove }) => {
-      const previousGroups = groupsRef.current;
-      updateGroups((current) =>
-        applyStudentsDelta(current, group.id, toAssign.length - toRemove.length)
-      );
-      return { previousGroups };
-    },
-    onError: (error, _data, context) => {
-      if (context) {
-        restoreGroups(context.previousGroups);
-      }
-
+    onError: (error) => {
       toast.error(error.message);
     },
     onSuccess: () => {
       toast.success("Состав группы обновлен");
     },
-    onSettled: refreshServerState,
   });
 
   const splitterMutation = useMutation<
@@ -313,7 +159,6 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]): GroupsCrudStat
     },
     onError: (error) => toast.error(error.message),
     onSuccess: () => toast.success("Подгруппы созданы"),
-    onSettled: refreshServerState,
   });
 
   const subgroupRedistributionMutation = useMutation<
@@ -331,7 +176,6 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]): GroupsCrudStat
     onSuccess: () => {
       toast.success("Состав подгрупп обновлен");
     },
-    onSettled: refreshServerState,
   });
 
   const loadStudentsForAssignment = useCallback(
@@ -375,7 +219,7 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]): GroupsCrudStat
   };
 
   return {
-    groups,
+    groups: initialGroups,
     commands,
     loadStudentsForAssignment,
     loadGroupStudents,
