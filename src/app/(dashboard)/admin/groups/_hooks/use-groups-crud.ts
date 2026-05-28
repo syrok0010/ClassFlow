@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import type { UseMutationResult } from "@tanstack/react-query";
 import type { GroupType } from "@/generated/prisma/client";
+import { assertActionSuccess } from "@/lib/mutation-utils";
 import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
 import {
   createGroupAction,
@@ -18,7 +19,6 @@ import {
   updateGroupStudentsAction,
 } from "../_actions/group-actions";
 import { toast } from "sonner";
-import type { Result } from "@/lib/result";
 
 type GroupsCrudState = {
   groups: GroupWithDetails[];
@@ -74,17 +74,6 @@ export type GroupsCrudCommands = {
   splitGroup: MutationCommand<SplitGroupVariables>;
   redistributeSubgroups: MutationCommand<RedistributeSubgroupsVariables>;
 };
-
-function assertActionSuccess<T>(
-  response: Result<T>,
-  fallback: string
-): T {
-  if (response.error || response.result === null) {
-    throw new Error(response.error ?? fallback);
-  }
-
-  return response.result;
-}
 
 export function useGroupsCrud(initialGroups: GroupWithDetails[]): GroupsCrudState {
   const createGroupMutation = useMutation<unknown, Error, CreateGroupVariables>({
