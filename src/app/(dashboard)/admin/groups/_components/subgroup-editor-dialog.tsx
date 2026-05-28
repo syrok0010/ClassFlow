@@ -74,9 +74,8 @@ export function SubgroupEditorDialog({
   };
 
   const handleSave = async () => {
-    try {
-      await command.mutateAsync(buckets);
-    } catch {
+    const result = await command.execute(buckets);
+    if (result === null) {
       return;
     }
 

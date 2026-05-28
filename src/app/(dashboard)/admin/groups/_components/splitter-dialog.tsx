@@ -136,17 +136,16 @@ export function SplitterDialog({
   const handleSave = async () => {
     if (!group || !subjectId) return;
 
-    try {
-      const subgroupsData = bucketKeys.map((key, i) => ({
-        name: groupNameSchema.parse(`${group.name} ${subjectName} ${i + 1}`),
-        studentIds: buckets[key] ?? [],
-      }));
-      await command.mutateAsync({
-        parentGroupId: group.id,
-        subjectId,
-        subgroups: subgroupsData,
-      });
-    } catch {
+    const subgroupsData = bucketKeys.map((key, i) => ({
+      name: groupNameSchema.parse(`${group.name} ${subjectName} ${i + 1}`),
+      studentIds: buckets[key] ?? [],
+    }));
+    const result = await command.execute({
+      parentGroupId: group.id,
+      subjectId,
+      subgroups: subgroupsData,
+    });
+    if (result === null) {
       return;
     }
 

@@ -2,9 +2,12 @@
 
 import { useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
-import type { UseMutationResult } from "@tanstack/react-query";
 import type { GroupType } from "@/generated/prisma/client";
-import { assertActionSuccess } from "@/lib/mutation-utils";
+import {
+  assertActionSuccess,
+  type MutationCommand,
+  withExecute,
+} from "@/lib/mutation-utils";
 import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
 import {
   createGroupAction,
@@ -60,11 +63,6 @@ export type SplitGroupVariables = {
 };
 
 export type RedistributeSubgroupsVariables = Record<string, string[]>;
-
-type MutationCommand<TVariables> = Pick<
-  UseMutationResult<unknown, Error, TVariables>,
-  "error" | "isPending" | "mutate" | "mutateAsync" | "reset" | "status" | "variables"
->;
 
 export type GroupsCrudCommands = {
   createGroup: MutationCommand<CreateGroupVariables>;
@@ -199,12 +197,12 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]): GroupsCrudStat
   );
 
   const commands: GroupsCrudCommands = {
-    createGroup: createGroupMutation,
-    renameGroup: renameGroupMutation,
-    deleteGroup: deleteGroupMutation,
-    transferStudents: transferStudentsMutation,
-    splitGroup: splitterMutation,
-    redistributeSubgroups: subgroupRedistributionMutation,
+    createGroup: withExecute(createGroupMutation),
+    renameGroup: withExecute(renameGroupMutation),
+    deleteGroup: withExecute(deleteGroupMutation),
+    transferStudents: withExecute(transferStudentsMutation),
+    splitGroup: withExecute(splitterMutation),
+    redistributeSubgroups: withExecute(subgroupRedistributionMutation),
   };
 
   return {

@@ -133,9 +133,8 @@ export function StudentAssignmentDialog({
       return;
     }
 
-    try {
-      await command.mutateAsync({ group, toAssign, toRemove });
-    } catch {
+    const result = await command.execute({ group, toAssign, toRemove });
+    if (result === null) {
       return;
     }
 

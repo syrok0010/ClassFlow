@@ -47,16 +47,15 @@ export function InlineCreateRow({ command, onCancel }: InlineCreateRowProps) {
       grade: "" as string,
     },
     onSubmit: async ({ value }) => {
-      try {
-        await command.mutateAsync({
-          name: value.name,
-          type: value.type,
-          grade: parseGroupGradeInput(value.grade),
-        });
-        flushSync(() => form.reset());
-      } catch {
+      const result = await command.execute({
+        name: value.name,
+        type: value.type,
+        grade: parseGroupGradeInput(value.grade),
+      });
+      if (result === null) {
         return;
       }
+      flushSync(() => form.reset());
     },
   });
 
@@ -173,7 +172,7 @@ export function InlineCreateRow({ command, onCancel }: InlineCreateRowProps) {
             <InlineCreateRowFrameActions
               onSave={() => form.handleSubmit()}
               onCancel={onCancel}
-              isSaveDisabled={!name.trim() || isSubmitting || command.isPending}
+              isSaveDisabled={!name.trim() || isSubmitting}
             />
           )}
         </form.Subscribe>

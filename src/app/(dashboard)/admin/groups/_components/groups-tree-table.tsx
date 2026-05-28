@@ -111,12 +111,11 @@ export function GroupsTreeTable({
   const handleSaveRename = useCallback(
     async (newName: string) => {
       if (editingId && newName.trim()) {
-        try {
-          await commands.renameGroup.mutateAsync({
-            id: editingId,
-            name: newName.trim(),
-          });
-        } catch {
+        const result = await commands.renameGroup.execute({
+          id: editingId,
+          name: newName.trim(),
+        });
+        if (result === null) {
           return;
         }
       }
@@ -132,14 +131,9 @@ export function GroupsTreeTable({
   const handleConfirmDelete = async () => {
     if (confirmDeleteGroup) {
       setIsDeleting(true);
-      try {
-        await commands.deleteGroup.mutateAsync(confirmDeleteGroup);
-      } catch {
-        return;
-      } finally {
-        setIsDeleting(false);
-        setConfirmDeleteGroup(null);
-      }
+      await commands.deleteGroup.execute(confirmDeleteGroup);
+      setIsDeleting(false);
+      setConfirmDeleteGroup(null);
     }
   };
 
