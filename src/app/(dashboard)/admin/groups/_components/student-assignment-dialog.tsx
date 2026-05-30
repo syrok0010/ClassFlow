@@ -16,7 +16,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import {
   Select,
   SelectContent,
@@ -176,15 +180,17 @@ export function StudentAssignmentDialog({
             </p>
 
             <div className="flex gap-1.5">
-              <div className="relative flex-1">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                <Input
+              <InputGroup className="flex-1">
+                <InputGroupAddon align="inline-start">
+                  <Search className="size-3.5" />
+                </InputGroupAddon>
+                <InputGroupInput
                   placeholder="Поиск..."
                   value={leftSearch}
                   onChange={(e) => setLeftSearch(e.target.value)}
-                  className="h-7 pl-7 text-xs"
+                  className="text-xs"
                 />
-              </div>
+              </InputGroup>
               {isElective && availableClasses.length > 0 && (
                 <Select
                   value={leftClassFilter}

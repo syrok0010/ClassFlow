@@ -36,7 +36,7 @@ export function StudentBucketPanel({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col rounded-lg border min-h-[200px] transition-colors",
+        "flex flex-col rounded-lg border min-h-50 transition-colors h-full",
         variant === "source" ? "bg-muted/30" : "bg-background",
         isOver && "ring-2 ring-primary/50 bg-primary/5",
         className
@@ -56,7 +56,7 @@ export function StudentBucketPanel({
       )}
       <div
         className={cn(
-          "flex-1 p-1.5 flex flex-col gap-0.5 overflow-y-auto max-h-[300px]",
+          "flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-1.5",
           contentClassName
         )}
       >

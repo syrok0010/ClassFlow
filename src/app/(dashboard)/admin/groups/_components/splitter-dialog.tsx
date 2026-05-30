@@ -295,7 +295,7 @@ export function SplitterDialog({
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex flex-col gap-4">
+            <div className="flex min-h-[32rem] flex-col gap-4">
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -313,6 +313,7 @@ export function SplitterDialog({
               <StudentBucketsBoard
                 columns={boardColumns}
                 getStudentDisplayName={getStudentDisplayName}
+                className="flex-1"
               />
 
               <DialogFooter>

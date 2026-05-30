@@ -31,11 +31,16 @@ export function StudentBucketsBoard({
   className,
 }: StudentBucketsBoardProps) {
   return (
-    <div className="flex flex-wrap gap-3">
+    <div
+      className={cn(
+        "grid auto-cols-[minmax(16rem,1fr)] grid-flow-col items-stretch gap-3 overflow-x-auto pb-1",
+        className
+      )}
+    >
       {columns.map((column) => (
         <div
           key={column.id}
-          className={cn("flex min-w-2xs flex-1 flex-col gap-2", className)}
+          className="flex min-w-64 self-stretch flex-col gap-2"
         >
           {column.header}
           <StudentBucketPanel
@@ -43,6 +48,7 @@ export function StudentBucketsBoard({
             title={column.title}
             variant={column.tone ?? "target"}
             emptyMessage={column.emptyMessage}
+            className="flex-1"
           >
             <SortableContext
               items={column.students.map((student) => student.id)}
