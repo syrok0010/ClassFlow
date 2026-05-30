@@ -43,7 +43,8 @@ const MISSING_TEACHER_LABEL = "Преподаватель не назначен"
 const MISSING_ROOM_LABEL = "Кабинет не указан";
 
 export function mapScheduleEntryToStudentScheduleEvent(
-  entry: StudentScheduleEntryRecord
+  entry: StudentScheduleEntryRecord,
+  enrolledDeliveryGroupIds: ReadonlySet<string>
 ): StudentScheduleEvent {
   const teacherName = entry.teacher?.user
     ? getUserFullName(entry.teacher.user) || MISSING_TEACHER_LABEL
@@ -63,6 +64,10 @@ export function mapScheduleEntryToStudentScheduleEvent(
     roomName,
     groupName,
     groupType: groupType as GroupType,
+    deliveryGroupId: entry.deliveryGroup?.id ?? null,
+    isEnrolledInDeliveryGroup: entry.deliveryGroup
+      ? enrolledDeliveryGroupIds.has(entry.deliveryGroup.id)
+      : false,
     timeLabel: `${format(entry.startTime, "HH:mm")}-${format(entry.endTime, "HH:mm")}`,
     metaLine: `${teacherName} • ${roomName}`,
   };

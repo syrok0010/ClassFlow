@@ -127,6 +127,7 @@ export async function getParentSchedulePageData({
     studentId: selectedStudentId,
     anchorDate,
     viewMode,
+    includeAvailableOptionalElectives: true,
   });
 
   return {
