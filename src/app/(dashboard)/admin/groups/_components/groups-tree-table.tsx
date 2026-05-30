@@ -7,6 +7,7 @@ import {
   type FocusEvent,
 } from "react";
 import { useForm } from "@tanstack/react-form";
+import { z } from "zod/v4";
 import type { GroupWithDetails, SubjectOption } from "../_lib/types";
 import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
 import {
@@ -102,6 +103,29 @@ const TYPE_STYLES: Record<string, string> = {
   KINDERGARTEN_GROUP: "bg-orange-50 text-orange-700 ring-orange-600/20",
 };
 
+const linkedClassIdsFormSchema = z
+  .array(z.string().min(1))
+  .min(1, "Выберите хотя бы один класс");
+
+const electiveSubjectIdFormSchema = z
+  .string()
+  .min(1, "Выберите доп");
+
+const renameFormSchema = z.object({
+  name: groupNameSchema,
+});
+
+const linkedClassesFormSchema = z.object({
+  linkedClassIds: linkedClassIdsFormSchema,
+});
+
+function haveSameIds(left: string[], right: string[]) {
+  return (
+    left.length === right.length &&
+    left.every((id) => right.includes(id))
+  );
+}
+
 export function GroupsTreeTable({
   groups,
   classOptions,
@@ -121,7 +145,6 @@ export function GroupsTreeTable({
   const [editingElectiveSubjectId, setEditingElectiveSubjectId] = useState<string | null>(null);
   const [confirmDeleteGroup, setConfirmDeleteGroup] =
     useState<GroupWithDetails | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const deleteStudentsCount = confirmDeleteGroup?._count.studentGroups ?? 0;
   const deleteSubGroupsCount = confirmDeleteGroup?.subGroups.length ?? 0;
@@ -163,65 +186,9 @@ export function GroupsTreeTable({
     [commands.renameGroup, editingId]
   );
 
-  const handleCancelRename = useCallback(() => {
-    setEditingId(null);
-  }, []);
-
-  const handleSaveLinkedClasses = useCallback(
-    async (linkedClassIds: string[]) => {
-      if (!editingLinkedClassesId) {
-        return;
-      }
-
-      const result = await commands.updateLinkedClasses.execute({
-        id: editingLinkedClassesId,
-        linkedClassIds,
-      });
-
-      if (result !== null) {
-        setEditingLinkedClassesId(null);
-      }
-    },
-    [commands.updateLinkedClasses, editingLinkedClassesId]
-  );
-
-  const handleCancelEditLinkedClasses = useCallback(() => {
-    setEditingLinkedClassesId(null);
-  }, []);
-
-  const handleSaveElectiveSubject = useCallback(
-    async (subjectId: string) => {
-      if (!editingElectiveSubjectId) {
-        return;
-      }
-
-      const subject = electiveSubjects.find((item) => item.id === subjectId);
-      if (!subject) {
-        setEditingElectiveSubjectId(null);
-        return;
-      }
-
-      const result = await commands.updateElectiveSubject.execute({
-        id: editingElectiveSubjectId,
-        subject,
-      });
-
-      if (result !== null) {
-        setEditingElectiveSubjectId(null);
-      }
-    },
-    [commands.updateElectiveSubject, editingElectiveSubjectId, electiveSubjects]
-  );
-
-  const handleCancelEditElectiveSubject = useCallback(() => {
-    setEditingElectiveSubjectId(null);
-  }, []);
-
   const handleConfirmDelete = async () => {
     if (confirmDeleteGroup) {
-      setIsDeleting(true);
       await commands.deleteGroup.execute(confirmDeleteGroup);
-      setIsDeleting(false);
       setConfirmDeleteGroup(null);
     }
   };
@@ -282,7 +249,7 @@ export function GroupsTreeTable({
               <InlineRenameInput
                 defaultValue={group.name}
                 onSave={handleSaveRename}
-                onCancel={handleCancelRename}
+                onCancel={() => setEditingId(null)}
               />
             );
           }
@@ -334,10 +301,11 @@ export function GroupsTreeTable({
             if (editingLinkedClassesId === group.id) {
               return (
                 <InlineLinkedClassesInput
+                  groupId={group.id}
                   defaultValue={group.linkedClasses.map((item) => item.id)}
                   options={classOptions}
-                  onSave={handleSaveLinkedClasses}
-                  onCancel={handleCancelEditLinkedClasses}
+                  command={commands.updateLinkedClasses}
+                  onCancel={() => setEditingLinkedClassesId(null)}
                 />
               );
             }
@@ -415,10 +383,11 @@ export function GroupsTreeTable({
             if (editingElectiveSubjectId === group.id) {
               return (
                 <InlineElectiveSubjectInput
+                  groupId={group.id}
                   defaultValue={group.subjectId}
                   options={electiveSubjects}
-                  onSave={handleSaveElectiveSubject}
-                  onCancel={handleCancelEditElectiveSubject}
+                  command={commands.updateElectiveSubject}
+                  onCancel={() => setEditingElectiveSubjectId(null)}
                 />
               );
             }
@@ -471,18 +440,15 @@ export function GroupsTreeTable({
       editingLinkedClassesId,
       classOptions,
       electiveSubjects,
-      handleCancelEditElectiveSubject,
-      handleCancelEditLinkedClasses,
-      handleCancelRename,
       handleDoubleClickElectiveSubject,
       handleDoubleClickLinkedClasses,
       handleDoubleClickName,
-      handleSaveElectiveSubject,
-      handleSaveLinkedClasses,
       handleStartEditElectiveSubject,
       handleStartEditLinkedClasses,
       handleSaveRename,
       handleStartRename,
+      commands.updateElectiveSubject,
+      commands.updateLinkedClasses,
       onOpenTransferList,
       onOpenSplitter,
       onOpenSubgroupEditor,
@@ -601,13 +567,13 @@ export function GroupsTreeTable({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={isDeleting}>
+              <AlertDialogCancel disabled={commands.deleteGroup.isPending}>
                 Отмена
               </AlertDialogCancel>
               <AlertDialogAction
                 variant="destructive"
                 onClick={handleConfirmDelete}
-                disabled={isDeleting}
+                disabled={commands.deleteGroup.isPending}
               >
                 Удалить
               </AlertDialogAction>
@@ -635,12 +601,10 @@ function InlineRenameInput({
       name: defaultValue,
     },
     validators: {
-      onSubmit: ({ value }) => {
-        groupNameSchema.parse(value.name);
-      },
+      onSubmit: renameFormSchema,
     },
     onSubmit: async ({ value }) => {
-      const nextName = groupNameSchema.parse(value.name);
+      const nextName = value.name.trim();
       if (nextName === defaultValue.trim()) {
         onCancel();
         return;
@@ -664,7 +628,13 @@ function InlineRenameInput({
 
   return (
     <div ref={containerRef} className="flex flex-col gap-1">
-      <form.Field name="name" validators={{ onBlur: groupNameSchema }}>
+      <form.Field
+        name="name"
+        validators={{
+          onBlur: groupNameSchema,
+          onSubmit: groupNameSchema,
+        }}
+      >
         {(field) => (
           <Field data-invalid={field.state.meta.errors.length > 0}>
             <div className="flex items-center gap-1">
@@ -723,106 +693,241 @@ function InlineRenameInput({
 }
 
 function InlineLinkedClassesInput({
+  groupId,
   defaultValue,
   options,
-  onSave,
+  command,
   onCancel,
 }: {
+  groupId: string;
   defaultValue: string[];
   options: ClassGroupOption[];
-  onSave: (linkedClassIds: string[]) => void;
+  command: GroupsCrudCommands["updateLinkedClasses"];
   onCancel: () => void;
 }) {
-  const [value, setValue] = useState(defaultValue);
-  const hasChanges =
-    value.length !== defaultValue.length ||
-    value.some((id) => !defaultValue.includes(id));
+  const form = useForm({
+    defaultValues: {
+      linkedClassIds: defaultValue,
+    },
+    validators: {
+      onSubmit: linkedClassesFormSchema,
+    },
+    onSubmit: async ({ value }) => {
+      if (haveSameIds(value.linkedClassIds, defaultValue)) {
+        onCancel();
+        return;
+      }
+
+      const result = await command.execute({
+        id: groupId,
+        linkedClassIds: value.linkedClassIds,
+      });
+      if (result !== null) {
+        onCancel();
+      }
+    },
+  });
 
   return (
     <div className="flex min-w-64 items-start gap-1">
-      <ClassGroupsMultiSelect
-        options={options}
-        selectedIds={value}
-        onChange={setValue}
-        placeholder={options.length > 0 ? "Классы для кружка" : "Сначала создайте классы"}
-        invalid={value.length === 0}
-        disabled={options.length === 0}
-      />
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={() => {
-          if (value.length === 0 || !hasChanges) {
-            onCancel();
-            return;
-          }
-
-          onSave(value);
+      <form.Field
+        name="linkedClassIds"
+        validators={{
+          onChange: linkedClassIdsFormSchema,
+          onSubmit: linkedClassIdsFormSchema,
         }}
-        title="Сохранить"
-        disabled={value.length === 0}
       >
-        <Check className="size-3.5" />
-      </Button>
-      <Button variant="ghost" size="icon-xs" onClick={onCancel} title="Отмена">
-        <X className="size-3.5" />
-      </Button>
+        {(field) => (
+          <Field data-invalid={field.state.meta.errors.length > 0}>
+            <ClassGroupsMultiSelect
+              options={options}
+              selectedIds={field.state.value}
+              onChange={(next) => field.handleChange(next)}
+              placeholder={
+                options.length > 0
+                  ? "Классы для кружка"
+                  : "Сначала создайте классы"
+              }
+              invalid={field.state.meta.errors.length > 0}
+              disabled={options.length === 0}
+            />
+            <FieldError errors={field.state.meta.errors} className="text-xs" />
+          </Field>
+        )}
+      </form.Field>
+      <form.Subscribe
+        selector={(state) =>
+          [
+            state.canSubmit,
+            state.isSubmitting,
+          ] as const
+        }
+      >
+        {([canSubmit, isSubmitting]) => (
+          <>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => void form.handleSubmit()}
+              title="Сохранить"
+              disabled={
+                !canSubmit ||
+                isSubmitting ||
+                command.isPending
+              }
+            >
+              {isSubmitting || command.isPending ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                <Check className="size-3.5" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={onCancel}
+              title="Отмена"
+              disabled={isSubmitting || command.isPending}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </>
+        )}
+      </form.Subscribe>
     </div>
   );
 }
 
 function InlineElectiveSubjectInput({
+  groupId,
   defaultValue,
   options,
-  onSave,
+  command,
   onCancel,
 }: {
+  groupId: string;
   defaultValue: string | null;
   options: SubjectOption[];
-  onSave: (subjectId: string) => void;
+  command: GroupsCrudCommands["updateElectiveSubject"];
   onCancel: () => void;
 }) {
-  const [value, setValue] = useState(defaultValue ?? "");
   const subjectItems = useMemo(
     () => Object.fromEntries(options.map((option) => [option.id, option.name])),
     [options]
   );
-  const selectedSubject = options.find((option) => option.id === value) ?? null;
-  const hasChanges = value !== (defaultValue ?? "");
+  const subjectIdFormSchema = useMemo(
+    () =>
+      electiveSubjectIdFormSchema.refine(
+        (subjectId) => options.some((option) => option.id === subjectId),
+        "Выберите доп из списка"
+      ),
+    [options]
+  );
+  const electiveSubjectFormSchema = useMemo(
+    () =>
+      z.object({
+        subjectId: subjectIdFormSchema,
+      }),
+    [subjectIdFormSchema]
+  );
+  const form = useForm({
+    defaultValues: {
+      subjectId: defaultValue ?? "",
+    },
+    validators: {
+      onSubmit: electiveSubjectFormSchema,
+    },
+    onSubmit: async ({ value }) => {
+      const subjectId = value.subjectId;
+
+      if (subjectId === (defaultValue ?? "")) {
+        onCancel();
+        return;
+      }
+
+      const subject = options.find((option) => option.id === subjectId);
+
+      const result = await command.execute({
+        id: groupId,
+        subject: subject!,
+      });
+      if (result !== null) {
+        onCancel();
+      }
+    },
+  });
 
   return (
     <div className="flex min-w-56 items-center gap-1">
-      <Select value={value} onValueChange={(next) => setValue(next ?? "")} items={subjectItems}>
-        <SelectTrigger size="sm" className="h-8 min-w-44">
-          <SelectValue placeholder="Выберите доп" />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.id} value={option.id}>
-              {option.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={() => {
-          if (!selectedSubject || !hasChanges) {
-            onCancel();
-            return;
-          }
-
-          onSave(selectedSubject.id);
+      <form.Field
+        name="subjectId"
+        validators={{
+          onChange: subjectIdFormSchema,
+          onSubmit: subjectIdFormSchema,
         }}
-        title="Сохранить"
-        disabled={!selectedSubject}
       >
-        <Check className="size-3.5" />
-      </Button>
-      <Button variant="ghost" size="icon-xs" onClick={onCancel} title="Отмена">
-        <X className="size-3.5" />
-      </Button>
+        {(field) => (
+          <Field data-invalid={field.state.meta.errors.length > 0}>
+            <Select
+              value={field.state.value}
+              onValueChange={(next) => field.handleChange(next ?? "")}
+              items={subjectItems}
+            >
+              <SelectTrigger
+                size="sm"
+                className="h-8 min-w-44"
+                aria-invalid={field.state.meta.errors.length > 0}
+              >
+                <SelectValue placeholder="Выберите доп" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldError errors={field.state.meta.errors} className="text-xs" />
+          </Field>
+        )}
+      </form.Field>
+      <form.Subscribe
+        selector={(state) =>
+          [state.canSubmit, state.isSubmitting] as const
+        }
+      >
+        {([canSubmit, isSubmitting]) => (
+          <>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => void form.handleSubmit()}
+              title="Сохранить"
+              disabled={
+                !canSubmit ||
+                isSubmitting ||
+                command.isPending
+              }
+            >
+              {isSubmitting || command.isPending ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                <Check className="size-3.5" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={onCancel}
+              title="Отмена"
+              disabled={isSubmitting || command.isPending}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </>
+        )}
+      </form.Subscribe>
     </div>
   );
 }
