@@ -13,7 +13,7 @@ export const groupNameSchema = z
   .min(1, "Название обязательно")
   .max(512, "Максимум 512 символов");
 
-export const groupGradeSchema = z.number().int().min(1).max(11).nullable();
+export const groupGradeSchema = z.number().int().min(1).max(11).nullable().optional();
 export const groupLinkedClassIdsSchema = z
   .array(z.string().min(1))
   .min(1, "Выберите хотя бы один класс");

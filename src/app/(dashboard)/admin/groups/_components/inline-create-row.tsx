@@ -57,7 +57,7 @@ export function InlineCreateRow({
       name: "",
       type: "CLASS",
       grade: null,
-      linkedClassIds: [],
+      linkedClassIds: undefined,
     } as CreateGroupInput,
     validators: {
       onSubmit: createGroupSchema,
@@ -67,8 +67,7 @@ export function InlineCreateRow({
         name: value.name.trim(),
         type: value.type,
         grade: value.grade,
-        linkedClassIds:
-          value.type === "ELECTIVE_GROUP" ? value.linkedClassIds ?? [] : undefined,
+        linkedClassIds: value.linkedClassIds,
       });
       if (result === null) {
         return;
@@ -194,13 +193,7 @@ export function InlineCreateRow({
                       placeholder="Параллель"
                       type="number"
                       value={field.state.value ?? ""}
-                      onChange={(event) =>
-                        field.handleChange(
-                          event.target.value === ""
-                            ? null
-                            : event.target.valueAsNumber
-                        )
-                      }
+                      onChange={(event) => field.handleChange(event.target.valueAsNumber)}
                       onBlur={field.handleBlur}
                       onKeyDown={handleKeyDown}
                       aria-invalid={field.state.meta.errors.length > 0}
