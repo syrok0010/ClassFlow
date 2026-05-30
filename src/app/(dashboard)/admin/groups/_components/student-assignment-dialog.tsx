@@ -24,13 +24,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import {
   DndContext,
   closestCenter,
   DragOverlay,
 } from "@dnd-kit/core";
 import { StudentBucketsBoard } from "./student-buckets-board";
+import { Spinner } from "@/components/ui/spinner";
 
 interface StudentAssignmentDialogProps {
   open: boolean;
@@ -266,7 +267,7 @@ export function StudentAssignmentDialog({
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            <Spinner />
           </div>
         ) : (
           <DndContext
@@ -303,7 +304,7 @@ export function StudentAssignmentDialog({
             disabled={!hasChanges || command.isPending}
             onClick={handleSave}
           >
-            {command.isPending && <Loader2 className="size-4 animate-spin" />}
+            {command.isPending && <Spinner />}
             Сохранить
           </Button>
         </DialogFooter>

@@ -31,7 +31,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Shuffle, ArrowRight, Loader2 } from "lucide-react";
+import { Shuffle, ArrowRight } from "lucide-react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod/v4";
 import {
@@ -40,6 +40,7 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import { StudentBucketsBoard } from "./student-buckets-board";
+import { Spinner } from "@/components/ui/spinner";
 
 interface SplitterDialogProps {
   open: boolean;
@@ -329,7 +330,7 @@ export function SplitterDialog({
                         : undefined
                   }
                 >
-                  {command.isPending && <Loader2 className="size-4 animate-spin" />}
+                  {command.isPending && <Spinner />}
                   Сохранить и создать подгруппы
                 </Button>
               </DialogFooter>

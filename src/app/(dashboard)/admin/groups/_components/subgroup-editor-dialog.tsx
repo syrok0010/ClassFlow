@@ -19,13 +19,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Shuffle, Loader2 } from "lucide-react";
+import { Shuffle } from "lucide-react";
 import {
   DndContext,
   closestCenter,
   DragOverlay,
 } from "@dnd-kit/core";
 import { StudentBucketsBoard } from "./student-buckets-board";
+import { Spinner } from "@/components/ui/spinner";
 
 interface SubgroupEditorDialogProps {
   open: boolean;
@@ -132,7 +133,7 @@ export function SubgroupEditorDialog({
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            <Spinner />
           </div>
         ) : (
           <DndContext
@@ -172,7 +173,7 @@ export function SubgroupEditorDialog({
                   disabled={!hasChanges || command.isPending}
                   onClick={handleSave}
                 >
-                  {command.isPending && <Loader2 className="size-4 animate-spin" />}
+                  {command.isPending && <Spinner />}
                   Сохранить
                 </Button>
               </DialogFooter>
