@@ -492,6 +492,7 @@ export async function updateGroupStudentsAction(
     ]);
 
     revalidatePath("/admin/groups");
+    revalidatePath("/parent/schedule");
     return ok(true);
   } catch (error) {
     return err(

@@ -56,8 +56,9 @@ test.describe("Admin groups", () => {
     await page.getByPlaceholder("Параллель").fill("11");
     await page.getByRole("button", { name: "Сохранить" }).click();
 
-    await expect(page.getByText(groupName)).toBeVisible();
-    await expect(groupRow(page, groupName).getByText("11 класс")).toBeVisible();
+    const createdRow = groupRow(page, groupName);
+    await expect(createdRow).toBeVisible();
+    await expect(createdRow.getByText("11 класс")).toBeVisible();
   });
 
   test("renames a group with inline edit", async ({ page }) => {

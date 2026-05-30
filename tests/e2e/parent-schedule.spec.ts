@@ -43,4 +43,25 @@ test.describe("Parent schedule", () => {
     await expect(duplicateChildren.first()).toHaveAttribute("aria-checked", "true");
     await expect(page).toHaveURL(/\/parent\/schedule\?.*studentId=/);
   });
+
+  test("allows parent to enroll child in optional elective without attendance badge", async ({ page }) => {
+    await loginAsParent(page);
+
+    const optionalCard = page
+      .locator('[data-testid="parent-schedule-card"]')
+      .filter({ hasText: "Киноклуб" });
+
+    await expect(optionalCard).toBeVisible();
+    await expect(optionalCard).toHaveAttribute("data-parent-elective-state", "available");
+    await optionalCard.getByRole("button", { name: "Записаться" }).click();
+
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toContainText("Волкова Дарья Игоревна будет записан(а) на доп «Киноклуб».");
+    await dialog.getByRole("button", { name: "Подтвердить" }).click();
+
+    await expect(page.getByText("Ребенок записан на доп")).toBeVisible();
+    await expect(optionalCard).toHaveAttribute("data-parent-elective-state", "enrolled");
+    await expect(optionalCard.getByRole("button", { name: "Записаться" })).toHaveCount(0);
+    await expect(optionalCard.getByText("Посещает")).toHaveCount(0);
+  });
 });

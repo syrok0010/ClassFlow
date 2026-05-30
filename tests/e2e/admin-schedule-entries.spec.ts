@@ -13,7 +13,7 @@ test.describe("Admin schedule entries", () => {
     await expect(targetCombobox).toBeEnabled();
 
     await targetCombobox.fill("5 А");
-    await page.locator('[data-slot="combobox-content"]').getByText("5 А").click();
+    await page.getByRole("option", { name: "5 А Группа · Класс" }).click();
     await expect(page.getByTestId("admin-schedule-card").filter({ hasText: "Математика" })).toBeVisible();
     await expect(targetCombobox).toBeEnabled();
     await expect(targetCombobox).toHaveValue("5 А");
@@ -23,7 +23,7 @@ test.describe("Admin schedule entries", () => {
     expect(groupUrl.searchParams.get("scope")).toBeNull();
 
     await targetCombobox.fill("Иванов Иван Иванович");
-    await page.locator('[data-slot="combobox-content"]').getByText("Иванов Иван Иванович").click();
+    await page.getByRole("option", { name: "Иванов Иван Иванович Преподаватель" }).click();
     await expect(page.getByTestId("admin-schedule-card").filter({ hasText: "Математика" })).toBeVisible();
     await expect(targetCombobox).toBeEnabled();
     await expect(targetCombobox).toHaveValue("Иванов Иван Иванович");
@@ -33,7 +33,7 @@ test.describe("Admin schedule entries", () => {
     expect(teacherUrl.searchParams.get("scope")).toBe("teacher");
 
     await targetCombobox.fill("Кабинет 5А");
-    await page.locator('[data-slot="combobox-content"]').getByText("Кабинет 5А").click();
+    await page.getByRole("option", { name: "Кабинет 5А Кабинет" }).click();
     await expect(page).toHaveURL(/scope=room/);
     await expect(page.getByTestId("admin-schedule-card").filter({ hasText: "Математика" })).toBeVisible();
     await expect(targetCombobox).toBeEnabled();
