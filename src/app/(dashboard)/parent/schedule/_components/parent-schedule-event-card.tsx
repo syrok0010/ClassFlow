@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useRouter } from "next/navigation";
-import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { assertActionSuccess } from "@/lib/mutation-utils";
 import { StudentScheduleEventCard } from "@/features/schedule/student/student-schedule-event-card";
 import type { StudentScheduleEvent } from "@/features/schedule/student/student-schedule-types";
 import { enrollChildInElectiveAction } from "../_actions/parent-schedule-actions";
@@ -39,7 +41,21 @@ export function ParentScheduleEventCard({
 }: ParentScheduleEventCardProps) {
   const router = useRouter();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const enrollMutation = useMutation({
+    mutationFn: async () => {
+      const result = await enrollChildInElectiveAction(studentId, event.id);
+      return assertActionSuccess(result, "Не удалось записать ребенка на доп");
+    },
+    onSuccess: (result) => {
+      onEnrollmentSuccess(result.groupId);
+      setConfirmOpen(false);
+      toast.success("Ребенок записан на доп");
+      router.refresh();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Не удалось записать ребенка на доп");
+    },
+  });
 
   const isOptionalElective =
     event.subjectType === "ELECTIVE_OPTIONAL" && event.deliveryGroupId !== null;
@@ -96,34 +112,16 @@ export function ParentScheduleEventCard({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>Отмена</AlertDialogCancel>
+            <AlertDialogCancel disabled={enrollMutation.isPending}>Отмена</AlertDialogCancel>
             <AlertDialogAction
-              disabled={isPending}
+              disabled={enrollMutation.isPending}
               onClick={(dialogEvent) => {
                 dialogEvent.preventDefault();
-
-                startTransition(async () => {
-                  const result = await enrollChildInElectiveAction(studentId, event.id);
-
-                  if (result.error) {
-                    toast.error(result.error);
-                    return;
-                  }
-
-                  if (!result.result) {
-                    toast.error("Не удалось записать ребенка на доп");
-                    return;
-                  }
-
-                  onEnrollmentSuccess(result.result.groupId);
-                  setConfirmOpen(false);
-                  toast.success("Ребенок записан на доп");
-                  router.refresh();
-                });
+                enrollMutation.mutate();
               }}
             >
-              <span className={cn("inline-flex items-center gap-1", isPending && "opacity-90")}>
-                {isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
+              <span className={cn("inline-flex items-center gap-1", enrollMutation.isPending && "opacity-90")}>
+                {enrollMutation.isPending ? <Spinner /> : null}
                 Подтвердить
               </span>
             </AlertDialogAction>
