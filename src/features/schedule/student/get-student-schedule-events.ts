@@ -1,5 +1,6 @@
 import { getScheduleRange } from "@/features/schedule/lib/query-params";
 import type { ScheduleViewMode } from "@/features/schedule/lib/types";
+import type { Prisma } from "@/generated/prisma/client";
 import type { GroupType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 
@@ -13,6 +14,7 @@ export interface GetStudentScheduleEventsParams {
   studentId: string;
   anchorDate: Date;
   viewMode: ScheduleViewMode;
+  includeAvailableOptionalElectives?: boolean;
 }
 
 export interface GetStudentScheduleEventsResult {
@@ -25,6 +27,7 @@ export async function getStudentScheduleEvents({
   studentId,
   anchorDate,
   viewMode,
+  includeAvailableOptionalElectives = false,
 }: GetStudentScheduleEventsParams): Promise<GetStudentScheduleEventsResult> {
   const studentGroups = await prisma.studentGroups.findMany({
     where: {
@@ -54,30 +57,38 @@ export async function getStudentScheduleEvents({
   }
 
   const { rangeStart, rangeEnd } = getScheduleRange(anchorDate, viewMode);
+  const visibilityConditions: Prisma.ScheduleEntryWhereInput[] = [
+    {
+      deliveryGroupId: { in: groupIds },
+    },
+    {
+      coveredClasses: {
+        some: {
+          classGroupId: classId,
+        },
+      },
+    },
+  ];
+
+  if (includeAvailableOptionalElectives) {
+    visibilityConditions.push({
+      subject: {
+        type: "ELECTIVE_OPTIONAL",
+      },
+      deliveryGroup: {
+        type: "ELECTIVE_GROUP",
+        electiveClassLinks: {
+          some: {
+            classGroupId: classId,
+          },
+        },
+      },
+    });
+  }
+
   const scheduleEntries = await prisma.scheduleEntry.findMany({
     where: {
-      OR: [
-        {
-          deliveryGroupId: { in: groupIds },
-        },
-        {
-          deliveryGroup: {
-            type: "ELECTIVE_GROUP",
-            electiveClassLinks: {
-              some: {
-                classGroupId: classId,
-              },
-            },
-          },
-        },
-        {
-          coveredClasses: {
-            some: {
-              classGroupId: classId,
-            },
-          },
-        },
-      ],
+      OR: visibilityConditions,
       startTime: {
         gte: rangeStart,
         lt: rangeEnd,
