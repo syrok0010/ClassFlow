@@ -1,4 +1,9 @@
-import { adminScheduleTemplateInclude, mapWeeklyTemplateToAdminScheduleEvents, type AdminScheduleTemplateRecord } from "./admin-schedule-mapper";
+import {
+  adminScheduleTemplateInclude,
+  mapWeeklyTemplateToAdminScheduleEvents,
+  type AdminScheduleTemplateRecord,
+  type RequirementMeta,
+} from "./admin-schedule-mapper";
 import { validateScheduleTemplateRollout } from "./schedule-conflicts";
 import {
   createAdminScheduleTemplateMutationSchema,
@@ -15,6 +20,7 @@ export interface ApplyScheduleTemplateValidationResult {
 
 type ValidationGroupRecord = {
   id: string;
+  name: string;
   type: "CLASS" | "KINDERGARTEN_GROUP" | "SUBJECT_SUBGROUP" | "ELECTIVE_GROUP";
   subjectId: string | null;
   parentId: string | null;
@@ -24,6 +30,7 @@ type ValidationGroupRecord = {
 
 type ValidationSubjectRecord = {
   id: string;
+  name: string;
   type: "ACADEMIC" | "ELECTIVE_REQUIRED" | "ELECTIVE_OPTIONAL" | "REGIME";
   defaultAttendanceLoadMode:
     | "DELIVERY_GROUP_SIZE"
@@ -49,6 +56,8 @@ type ValidationTeacherRecord = {
 type ValidationRequirementRecord = {
   groupId: string;
   subjectId: string;
+  lessonsPerWeek: number;
+  breakDuration: number;
   durationInMinutes: number;
 };
 
@@ -70,6 +79,21 @@ export function validateApplyScheduleTemplateState(input: {
     input.requirements,
     input.templates,
   );
+  const requirementMetaByGroupSubject: Record<string, RequirementMeta> = Object.fromEntries(
+    input.requirements.map((requirement) => [
+      `${requirement.groupId}:${requirement.subjectId}`,
+      {
+        lessonsPerWeek: requirement.lessonsPerWeek,
+        breakDuration: requirement.breakDuration,
+      },
+    ]),
+  );
+  const weeklyLoadErrorMessages = validateWeeklySubjectLoad({
+    templates: scheduledTemplates,
+    groups: input.groups,
+    requirements: input.requirements,
+    subjects: input.subjects,
+  });
   const structuralSchema = createAdminScheduleTemplateMutationSchema({
     subjectsById: Object.fromEntries(
       input.subjects.map((subject) => [
@@ -129,13 +153,16 @@ export function validateApplyScheduleTemplateState(input: {
     }),
   );
   const conflictAnalysis = validateScheduleTemplateRollout(
-    input.templates.flatMap((template) => mapWeeklyTemplateToAdminScheduleEvents(template)),
+    input.templates.flatMap((template) =>
+      mapWeeklyTemplateToAdminScheduleEvents(template, requirementMetaByGroupSubject)
+    ),
   );
   const hardConflictMessages = dedupeMessages(
     conflictAnalysis.hardConflicts.map((conflict) => conflict.message),
   );
   const errorMessages = dedupeMessages([
     ...(scheduledTemplates.length === 0 ? ["Недельный шаблон расписания пуст"] : []),
+    ...weeklyLoadErrorMessages,
     ...structuralErrorMessages,
     ...hardConflictMessages,
   ]);
@@ -146,6 +173,82 @@ export function validateApplyScheduleTemplateState(input: {
     structuralErrorMessages,
     hardConflictMessages,
   };
+}
+
+function validateWeeklySubjectLoad(input: {
+  templates: AdminScheduleTemplateRecord[];
+  groups: ValidationGroupRecord[];
+  requirements: ValidationRequirementRecord[];
+  subjects: ValidationSubjectRecord[];
+}) {
+  const groupsById = new Map(input.groups.map((group) => [group.id, group]));
+  const groupNameById = new Map(input.groups.map((group) => [group.id, group.name]));
+  const subjectNameById = new Map(input.subjects.map((subject) => [subject.id, subject.name]));
+  const subgroupRequirementKeys = new Set(
+    input.requirements.flatMap((requirement) => {
+      const group = groupsById.get(requirement.groupId);
+
+      return group?.type === "SUBJECT_SUBGROUP" && group.parentId
+        ? [`${group.parentId}:${requirement.subjectId}`]
+        : [];
+    }),
+  );
+  const expectedLessonsByGroupSubject = new Map<string, number>(
+    input.requirements.flatMap((requirement) => {
+      const group = groupsById.get(requirement.groupId);
+
+      if (
+        group?.type === "CLASS"
+        && subgroupRequirementKeys.has(`${group.id}:${requirement.subjectId}`)
+      ) {
+        return [];
+      }
+
+      return [[`${requirement.groupId}:${requirement.subjectId}`, requirement.lessonsPerWeek] as const];
+    }),
+  );
+  const scheduledLessonsByGroupSubject = new Map<string, number>();
+
+  for (const template of input.templates) {
+    const requirementGroupIds = template.deliveryMode === "SHARED_CLASSES"
+      ? template.coveredClasses.map((item) => item.classGroupId)
+      : template.deliveryGroupId
+        ? [template.deliveryGroupId]
+        : [];
+
+    for (const groupId of requirementGroupIds) {
+      const key = `${groupId}:${template.subjectId}`;
+      scheduledLessonsByGroupSubject.set(key, (scheduledLessonsByGroupSubject.get(key) ?? 0) + 1);
+    }
+  }
+
+  const groupSubjectKeys = new Set([
+    ...expectedLessonsByGroupSubject.keys(),
+    ...scheduledLessonsByGroupSubject.keys(),
+  ]);
+
+  return dedupeMessages(
+    Array.from(groupSubjectKeys).flatMap((key) => {
+      const expectedLessons = expectedLessonsByGroupSubject.get(key) ?? 0;
+      const actualLessons = scheduledLessonsByGroupSubject.get(key) ?? 0;
+
+      if (actualLessons === expectedLessons) {
+        return [];
+      }
+
+      const separatorIndex = key.indexOf(":");
+      const groupId = key.slice(0, separatorIndex);
+      const subjectId = key.slice(separatorIndex + 1);
+
+      const groupName = groupNameById.get(groupId) ?? "Неизвестная группа";
+      const subjectName = subjectNameById.get(subjectId) ?? "Без названия";
+
+      return [
+        `Для группы ${groupName} предмет ${subjectName} ` +
+          `проставлен в шаблоне ${actualLessons} раз(а) в неделю вместо ${expectedLessons}.`,
+      ];
+    }),
+  );
 }
 
 function buildTemplateDraft(

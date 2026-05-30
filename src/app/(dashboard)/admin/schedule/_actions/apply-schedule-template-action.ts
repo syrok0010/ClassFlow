@@ -289,11 +289,12 @@ async function loadApplyScheduleTemplateValidation() {
       ],
     }),
     prisma.subject.findMany({
-      select: { id: true, type: true, defaultAttendanceLoadMode: true },
+      select: { id: true, name: true, type: true, defaultAttendanceLoadMode: true },
     }),
     prisma.group.findMany({
       select: {
         id: true,
+        name: true,
         type: true,
         subjectId: true,
         parentId: true,
@@ -328,6 +329,8 @@ async function loadApplyScheduleTemplateValidation() {
       select: {
         groupId: true,
         subjectId: true,
+        lessonsPerWeek: true,
+        breakDuration: true,
         durationInMinutes: true,
       },
     }),

@@ -27,12 +27,44 @@ type ValidationGroupRecord = {
   _count: { studentGroups: number };
 };
 
-function getRequirementGroupIds(payload: AdminScheduleTemplateMutationInput) {
+function getRequirementGroupIds(
+  payload: AdminScheduleTemplateMutationInput,
+  deliveryGroup: Pick<ValidationGroupRecord, "type" | "parentId"> | null,
+) {
   if (payload.deliveryMode === "SHARED_CLASSES") {
     return payload.coveredClassIds;
   }
 
+  if (
+    payload.deliveryMode === "DIRECT_GROUP"
+    && deliveryGroup?.type === "SUBJECT_SUBGROUP"
+    && deliveryGroup.parentId
+  ) {
+    return [deliveryGroup.parentId];
+  }
+
   return payload.deliveryGroupId ? [payload.deliveryGroupId] : [];
+}
+
+function getTemplateRequirementGroupIds(template: {
+  deliveryMode: "DIRECT_GROUP" | "ELECTIVE_GROUP" | "SHARED_CLASSES";
+  deliveryGroupId: string | null;
+  deliveryGroup: { type: GroupType; parentId: string | null } | null;
+  coveredClasses: Array<{ classGroupId: string }>;
+}) {
+  if (template.deliveryMode === "SHARED_CLASSES") {
+    return template.coveredClasses.map((coveredClass) => coveredClass.classGroupId);
+  }
+
+  if (!template.deliveryGroupId) {
+    return [];
+  }
+
+  if (template.deliveryGroup?.type === "SUBJECT_SUBGROUP" && template.deliveryGroup.parentId) {
+    return [template.deliveryGroup.parentId];
+  }
+
+  return [template.deliveryGroupId];
 }
 
 function buildValidationGroupsById(groups: ValidationGroupRecord[]) {
@@ -108,7 +140,7 @@ export async function createOrUpdateAdminScheduleTemplateAction(input: AdminSche
         },
       })
     : [];
-  const requirementGroupIds = getRequirementGroupIds(payload);
+  const requirementGroupIds = getRequirementGroupIds(payload, deliveryGroup);
   const [room, teacher, requirements, existingDurationTemplates] = await Promise.all([
     payload.roomId
       ? prisma.room.findUnique({
@@ -153,6 +185,14 @@ export async function createOrUpdateAdminScheduleTemplateAction(input: AdminSche
         subjectId: payload.subjectId,
         OR: [
           { deliveryGroupId: { in: requirementGroupIds } },
+          {
+            deliveryGroup: {
+              is: {
+                type: "SUBJECT_SUBGROUP",
+                parentId: { in: requirementGroupIds },
+              },
+            },
+          },
           { coveredClasses: { some: { classGroupId: { in: requirementGroupIds } } } },
         ],
       },
@@ -161,6 +201,12 @@ export async function createOrUpdateAdminScheduleTemplateAction(input: AdminSche
         deliveryGroupId: true,
         startTime: true,
         endTime: true,
+        deliveryGroup: {
+          select: {
+            type: true,
+            parentId: true,
+          },
+        },
         coveredClasses: { select: { classGroupId: true } },
       },
     }),
@@ -261,12 +307,64 @@ export async function moveAdminScheduleTemplateAction(input: AdminScheduleTempla
     || parsed.data.startMinutes === null
     || parsed.data.endMinutes === null;
 
+  let expectedEndMinutes = parsed.data.endMinutes;
+
+  if (!isDetached) {
+    const startMinutes = parsed.data.startMinutes;
+
+    if (startMinutes === null) {
+      return { error: "Не передано время начала" };
+    }
+
+    const template = await prisma.weeklyScheduleTemplate.findUnique({
+      where: { id: parsed.data.templateId },
+      select: {
+        subjectId: true,
+        deliveryMode: true,
+        deliveryGroupId: true,
+        deliveryGroup: {
+          select: {
+            type: true,
+            parentId: true,
+          },
+        },
+        coveredClasses: {
+          select: {
+            classGroupId: true,
+          },
+        },
+      },
+    });
+
+    if (!template) {
+      return { error: "Карточка шаблона не найдена" };
+    }
+
+    const requirementGroupIds = getTemplateRequirementGroupIds(template);
+    const requirements = requirementGroupIds.length > 0
+      ? await prisma.groupSubjectRequirement.findMany({
+          where: {
+            groupId: { in: requirementGroupIds },
+            subjectId: template.subjectId,
+          },
+          select: {
+            durationInMinutes: true,
+          },
+        })
+      : [];
+    const uniqueDurations = Array.from(new Set(requirements.map((requirement) => requirement.durationInMinutes)));
+
+    if (uniqueDurations.length === 1) {
+      expectedEndMinutes = startMinutes + uniqueDurations[0];
+    }
+  }
+
   await prisma.weeklyScheduleTemplate.update({
     where: { id: parsed.data.templateId },
     data: {
       dayOfWeek: isDetached ? null : parsed.data.dayOfWeek,
       startTime: isDetached ? null : parsed.data.startMinutes,
-      endTime: isDetached ? null : parsed.data.endMinutes,
+      endTime: isDetached ? null : expectedEndMinutes,
     },
   });
 

@@ -29,7 +29,10 @@ type OptimisticTemplateMoveAction = {
   move: AdminScheduleTemplateTimeMoveInput;
 };
 
-export function useAdminScheduleDnd(events: AdminScheduleEvent[]) {
+export function useAdminScheduleDnd(
+  events: AdminScheduleEvent[],
+  lessonDurationByGroupSubject: Record<string, number>,
+) {
   const router = useRouter();
   const [isDragActive, setIsDragActive] = useState(false);
   const [savingTemplateIds, setSavingTemplateIds] = useState<string[]>([]);
@@ -124,14 +127,18 @@ export function useAdminScheduleDnd(events: AdminScheduleEvent[]) {
         return;
       }
 
-      const moveInput = getMoveInputFromDragEndEvent(event, activeEvent);
+      const moveInput = getMoveInputFromDragEndEvent(
+        event,
+        activeEvent,
+        lessonDurationByGroupSubject,
+      );
       if (!moveInput || isSameTemplateMove(activeEvent, moveInput)) {
         return;
       }
 
       await saveMove(activeEvent, moveInput);
     },
-    [eventsById, saveMove],
+    [eventsById, lessonDurationByGroupSubject, saveMove],
   );
 
   return {
@@ -147,6 +154,7 @@ export function useAdminScheduleDnd(events: AdminScheduleEvent[]) {
 function getMoveInputFromDragEndEvent(
   event: DragEndEvent,
   activeEvent: AdminScheduleEvent,
+  lessonDurationByGroupSubject: Record<string, number>,
 ) {
   const over = event.over;
 
@@ -181,7 +189,7 @@ function getMoveInputFromDragEndEvent(
     dayOfWeek: overData.dayIndex + 1,
     rowId: overData.rowId,
     startMinutes,
-  });
+  }, lessonDurationByGroupSubject);
 }
 
 function applyTemplateMoveToEvent(

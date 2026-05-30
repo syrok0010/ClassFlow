@@ -52,7 +52,8 @@ export function DraggableScheduleEventCard({
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
       className={cn(
-        isDragging && "opacity-70",
+        "relative",
+        isDragging && "z-50 opacity-70",
         disabled && "cursor-progress opacity-85",
       )}
       {...listeners}
@@ -94,7 +95,7 @@ export function TemporaryScheduleArea({
   const { isOver, setNodeRef } = useDroppable({ id: PARKING_DROP_ID });
 
   return (
-    <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
+    <div className="relative z-10 rounded-xl border bg-card text-card-foreground shadow-sm">
       <div className="flex items-center justify-between border-b px-3 py-2">
         <span className="text-sm font-semibold">Временная область</span>
         <Button size="sm" variant="outline" onClick={onCreate}>

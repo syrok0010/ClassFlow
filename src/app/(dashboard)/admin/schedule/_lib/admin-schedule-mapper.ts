@@ -76,6 +76,26 @@ type ProjectedClass = {
   grade: number | null;
 };
 
+export type RequirementMeta = {
+  lessonsPerWeek: number;
+  breakDuration: number;
+};
+
+function getRequirementMetaGroupId(
+  entry: AdminScheduleTemplateRecord,
+  projectedClassId: string,
+) {
+  if (entry.deliveryMode === "SHARED_CLASSES") {
+    return projectedClassId;
+  }
+
+  if (entry.deliveryGroup?.type === "SUBJECT_SUBGROUP") {
+    return entry.deliveryGroup.parentGroup?.id ?? entry.deliveryGroup.id;
+  }
+
+  return entry.deliveryGroup?.id ?? null;
+}
+
 function mapClassInfo(group: {
   id: string;
   name: string;
@@ -156,6 +176,7 @@ function getGroupLabel(entry: AdminScheduleTemplateRecord) {
 
 export function mapWeeklyTemplateToAdminScheduleEvents(
   entry: AdminScheduleTemplateRecord,
+  requirementMetaByGroupSubject: Record<string, RequirementMeta> = {},
 ): AdminScheduleEvent[] {
   const teacherName = entry.teacher?.user
     ? getUserFullName(entry.teacher.user) || MISSING_TEACHER_LABEL
@@ -182,8 +203,16 @@ export function mapWeeklyTemplateToAdminScheduleEvents(
       : null;
   const deliveryGroupStudentCount = entry.deliveryGroup?._count.studentGroups ?? null;
   const attendanceLoadMode = entry.attendanceLoadModeOverride ?? entry.subject.defaultAttendanceLoadMode;
+  const resolveRequirementMeta = (projectedClassId: string) => {
+    const requirementGroupId = getRequirementMetaGroupId(entry, projectedClassId);
+
+    return requirementGroupId
+      ? requirementMetaByGroupSubject[`${requirementGroupId}:${entry.subjectId}`] ?? null
+      : null;
+  };
 
   return projectedClasses.map((projectedClass) => ({
+    minimumBreakAfterMinutes: resolveRequirementMeta(projectedClass.id)?.breakDuration ?? null,
     id: `${entry.id}:${projectedClass.id}`,
     templateId: entry.id,
     projectionClassId: projectedClass.id,
