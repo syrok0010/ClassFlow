@@ -23,9 +23,13 @@ function filterGroupsTree(
       .map(filterNodeBySearch)
       .filter((group): group is GroupWithDetails => group !== null);
 
+    const matchesLinkedClasses = node.linkedClasses.some((group) =>
+      group.name.toLowerCase().includes(search ?? "")
+    );
     const matchesSearch =
       !search ||
       node.name.toLowerCase().includes(search) ||
+      matchesLinkedClasses ||
       filteredSubGroups.length > 0;
 
     if (!matchesSearch) {
@@ -54,6 +58,17 @@ export async function getGroupsTree(
       include: {
         subject: { select: { id: true, name: true } },
         _count: { select: { studentGroups: true } },
+        electiveClassLinks: {
+          select: {
+            classGroup: {
+              select: {
+                id: true,
+                name: true,
+                grade: true,
+              },
+            },
+          },
+        },
       },
       orderBy: [{ type: "asc" }, { grade: "asc" }, { name: "asc" }],
     });
@@ -82,6 +97,23 @@ export async function getGroupsTree(
       parentId: group.parentId,
       subjectId: group.subjectId,
       subject: group.subject,
+      linkedClasses: group.electiveClassLinks
+        .map((link) => ({
+          id: link.classGroup.id,
+          name: link.classGroup.name,
+          grade: link.classGroup.grade,
+        }))
+        .sort((left, right) => {
+          const gradeDelta =
+            (left.grade ?? Number.MAX_SAFE_INTEGER) -
+            (right.grade ?? Number.MAX_SAFE_INTEGER);
+
+          if (gradeDelta !== 0) {
+            return gradeDelta;
+          }
+
+          return left.name.localeCompare(right.name, "ru");
+        }),
       _count: { studentGroups: group._count.studentGroups },
       subGroups: (groupsByParentId.get(group.id) ?? []).map(buildTreeNode),
     });
@@ -99,7 +131,7 @@ export async function getSubjects(): Promise<Result<SubjectOption[]>> {
 
   try {
     const subjects = await prisma.subject.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, type: true },
       orderBy: { name: "asc" },
     });
 

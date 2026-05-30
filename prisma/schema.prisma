@@ -130,6 +130,17 @@ model StudentGroups {
   @@id([studentId, groupId])
 }
 
+model ElectiveGroupClassLink {
+  electiveGroupId String
+  classGroupId    String
+
+  electiveGroup Group @relation("ElectiveGroupClassLinks", fields: [electiveGroupId], references: [id], onDelete: Cascade)
+  classGroup    Group @relation("ElectiveGroupOpenedForLinks", fields: [classGroupId], references: [id], onDelete: Cascade)
+
+  @@id([electiveGroupId, classGroupId])
+  @@index([classGroupId])
+}
+
 enum GroupType {
   CLASS
   KINDERGARTEN_GROUP
@@ -161,6 +172,8 @@ model Group {
   subGroups                Group[]                   @relation("GroupParent")
   subject                  Subject?                  @relation(fields: [subjectId], references: [id])
   studentGroups            StudentGroups[]
+  electiveClassLinks       ElectiveGroupClassLink[]  @relation("ElectiveGroupClassLinks")
+  openedElectiveLinks      ElectiveGroupClassLink[]  @relation("ElectiveGroupOpenedForLinks")
   groupSubjectRequirements GroupSubjectRequirement[]
   deliveredWeeklyScheduleTemplates WeeklyScheduleTemplate[] @relation("WeeklyTemplateDeliveryGroup")
   deliveredScheduleEntries         ScheduleEntry[]          @relation("ScheduleEntryDeliveryGroup")

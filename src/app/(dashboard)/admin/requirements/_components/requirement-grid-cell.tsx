@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Clock3, Coffee, Plus } from "lucide-react";
+import { Clock3, Coffee, Lock, Plus } from "lucide-react";
 import { TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { 
@@ -28,6 +28,7 @@ type RequirementGridCellProps = {
   isActive: boolean;
   editing: { initialLessons?: number; instanceId: string } | null;
   quickInputMode: boolean;
+  disabled?: boolean;
   onActivate: () => void;
   onStartEditing: (lessons?: number) => void;
   onSave: (payload: RequirementCellFormInput & { advance: NavigationDirection }) => Promise<void>;
@@ -41,6 +42,7 @@ export function RequirementGridCell({
   isActive,
   editing,
   quickInputMode,
+  disabled = false,
   onActivate,
   onStartEditing,
   onSave,
@@ -54,20 +56,30 @@ export function RequirementGridCell({
         "relative h-16 min-w-32 border-r border-b px-2 py-1",
         SUBJECT_TYPE_CELL_TINT[subject.type],
         !entry && "bg-muted/25",
+        disabled && "bg-muted/40",
         isActive && "ring-2 ring-primary/60 ring-inset"
       )}
     >
       <button
         type="button"
-        className="group flex h-full w-full items-center justify-center text-center outline-none hover:bg-background/70 focus-visible:ring-ring"
-        title="Нажмите Enter или цифру для редактирования"
-        onClick={onActivate}
+        className={cn(
+          "group flex h-full w-full items-center justify-center text-center outline-none focus-visible:ring-ring",
+          !disabled && "hover:bg-background/70",
+          disabled && "cursor-not-allowed text-muted-foreground"
+        )}
+        title={
+          disabled
+            ? "Для кружка можно задавать часы только по привязанному допу"
+            : "Нажмите Enter или цифру для редактирования"
+        }
+        onClick={disabled ? undefined : onActivate}
         onDoubleClick={() => {
+          if (disabled) return;
           onActivate();
           onStartEditing();
         }}
         onKeyDown={(event) => {
-          if (!isActive) return;
+          if (!isActive || disabled) return;
 
           const navMap: Record<string, NavigationDirection> = {
             ArrowUp: "up",
@@ -105,7 +117,11 @@ export function RequirementGridCell({
         tabIndex={isActive ? 0 : -1}
         data-cell-focus-id={key}
       >
-        {entry ? (
+        {disabled ? (
+          <span className="opacity-60">
+            <Lock className="size-4" />
+          </span>
+        ) : entry ? (
           <div className="flex flex-col items-center">
             <span className="text-xl font-semibold leading-none">{entry.lessonsPerWeek}</span>
             <span className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
@@ -126,7 +142,7 @@ export function RequirementGridCell({
         )}
       </button>
 
-      {editing && (
+      {editing && !disabled && (
         <RequirementCellEditor
           key={editing.instanceId}
           quickInputMode={quickInputMode}

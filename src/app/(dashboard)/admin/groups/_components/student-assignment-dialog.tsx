@@ -173,7 +173,7 @@ export function StudentAssignmentDialog({
         header: (
           <>
             <p className="text-sm font-medium">
-              {isElective ? "Все ученики" : "Свободные ученики"}{" "}
+              {isElective ? "Доступные ученики" : "Свободные ученики"}{" "}
               <span className="text-muted-foreground">
                 ({filteredLeftStudents.length})
               </span>
