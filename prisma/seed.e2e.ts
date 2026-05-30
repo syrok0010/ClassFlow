@@ -163,7 +163,7 @@ async function seedAuthAndUsers() {
   });
   const parentOptionalElectiveSubject = await prisma.subject.create({
     data: {
-      name: "Медиастудия",
+      name: "Киноклуб",
       type: "ELECTIVE_OPTIONAL",
     },
   });
@@ -226,7 +226,7 @@ async function seedAuthAndUsers() {
   });
   const parentOptionalElectiveGroup = await prisma.group.create({
     data: {
-      name: "Медиастудия 5 А",
+      name: "Киноклуб 5 А",
       type: "ELECTIVE_GROUP",
       subjectId: parentOptionalElectiveSubject.id,
     },

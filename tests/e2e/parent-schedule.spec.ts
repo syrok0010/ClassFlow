@@ -49,14 +49,14 @@ test.describe("Parent schedule", () => {
 
     const optionalCard = page
       .locator('[data-testid="parent-schedule-card"]')
-      .filter({ hasText: "Медиастудия" });
+      .filter({ hasText: "Киноклуб" });
 
     await expect(optionalCard).toBeVisible();
     await expect(optionalCard).toHaveAttribute("data-parent-elective-state", "available");
     await optionalCard.getByRole("button", { name: "Записаться" }).click();
 
     const dialog = page.getByRole("alertdialog");
-    await expect(dialog).toContainText("Волкова Дарья Игоревна будет записан(а) на доп «Медиастудия».");
+    await expect(dialog).toContainText("Волкова Дарья Игоревна будет записан(а) на доп «Киноклуб».");
     await dialog.getByRole("button", { name: "Подтвердить" }).click();
 
     await expect(page.getByText("Ребенок записан на доп")).toBeVisible();
