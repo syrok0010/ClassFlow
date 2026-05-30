@@ -377,8 +377,12 @@ async function main() {
     ["Арина", "Сафонова"],
   ] as const;
 
+  let kuznetsovMikhailId: string | null = null;
   for (const [name, surname] of class3Students) {
-    await createStudent(name, surname, [class3.id], "ACTIVE", allStudents.length === 0);
+    const studentId = await createStudent(name, surname, [class3.id], "ACTIVE", allStudents.length === 0);
+    if (name === "Михаил" && surname === "Кузнецов") {
+      kuznetsovMikhailId = studentId;
+    }
   }
 
   const class6Students = [
@@ -396,8 +400,12 @@ async function main() {
     ["Софья", "Чистякова"],
   ] as const;
 
+  let fominNikitaId: string | null = null;
   for (const [name, surname] of class6Students) {
-    await createStudent(name, surname, [class6.id]);
+    const studentId = await createStudent(name, surname, [class6.id]);
+    if (name === "Никита" && surname === "Фомин") {
+      fominNikitaId = studentId;
+    }
   }
 
   await createStudent("Егор", "Лазарев", [class4.id]);
@@ -433,8 +441,12 @@ async function main() {
   });
   const parent2 = await prisma.parent.create({ data: { userId: parent2User.id } });
 
-  const parent1Class3ChildId = allStudents[0];
-  const parent1Class6ChildId = allStudents[class3Students.length];
+  if (!kuznetsovMikhailId || !fominNikitaId) {
+    throw new Error("Не удалось найти Михаила Кузнецова или Никиту Фомина в сид-данных");
+  }
+
+  const parent1Class3ChildId = kuznetsovMikhailId;
+  const parent1Class6ChildId = fominNikitaId;
   const parent2ChildId = allStudents[1];
 
   await prisma.studentParents.createMany({
@@ -809,6 +821,26 @@ async function main() {
       grades: lesson.grades,
     });
   }
+
+  const electiveAssignments = [
+    { studentId: kuznetsovMikhailId, classId: class3.id, subjectName: "Подвижные игры" },
+    { studentId: kuznetsovMikhailId, classId: class3.id, subjectName: "Рукоделие" },
+    { studentId: kuznetsovMikhailId, classId: class3.id, subjectName: "Арт-терапия" },
+    { studentId: kuznetsovMikhailId, classId: class3.id, subjectName: "Шахматы и шашки" },
+    { studentId: fominNikitaId, classId: class6.id, subjectName: "Йога" },
+    { studentId: fominNikitaId, classId: class6.id, subjectName: "Журналистика" },
+    { studentId: fominNikitaId, classId: class6.id, subjectName: "Писательский клуб" },
+    { studentId: fominNikitaId, classId: class6.id, subjectName: "Театр" },
+  ] as const;
+
+  await prisma.studentGroups.createMany({
+    data: await Promise.all(
+      electiveAssignments.map(async ({ studentId, classId, subjectName }) => ({
+        studentId,
+        groupId: await ensureElectiveOfferingGroup(classId, subjectName),
+      })),
+    ),
+  });
 
   const teacherSubjectRows = new Map<string, { teacherId: string; subjectId: string; minGrade: number; maxGrade: number }>();
   for (const lesson of normalizedTemplateSeeds) {

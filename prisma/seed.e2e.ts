@@ -161,6 +161,12 @@ async function seedAuthAndUsers() {
       type: "ACADEMIC",
     },
   });
+  const parentOptionalElectiveSubject = await prisma.subject.create({
+    data: {
+      name: "Медиастудия",
+      type: "ELECTIVE_OPTIONAL",
+    },
+  });
   const parentScheduleGroup = await prisma.group.create({
     data: {
       name: "5 А",
@@ -189,19 +195,46 @@ async function seedAuthAndUsers() {
       maxGrade: 5,
     },
   });
-  await prisma.roomSubject.create({
+  await prisma.teacherSubject.create({
     data: {
-      roomId: parentScheduleRoom.id,
-      subjectId: parentScheduleSubject.id,
+      teacherId: scheduleTeacher.id,
+      subjectId: parentOptionalElectiveSubject.id,
+      minGrade: 5,
+      maxGrade: 5,
     },
+  });
+  await prisma.roomSubject.createMany({
+    data: [
+      {
+        roomId: parentScheduleRoom.id,
+        subjectId: parentScheduleSubject.id,
+      },
+      {
+        roomId: parentScheduleRoom.id,
+        subjectId: parentOptionalElectiveSubject.id,
+      },
+    ],
   });
   await prisma.groupSubjectRequirement.create({
     data: {
       groupId: parentScheduleGroup.id,
       subjectId: parentScheduleSubject.id,
-      lessonsPerWeek: 5,
+      lessonsPerWeek: 1,
       durationInMinutes: 45,
       breakDuration: 10,
+    },
+  });
+  const parentOptionalElectiveGroup = await prisma.group.create({
+    data: {
+      name: "Медиастудия 5 А",
+      type: "ELECTIVE_GROUP",
+      subjectId: parentOptionalElectiveSubject.id,
+    },
+  });
+  await prisma.electiveGroupClassLink.create({
+    data: {
+      electiveGroupId: parentOptionalElectiveGroup.id,
+      classGroupId: parentScheduleGroup.id,
     },
   });
   await prisma.weeklyScheduleTemplate.create({
@@ -246,6 +279,19 @@ async function seedAuthAndUsers() {
       roomId: parentScheduleRoom.id,
       teacherId: scheduleTeacher.id,
       subjectId: parentScheduleSubject.id,
+    },
+  });
+  await prisma.scheduleEntry.create({
+    data: {
+      date: scheduleDate,
+      startTime: set(scheduleDate, {hours: 10, minutes: 0, seconds: 0, milliseconds: 0}),
+      endTime: set(scheduleDate, {hours: 10, minutes: 45, seconds: 0, milliseconds: 0}),
+      deliveryMode: "ELECTIVE_GROUP",
+      deliveryGroupId: parentOptionalElectiveGroup.id,
+      attendanceLoadMode: "DELIVERY_GROUP_SIZE",
+      roomId: parentScheduleRoom.id,
+      teacherId: scheduleTeacher.id,
+      subjectId: parentOptionalElectiveSubject.id,
     },
   });
 

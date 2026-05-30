@@ -1,0 +1,135 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
+import { useRouter } from "next/navigation";
+import { LoaderCircle } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
+import { StudentScheduleEventCard } from "@/features/schedule/student/student-schedule-event-card";
+import type { StudentScheduleEvent } from "@/features/schedule/student/student-schedule-types";
+import { enrollChildInElectiveAction } from "../_actions/parent-schedule-actions";
+
+interface ParentScheduleEventCardProps {
+  event: StudentScheduleEvent;
+  studentId: string;
+  studentName: string;
+  isOptimisticallyEnrolled: boolean;
+  onEnrollmentSuccess: (groupId: string) => void;
+}
+
+export function ParentScheduleEventCard({
+  event,
+  studentId,
+  studentName,
+  isOptimisticallyEnrolled,
+  onEnrollmentSuccess,
+}: ParentScheduleEventCardProps) {
+  const router = useRouter();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  const isOptionalElective =
+    event.subjectType === "ELECTIVE_OPTIONAL" && event.deliveryGroupId !== null;
+  const isEnrolled = event.isEnrolledInDeliveryGroup || isOptimisticallyEnrolled;
+  const electiveState = isOptionalElective ? (isEnrolled ? "enrolled" : "available") : undefined;
+
+  return (
+    <>
+      <div
+        data-testid="parent-schedule-card"
+        data-parent-elective-state={electiveState}
+        className="h-full w-full"
+      >
+        <StudentScheduleEventCard
+          event={event}
+          inlineAction={
+            isOptionalElective && !isEnrolled ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-6 px-2 text-[11px] shadow-sm transition-colors hover:bg-foreground hover:text-background"
+                onClick={(eventClick) => {
+                  eventClick.preventDefault();
+                  eventClick.stopPropagation();
+                  setConfirmOpen(true);
+                }}
+              >
+                Записаться
+              </Button>
+            ) : undefined
+          }
+          inlineCardClassName={
+            isOptionalElective && !isEnrolled
+              ? "border-amber-200/70 bg-amber-100/40"
+              : undefined
+          }
+        />
+      </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Записаться на доп?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-1">
+              <span className="block">
+                {studentName} будет записан(а) на доп «{event.subjectName}».
+              </span>
+              <span className="block">
+                Время: {format(event.start, "EEEE", { locale: ru })}, {event.timeLabel}
+              </span>
+              <span className="block">Кабинет: {event.roomName}</span>
+              <span className="block">Преподаватель: {event.teacherName}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isPending}
+              onClick={(dialogEvent) => {
+                dialogEvent.preventDefault();
+
+                startTransition(async () => {
+                  const result = await enrollChildInElectiveAction(studentId, event.id);
+
+                  if (result.error) {
+                    toast.error(result.error);
+                    return;
+                  }
+
+                  if (!result.result) {
+                    toast.error("Не удалось записать ребенка на доп");
+                    return;
+                  }
+
+                  onEnrollmentSuccess(result.result.groupId);
+                  setConfirmOpen(false);
+                  toast.success("Ребенок записан на доп");
+                  router.refresh();
+                });
+              }}
+            >
+              <span className={cn("inline-flex items-center gap-1", isPending && "opacity-90")}>
+                {isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
+                Подтвердить
+              </span>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}

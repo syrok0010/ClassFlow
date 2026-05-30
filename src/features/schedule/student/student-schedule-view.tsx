@@ -6,15 +6,18 @@ import { ReadonlyScheduleBrowser } from "@/features/schedule/components/readonly
 import { DEFAULT_SCHEDULE_VIEW } from "@/features/schedule/lib/query-params";
 
 import { StudentScheduleEventCard } from "./student-schedule-event-card";
-import type { StudentSchedulePageData } from "./student-schedule-types";
+import type { StudentScheduleEvent, StudentSchedulePageData } from "./student-schedule-types";
 
-type StudentScheduleViewProps = StudentSchedulePageData;
+interface StudentScheduleViewProps extends StudentSchedulePageData {
+  renderEventCard?: (event: StudentScheduleEvent) => React.ReactNode;
+}
 
 export function StudentScheduleView({
   anchorDate,
   dateParam,
   events,
   viewMode,
+  renderEventCard,
 }: StudentScheduleViewProps) {
   return (
     <ReadonlyScheduleBrowser
@@ -28,7 +31,9 @@ export function StudentScheduleView({
         title: "Нет занятий",
         description: "На выбранный день или неделю расписание пусто.",
       }}
-      renderEvent={(event) => <StudentScheduleEventCard event={event} />}
+      renderEvent={(event) =>
+        renderEventCard ? renderEventCard(event) : <StudentScheduleEventCard event={event} />
+      }
     />
   );
 }

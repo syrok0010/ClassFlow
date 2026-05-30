@@ -8,6 +8,8 @@ export interface StudentScheduleEvent extends BaseScheduleEvent {
   roomName: string;
   groupName: string;
   groupType: GroupType;
+  deliveryGroupId: string | null;
+  isEnrolledInDeliveryGroup: boolean;
   timeLabel: string;
   metaLine: string;
 }
