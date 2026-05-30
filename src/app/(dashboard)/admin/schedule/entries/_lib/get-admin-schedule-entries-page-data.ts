@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { format, getISODay } from "date-fns";
 
 import { getScheduleRange } from "@/features/schedule";
 import { getMinutesSinceStartOfDay } from "@/features/schedule/lib/date-utils";
@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminContext } from "@/lib/server-action-auth";
 
 import type { AdminScheduleEvent } from "../../_lib/admin-schedule-types";
+import type { RequirementMeta } from "../../_lib/admin-schedule-mapper";
 import {
   AdminScheduleEntriesPageData,
   AdminScheduleEntriesScope, GetAdminScheduleEntriesPageDataParams
@@ -19,7 +20,7 @@ import {
   MISSING_TEACHER_LABEL
 } from "@/app/(dashboard)/admin/schedule/entries/_lib/constants";
 
-const scheduleEntryInclude = {
+export const scheduleEntryInclude = {
   subject: { select: { id: true, name: true, type: true } },
   teacher: {
     select: {
@@ -45,6 +46,20 @@ const scheduleEntryInclude = {
           _count: { select: { studentGroups: true } },
         },
       },
+      electiveClassLinks: {
+        select: {
+          classGroupId: true,
+          classGroup: {
+            select: {
+              id: true,
+              name: true,
+              grade: true,
+              type: true,
+              _count: { select: { studentGroups: true } },
+            },
+          },
+        },
+      },
     },
   },
   coveredClasses: {
@@ -63,7 +78,7 @@ const scheduleEntryInclude = {
   },
 } satisfies Prisma.ScheduleEntryInclude;
 
-type ScheduleEntryRecord = Prisma.ScheduleEntryGetPayload<{
+export type ScheduleEntryRecord = Prisma.ScheduleEntryGetPayload<{
   include: typeof scheduleEntryInclude;
 }>;
 
@@ -206,41 +221,50 @@ export async function getAdminScheduleEntriesPageData({
     targetId: selectedTarget.id,
     selectedTarget,
     options,
-    events: scheduleEntries.map(mapScheduleEntryToAdminScheduleEvent),
+    events: scheduleEntries.map((entry) => mapScheduleEntryToAdminScheduleEvent(entry)),
   };
 }
 
-function mapScheduleEntryToAdminScheduleEvent(
+export function mapScheduleEntryToConflictProjections(
   entry: ScheduleEntryRecord,
-): AdminScheduleEvent {
+  requirementMetaByGroupSubject: Record<string, RequirementMeta> = {},
+): AdminScheduleEvent[] {
   const teacherName = entry.teacher?.user
     ? getUserFullName(entry.teacher.user) || MISSING_TEACHER_LABEL
     : MISSING_TEACHER_LABEL;
   const roomName = entry.room?.name ?? MISSING_ROOM_LABEL;
   const groupName = getGroupLabel(entry);
+  const openClasses = entry.deliveryGroup?.electiveClassLinks.map((item) => mapClassInfo(item.classGroup)) ?? [];
   const coveredClasses = entry.coveredClasses.map((item) => mapClassInfo(item.schoolClass));
-  const primaryClass = getPrimaryClass(entry);
   const parentClass =
     entry.deliveryGroup?.type === "SUBJECT_SUBGROUP" && entry.deliveryGroup.parentGroup
       ? mapClassInfo(entry.deliveryGroup.parentGroup)
       : entry.deliveryGroup?.type === "CLASS"
         ? mapClassInfo(entry.deliveryGroup)
         : null;
+  const projectedClasses = getProjectedClasses(entry);
+  const resolveRequirementMeta = (projectedClassId: string) => {
+    const requirementGroupId = getRequirementMetaGroupId(entry, projectedClassId);
 
-  return {
-    id: entry.id,
-    templateId: entry.templateId ?? entry.id,
-    projectionClassId: primaryClass.id,
+    return requirementGroupId
+      ? requirementMetaByGroupSubject[`${requirementGroupId}:${entry.subjectId}`] ?? null
+      : null;
+  };
+
+  return projectedClasses.map((projectedClass) => ({
+    id: `${entry.id}:${projectedClass.id}`,
+    templateId: entry.id,
+    projectionClassId: projectedClass.id,
     deliveryMode: entry.deliveryMode,
     deliveryGroupId: entry.deliveryGroup?.id ?? null,
     deliveryGroupType: entry.deliveryGroup?.type ?? null,
-    openClassIds: [],
+    openClassIds: openClasses.map((item) => item.id),
     coveredClassIds: entry.coveredClasses.map((item) => item.classGroupId),
-    openClasses: [],
+    openClasses,
     coveredClasses,
     start: entry.startTime,
     end: entry.endTime,
-    dayOfWeek: null,
+    dayOfWeek: getISODay(entry.startTime),
     startMinutes: getMinutesSinceStartOfDay(entry.startTime),
     endMinutes: getMinutesSinceStartOfDay(entry.endTime),
     detached: false,
@@ -259,12 +283,86 @@ function mapScheduleEntryToAdminScheduleEvent(
     parentClassName: parentClass?.name ?? null,
     parentClassGrade: parentClass?.grade ?? null,
     parentClassStudentCount: parentClass?.studentCount ?? null,
-    classId: primaryClass.id,
-    className: primaryClass.name,
-    groupType: entry.deliveryGroup?.type ?? primaryClass.type,
+    minimumBreakAfterMinutes: resolveRequirementMeta(projectedClass.id)?.breakDuration ?? null,
+    classId: projectedClass.id,
+    className: projectedClass.name,
+    groupType: entry.deliveryGroup?.type ?? projectedClass.type,
     timeLabel: `${format(entry.startTime, "HH:mm")}-${format(entry.endTime, "HH:mm")}`,
     metaLine: `${teacherName} • ${roomName}`,
+  }));
+}
+
+export function mapScheduleEntryToAdminScheduleEvent(
+  entry: ScheduleEntryRecord,
+  requirementMetaByGroupSubject: Record<string, RequirementMeta> = {},
+): AdminScheduleEvent {
+  const primaryProjection = mapScheduleEntryToConflictProjections(entry, requirementMetaByGroupSubject)[0];
+
+  if (primaryProjection) {
+    return {
+      ...primaryProjection,
+      id: entry.id,
+    };
+  }
+
+  return {
+    id: entry.id,
+    templateId: entry.id,
+    projectionClassId: entry.id,
+    deliveryMode: entry.deliveryMode,
+    deliveryGroupId: entry.deliveryGroup?.id ?? null,
+    deliveryGroupType: entry.deliveryGroup?.type ?? null,
+    openClassIds: [],
+    coveredClassIds: [],
+    openClasses: [],
+    coveredClasses: [],
+    start: entry.startTime,
+    end: entry.endTime,
+    dayOfWeek: getISODay(entry.startTime),
+    startMinutes: getMinutesSinceStartOfDay(entry.startTime),
+    endMinutes: getMinutesSinceStartOfDay(entry.endTime),
+    detached: false,
+    subjectId: entry.subject.id,
+    subjectName: entry.subject.name,
+    subjectType: entry.subject.type,
+    attendanceLoadMode: entry.attendanceLoadMode,
+    teacherId: entry.teacher?.id ?? null,
+    teacherName: entry.teacher?.user ? getUserFullName(entry.teacher.user) || MISSING_TEACHER_LABEL : MISSING_TEACHER_LABEL,
+    roomId: entry.room?.id ?? null,
+    roomName: entry.room?.name ?? MISSING_ROOM_LABEL,
+    roomSeatsCount: entry.room?.seatsCount ?? null,
+    groupName: entry.deliveryGroup?.name ?? "Группа не указана",
+    deliveryGroupStudentCount: entry.deliveryGroup?._count.studentGroups ?? null,
+    parentClassId: null,
+    parentClassName: null,
+    parentClassGrade: null,
+    parentClassStudentCount: null,
+    minimumBreakAfterMinutes: null,
+    classId: entry.deliveryGroup?.id ?? entry.id,
+    className: entry.deliveryGroup?.name ?? "Группа не указана",
+    groupType: entry.deliveryGroup?.type ?? "CLASS",
+    timeLabel: `${format(entry.startTime, "HH:mm")}-${format(entry.endTime, "HH:mm")}`,
+    metaLine: `${entry.teacher?.user ? getUserFullName(entry.teacher.user) || MISSING_TEACHER_LABEL : MISSING_TEACHER_LABEL} • ${entry.room?.name ?? MISSING_ROOM_LABEL}`,
   };
+}
+
+function getRequirementMetaGroupId(
+  entry: ScheduleEntryRecord,
+  projectedClassId: string,
+) {
+  if (entry.deliveryMode === "SHARED_CLASSES") {
+    return projectedClassId;
+  }
+
+  if (
+    entry.deliveryMode === "DIRECT_GROUP"
+    && entry.deliveryGroup?.type === "SUBJECT_SUBGROUP"
+    && entry.deliveryGroup.parentGroup?.id
+  ) {
+    return entry.deliveryGroup.parentGroup.id;
+  }
+
+  return entry.deliveryGroup?.id ?? null;
 }
 
 type ClassInfo = {
@@ -292,6 +390,13 @@ function mapClassInfo(group: {
 }
 
 function getProjectedClasses(entry: ScheduleEntryRecord): ClassInfo[] {
+  if (entry.deliveryMode === "ELECTIVE_GROUP") {
+    return entry.deliveryGroup?.electiveClassLinks
+      .map((item) => mapClassInfo(item.classGroup))
+      .sort((left, right) => left.name.localeCompare(right.name, "ru"))
+      ?? [];
+  }
+
   if (entry.deliveryMode === "SHARED_CLASSES") {
     return entry.coveredClasses
       .map((item) => mapClassInfo(item.schoolClass))
@@ -307,16 +412,6 @@ function getProjectedClasses(entry: ScheduleEntryRecord): ClassInfo[] {
   }
 
   return [mapClassInfo(entry.deliveryGroup)];
-}
-
-function getPrimaryClass(entry: ScheduleEntryRecord): ClassInfo {
-  return getProjectedClasses(entry)[0] ?? {
-    id: entry.deliveryGroup?.id ?? entry.id,
-    name: entry.deliveryGroup?.name ?? "Группа не указана",
-    grade: entry.deliveryGroup?.grade ?? null,
-    studentCount: entry.deliveryGroup?._count.studentGroups ?? 0,
-    type: entry.deliveryGroup?.type ?? "CLASS",
-  };
 }
 
 function getGroupLabel(entry: ScheduleEntryRecord) {

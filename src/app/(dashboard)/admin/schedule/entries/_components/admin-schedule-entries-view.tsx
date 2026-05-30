@@ -1,7 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
 import { CalendarDays } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { parseAsString, parseAsStringLiteral, useQueryStates } from "nuqs";
 
 import {
@@ -15,12 +18,34 @@ import {
 } from "@/components/ui/combobox";
 import { DEFAULT_SCHEDULE_VIEW, ReadonlyScheduleBrowser } from "@/features/schedule";
 
+import { ScheduleDeleteDialog } from "../../_components/schedule-delete-dialog";
+import {
+  type ScheduleEditorDraft,
+  ScheduleEventEditorDialog,
+} from "../../_components/schedule-event-editor-dialog";
 import { AdminScheduleEventCard } from "../../_components/admin-schedule-event-card";
+import type { AdminSchedulePageData, AdminScheduleEvent } from "../../_lib/admin-schedule-types";
+import { buildDraftFromEvent } from "../../_lib/admin-schedule-template-commands";
+import {
+  deleteAdminScheduleEntryAction,
+  updateAdminScheduleEntryAction,
+} from "../_actions/schedule-entry-actions";
 import type {
   AdminScheduleEntriesPageData,
   AdminScheduleEntriesScope,
   ScheduleTargetOption
 } from "../_lib/types";
+
+type AdminScheduleEntriesViewProps = AdminScheduleEntriesPageData & Pick<
+  AdminSchedulePageData,
+  | "classRows"
+  | "subjectOptions"
+  | "directGroupOptions"
+  | "electiveGroupOptions"
+  | "roomOptions"
+  | "teacherOptions"
+  | "lessonDurationByGroupSubject"
+>;
 
 export function AdminScheduleEntriesView({
   anchorDate,
@@ -31,7 +56,15 @@ export function AdminScheduleEntriesView({
   selectedTarget,
   targetId,
   viewMode,
-}: AdminScheduleEntriesPageData) {
+  classRows,
+  subjectOptions,
+  directGroupOptions,
+  electiveGroupOptions,
+  roomOptions,
+  teacherOptions,
+  lessonDurationByGroupSubject,
+}: AdminScheduleEntriesViewProps) {
+  const router = useRouter();
   const [{ scope: currentScope, targetId: currentTargetId }, setTargetQuery] =
       useQueryStates(
           {
@@ -43,8 +76,15 @@ export function AdminScheduleEntriesView({
           },
       );
   const [targetInputValue, setTargetInputValue] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<AdminScheduleEvent | null>(null);
+  const [editingDraft, setEditingDraft] = useState<ScheduleEditorDraft | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminScheduleEvent | null>(null);
 
   const optimisticScope = parseScope(currentScope);
+  const classOptions = useMemo(
+    () => classRows.map((row) => ({ id: row.id, label: row.name })),
+    [classRows],
+  );
   const targetOptions = useMemo(
     () => buildTargetOptions(options),
     [options],
@@ -75,6 +115,16 @@ export function AdminScheduleEntriesView({
     visibleSelectedTarget && effectiveTargetInputValue === visibleSelectedTarget.label
       ? visibleSelectedTarget
       : null;
+  const fixedDayLabel = editingEvent
+    ? format(editingEvent.start, "EEEE, d MMMM", { locale: ru })
+    : null;
+  const handleEdit = useCallback((event: AdminScheduleEvent) => {
+    setEditingEvent(event);
+    setEditingDraft(buildDraftFromEvent(event));
+  }, []);
+  const handleDelete = useCallback((event: AdminScheduleEvent) => {
+    setDeleteTarget(event);
+  }, []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -146,7 +196,77 @@ export function AdminScheduleEntriesView({
             ? "Проверьте другой период или примените недельный шаблон к фактическому расписанию."
             : "После выбора здесь появится расписание.",
         }}
-        renderEvent={(event) => <AdminScheduleEventCard event={event} />}
+        renderEvent={(event) => (
+          <AdminScheduleEventCard
+            event={event}
+            showActions
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        )}
+      />
+
+      <ScheduleEventEditorDialog
+        open={Boolean(editingEvent && editingDraft)}
+        title="Редактирование записи"
+        description="Измените поля карточки. Изменения будут применены только к выбранной дате."
+        draft={editingDraft}
+        subjectOptions={subjectOptions}
+        classOptions={classOptions}
+        classRows={classRows}
+        directGroupOptions={directGroupOptions}
+        electiveGroupOptions={electiveGroupOptions}
+        roomOptions={roomOptions}
+        teacherOptions={teacherOptions}
+        lessonDurationByGroupSubject={lessonDurationByGroupSubject}
+        lockDaySelection
+        fixedDayLabel={fixedDayLabel}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingEvent(null);
+            setEditingDraft(null);
+          }
+        }}
+        onSave={async (draft) => {
+          if (!editingEvent) {
+            return "Запись для редактирования не выбрана";
+          }
+
+          const result = await updateAdminScheduleEntryAction({
+            entryId: editingEvent.id,
+            date: format(editingEvent.start, "yyyy-MM-dd"),
+            ...draft,
+          });
+
+          if (result.error) {
+            return result.error;
+          }
+
+          router.refresh();
+          setEditingEvent(null);
+          setEditingDraft(null);
+          return null;
+        }}
+      />
+
+      <ScheduleDeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+          }
+        }}
+        onConfirm={async () => {
+          if (!deleteTarget) {
+            return;
+          }
+
+          const result = await deleteAdminScheduleEntryAction(deleteTarget.id);
+          if (!result.error) {
+            router.refresh();
+            setDeleteTarget(null);
+          }
+        }}
       />
     </div>
   );
