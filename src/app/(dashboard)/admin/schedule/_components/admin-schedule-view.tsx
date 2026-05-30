@@ -87,7 +87,7 @@ export function AdminScheduleView({
     handleDragStart,
     handleDragCancel,
     handleDragEnd,
-  } = useAdminScheduleDnd(events);
+  } = useAdminScheduleDnd(events, lessonDurationByGroupSubject);
 
   const classOptions = useMemo(
     () => classRows.map((row) => ({ id: row.id, label: row.name })),

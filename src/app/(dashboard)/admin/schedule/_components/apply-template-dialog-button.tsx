@@ -261,9 +261,9 @@ export function ApplyTemplateDialogButton() {
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent>
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-xl">
           <form
-            className="flex flex-col gap-4"
+            className="flex min-h-0 flex-1 flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               void form.handleSubmit();
@@ -276,63 +276,65 @@ export function ApplyTemplateDialogButton() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <form.Field name="startDate">
-                {(field) => {
-                  const errors = getFieldErrorMessages(field);
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <form.Field name="startDate">
+                  {(field) => {
+                    const errors = getFieldErrorMessages(field);
 
-                  return (
-                    <Field data-invalid={errors.length > 0}>
-                      <FieldLabel htmlFor="apply-template-start-date">Дата начала</FieldLabel>
-                      <Input
-                        id="apply-template-start-date"
-                        name={field.name}
-                        type="date"
-                        value={field.state.value}
-                        disabled={disabled}
-                        aria-invalid={errors.length > 0 || undefined}
-                        onBlur={field.handleBlur}
-                        onChange={(event) =>
-                          handleDateChange(field, "startDate", event.currentTarget.value)
-                        }
-                      />
-                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                    </Field>
-                  );
-                }}
-              </form.Field>
+                    return (
+                      <Field data-invalid={errors.length > 0}>
+                        <FieldLabel htmlFor="apply-template-start-date">Дата начала</FieldLabel>
+                        <Input
+                          id="apply-template-start-date"
+                          name={field.name}
+                          type="date"
+                          value={field.state.value}
+                          disabled={disabled}
+                          aria-invalid={errors.length > 0 || undefined}
+                          onBlur={field.handleBlur}
+                          onChange={(event) =>
+                            handleDateChange(field, "startDate", event.currentTarget.value)
+                          }
+                        />
+                        {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+                      </Field>
+                    );
+                  }}
+                </form.Field>
 
-              <form.Field name="endDate">
-                {(field) => {
-                  const errors = getFieldErrorMessages(field);
+                <form.Field name="endDate">
+                  {(field) => {
+                    const errors = getFieldErrorMessages(field);
 
-                  return (
-                    <Field data-invalid={errors.length > 0}>
-                      <FieldLabel htmlFor="apply-template-end-date">Дата окончания</FieldLabel>
-                      <Input
-                        id="apply-template-end-date"
-                        name={field.name}
-                        type="date"
-                        value={field.state.value}
-                        disabled={disabled}
-                        aria-invalid={errors.length > 0 || undefined}
-                        onBlur={field.handleBlur}
-                        onChange={(event) =>
-                          handleDateChange(field, "endDate", event.currentTarget.value)
-                        }
-                      />
-                      {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
-                    </Field>
-                  );
-                }}
-              </form.Field>
+                    return (
+                      <Field data-invalid={errors.length > 0}>
+                        <FieldLabel htmlFor="apply-template-end-date">Дата окончания</FieldLabel>
+                        <Input
+                          id="apply-template-end-date"
+                          name={field.name}
+                          type="date"
+                          value={field.state.value}
+                          disabled={disabled}
+                          aria-invalid={errors.length > 0 || undefined}
+                          onBlur={field.handleBlur}
+                          onChange={(event) =>
+                            handleDateChange(field, "endDate", event.currentTarget.value)
+                          }
+                        />
+                        {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+                      </Field>
+                    );
+                  }}
+                </form.Field>
+              </div>
+
+              <form.Subscribe selector={(state) => state.values}>
+                {(values) => <ApplyTemplatePreview values={values} preview={preview} />}
+              </form.Subscribe>
+
+              <ApplyTemplateValidationNotice validation={templateValidation} />
             </div>
-
-            <form.Subscribe selector={(state) => state.values}>
-              {(values) => <ApplyTemplatePreview values={values} preview={preview} />}
-            </form.Subscribe>
-
-            <ApplyTemplateValidationNotice validation={templateValidation} />
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={disabled}>
@@ -496,13 +498,15 @@ function renderTemplateValidationNotice(validation: TemplateValidationState | nu
   }
 
   return (
-    <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-      <p className="font-medium">Недельный шаблон содержит ошибки и не может быть применен:</p>
-      <ul className="mt-2 list-disc pl-5">
-        {validation.errorMessages.map((message) => (
-          <li key={message}>{message}</li>
-        ))}
-      </ul>
+    <div className="overflow-hidden rounded-lg border border-destructive/30 bg-destructive/10 text-sm text-destructive">
+      <div className="max-h-[min(45vh,28rem)] overflow-y-auto px-3 py-2 pr-2">
+        <p className="font-medium">Недельный шаблон содержит ошибки и не может быть применен:</p>
+        <ul className="list-disc pl-5">
+          {validation.errorMessages.map((message) => (
+            <li key={message}>{message}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

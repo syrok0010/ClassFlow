@@ -366,9 +366,13 @@ function resolveValidationAudience(
   }
 
   const parentClass = group.parentId ? groupsById[group.parentId] : null;
+  const requirementGroupId =
+    group.type === "SUBJECT_SUBGROUP" && group.parentId
+      ? group.parentId
+      : value.deliveryGroupId;
 
   return {
-    requirementGroupIds: [value.deliveryGroupId],
+    requirementGroupIds: [requirementGroupId],
     deliveryGroupSize: group.studentCount ?? 0,
     fullClassSize: parentClass?.studentCount ?? group.studentCount ?? 0,
     gradeRange: {

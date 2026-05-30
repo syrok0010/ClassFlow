@@ -4,6 +4,7 @@ import { requireAdminContext } from "@/lib/server-action-auth";
 
 import {
   adminScheduleTemplateInclude,
+  type RequirementMeta,
   mapWeeklyTemplateToAdminScheduleEvents,
 } from "./admin-schedule-mapper";
 import type { AdminSchedulePageData } from "./admin-schedule-types";
@@ -174,11 +175,22 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
         groupId: true,
         subjectId: true,
         durationInMinutes: true,
+        lessonsPerWeek: true,
+        breakDuration: true,
       },
     }),
   ]);
 
   const lessonDurationByGroupSubject = buildLessonDurationByGroupSubject(requirements, templates);
+  const requirementMetaByGroupSubject: Record<string, RequirementMeta> = Object.fromEntries(
+    requirements.map((requirement) => [
+      `${requirement.groupId}:${requirement.subjectId}`,
+      {
+        lessonsPerWeek: requirement.lessonsPerWeek,
+        breakDuration: requirement.breakDuration,
+      },
+    ]),
+  );
   const subjectIdsByGroup = new Map<string, string[]>();
   for (const requirement of requirements) {
     const current = subjectIdsByGroup.get(requirement.groupId) ?? [];
@@ -204,7 +216,9 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
   );
 
   return {
-    events: templates.flatMap((entry) => mapWeeklyTemplateToAdminScheduleEvents(entry)),
+    events: templates.flatMap((entry) =>
+      mapWeeklyTemplateToAdminScheduleEvents(entry, requirementMetaByGroupSubject)
+    ),
     classRows: classRows.map((row) => ({
       id: row.id,
       name: row.name,
