@@ -1,11 +1,11 @@
-import {
-  useMemo,
-  useState,
-  useEffect,
-  useCallback,
-} from "react";
+import { useMemo, useState } from "react";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
+import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
+import {
+  useStudentBucketDnd,
+  type StudentBucketMap,
+} from "../_hooks/use-student-bucket-dnd";
 import { getStudentDisplayName } from "../_lib/utils";
 import {
   Dialog,
@@ -16,7 +16,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import {
   Select,
   SelectContent,
@@ -24,19 +28,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   DragOverlay,
-  type DragStartEvent,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import { StudentBucketsBoard } from "./student-buckets-board";
+import { Spinner } from "@/components/ui/spinner";
 
 interface StudentAssignmentDialogProps {
   open: boolean;
@@ -47,7 +46,7 @@ interface StudentAssignmentDialogProps {
     available: StudentForAssignment[];
   } | null;
   loading: boolean;
-  onSave: (toAssign: string[], toRemove: string[]) => Promise<void>;
+  command: GroupsCrudCommands["transferStudents"];
 }
 
 function getStudentClassInfo(s: StudentForAssignment) {
@@ -61,31 +60,15 @@ export function StudentAssignmentDialog({
   group,
   students,
   loading,
-  onSave,
+  command,
 }: StudentAssignmentDialogProps) {
-  const [buckets, setBuckets] = useState<Record<"unassigned" | "assigned", string[]>>({
-    unassigned: [],
-    assigned: [],
-  });
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [initializedFrom, setInitializedFrom] = useState<string | null>(null);
+  const [buckets, setBuckets] = useState<StudentBucketMap>(() => ({
+    unassigned: students?.available.map((student) => student.id) ?? [],
+    assigned: students?.assigned.map((student) => student.id) ?? [],
+  }));
   const [leftSearch, setLeftSearch] = useState("");
   const [debouncedLeftSearch] = useDebouncedValue(leftSearch, { wait: 350 });
   const [leftClassFilter, setLeftClassFilter] = useState("ALL");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!open || !group || !students) return;
-    const assignedKey = students.assigned.map((s) => s.id).join("|");
-    const availableKey = students.available.map((s) => s.id).join("|");
-    const nextKey = `${group.id}:${assignedKey}:${availableKey}`;
-    if (initializedFrom === nextKey) return;
-    setBuckets({
-      unassigned: students.available.map((s) => s.id),
-      assigned: students.assigned.map((s) => s.id),
-    });
-    setInitializedFrom(nextKey);
-  }, [open, group, students, initializedFrom]);
 
   const studentById = useMemo(() => {
     if (!students) return new Map<string, StudentForAssignment>();
@@ -95,12 +78,18 @@ export function StudentAssignmentDialog({
   }, [students]);
 
   const leftStudents = useMemo(
-    () => buckets.unassigned.map((id) => studentById.get(id)).filter(Boolean) as StudentForAssignment[],
+    () =>
+      (buckets.unassigned ?? [])
+        .map((id) => studentById.get(id))
+        .filter(Boolean) as StudentForAssignment[],
     [buckets.unassigned, studentById]
   );
 
   const rightStudents = useMemo(
-    () => buckets.assigned.map((id) => studentById.get(id)).filter(Boolean) as StudentForAssignment[],
+    () =>
+      (buckets.assigned ?? [])
+        .map((id) => studentById.get(id))
+        .filter(Boolean) as StudentForAssignment[],
     [buckets.assigned, studentById]
   );
 
@@ -127,90 +116,44 @@ export function StudentAssignmentDialog({
     return Array.from(classes).sort();
   }, [leftStudents]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor)
-  );
-
-  const findBucketOfStudent = useCallback(
-    (studentId: string): "unassigned" | "assigned" | null => {
-      if (buckets.unassigned.includes(studentId)) return "unassigned";
-      if (buckets.assigned.includes(studentId)) return "assigned";
-      return null;
-    },
-    [buckets]
-  );
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-
-    if (!over) return;
-
-    const studentId = active.id as string;
-    const targetBucket =
-      ((over.data.current?.bucketId as string) ?? (over.id as string)) as
-        | "unassigned"
-        | "assigned";
-    const sourceBucket = findBucketOfStudent(studentId);
-
-    if (!sourceBucket) return;
-    if (targetBucket !== "unassigned" && targetBucket !== "assigned") return;
-
-    setBuckets((prev) => {
-      const next = {
-        unassigned: [...prev.unassigned],
-        assigned: [...prev.assigned],
-      };
-
-      next[sourceBucket] = next[sourceBucket].filter((id) => id !== studentId);
-      if (!next[targetBucket].includes(studentId)) {
-        next[targetBucket] = [...next[targetBucket], studentId];
-      }
-
-      return next;
+  const { activeId, handleDragEnd, handleDragStart, sensors } =
+    useStudentBucketDnd({
+      bucketIds: ["unassigned", "assigned"],
+      buckets,
+      canMove: ({ sourceBucket }) => Boolean(sourceBucket),
+      setBuckets,
     });
-  };
 
   const handleSave = async () => {
-    if (!students) return;
+    if (!group || !students) return;
 
     const initialAssigned = new Set(students.assigned.map((s) => s.id));
-    const currentAssigned = new Set(buckets.assigned);
+    const currentAssigned = new Set(buckets.assigned ?? []);
 
     const toAssign = Array.from(currentAssigned).filter((id) => !initialAssigned.has(id));
     const toRemove = Array.from(initialAssigned).filter((id) => !currentAssigned.has(id));
 
-    setSaving(true);
-    try {
-      await onSave(toAssign, toRemove);
-      setLeftSearch("");
-      setLeftClassFilter("ALL");
-    } finally {
-      setSaving(false);
+    if (toAssign.length === 0 && toRemove.length === 0) {
+      onOpenChange(false);
+      return;
     }
-  };
 
-  const handleOpenChange = (v: boolean) => {
-    if (!v) {
-      setBuckets({ unassigned: [], assigned: [] });
-      setActiveId(null);
-      setInitializedFrom(null);
-      setLeftSearch("");
-      setLeftClassFilter("ALL");
+    const result = await command.execute({ group, toAssign, toRemove });
+    if (result === null) {
+      return;
     }
-    onOpenChange(v);
+
+    setLeftSearch("");
+    setLeftClassFilter("ALL");
+    onOpenChange(false);
   };
 
   const hasChanges = useMemo(() => {
     if (!students) return false;
     const initial = students.assigned.map((s) => s.id);
-    if (initial.length !== buckets.assigned.length) return true;
-    const currentSet = new Set(buckets.assigned);
+    const assigned = buckets.assigned ?? [];
+    if (initial.length !== assigned.length) return true;
+    const currentSet = new Set(assigned);
     return initial.some((id) => !currentSet.has(id));
   }, [students, buckets.assigned]);
 
@@ -237,15 +180,17 @@ export function StudentAssignmentDialog({
             </p>
 
             <div className="flex gap-1.5">
-              <div className="relative flex-1">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                <Input
+              <InputGroup className="flex-1">
+                <InputGroupAddon align="inline-start">
+                  <Search className="size-3.5" />
+                </InputGroupAddon>
+                <InputGroupInput
                   placeholder="Поиск..."
                   value={leftSearch}
                   onChange={(e) => setLeftSearch(e.target.value)}
-                  className="h-7 pl-7 text-xs"
+                  className="text-xs"
                 />
-              </div>
+              </InputGroup>
               {isElective && availableClasses.length > 0 && (
                 <Select
                   value={leftClassFilter}
@@ -312,7 +257,7 @@ export function StudentAssignmentDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-3xl"
         showCloseButton
@@ -328,7 +273,7 @@ export function StudentAssignmentDialog({
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            <Spinner />
           </div>
         ) : (
           <DndContext
@@ -337,7 +282,7 @@ export function StudentAssignmentDialog({
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex flex-col gap-3 min-h-[350px]">
+            <div className="flex flex-col gap-3 min-h-87.5">
               <StudentBucketsBoard
                 columns={boardColumns}
                 getStudentDisplayName={getStudentDisplayName}
@@ -357,15 +302,15 @@ export function StudentAssignmentDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => handleOpenChange(false)}
+            onClick={() => onOpenChange(false)}
           >
             Отмена
           </Button>
           <Button
-            disabled={!hasChanges || saving}
+            disabled={!hasChanges || command.isPending}
             onClick={handleSave}
           >
-            {saving && <Loader2 className="size-4 animate-spin" />}
+            {command.isPending && <Spinner />}
             Сохранить
           </Button>
         </DialogFooter>

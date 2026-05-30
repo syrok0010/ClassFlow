@@ -1,217 +1,169 @@
 "use client";
 
-import { startTransition, useCallback, useOptimistic } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback } from "react";
+import { useMutation } from "@tanstack/react-query";
 import type { GroupType } from "@/generated/prisma/client";
-import type { GroupWithDetails } from "../_lib/types";
 import {
-  assignStudentsToGroupAction,
+  assertActionSuccess,
+  type MutationCommand,
+  withExecute,
+} from "@/lib/mutation-utils";
+import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
+import {
   createGroupAction,
   createSubgroupsFromSplit,
   deleteGroupAction,
   getGroupStudents,
   getSubgroupEditorData,
   getStudentsForAssignment,
-  removeStudentsFromGroupAction,
   saveSubgroupRedistribution,
+  type SubgroupEditorData,
   updateGroupAction,
+  updateGroupStudentsAction,
 } from "../_actions/group-actions";
 import { toast } from "sonner";
 
-type OptimisticAction =
-  | {
-      type: "add";
-      group: GroupWithDetails;
-    }
-  | {
-      type: "rename";
-      id: string;
-      name: string;
-    }
-  | {
-      type: "remove";
-      id: string;
-    }
-  | {
-      type: "studentsDelta";
-      id: string;
-      delta: number;
-    };
+type GroupsCrudState = {
+  groups: GroupWithDetails[];
+  commands: GroupsCrudCommands;
+  loadStudentsForAssignment: (
+    groupId: string,
+    groupType: GroupType
+  ) => Promise<{
+    assigned: StudentForAssignment[];
+    available: StudentForAssignment[];
+  } | null>;
+  loadGroupStudents: (groupId: string) => Promise<StudentForAssignment[] | null>;
+  loadSubgroupEditorData: (
+    subgroupId: string
+  ) => Promise<SubgroupEditorData | null>;
+};
 
-function applyRename(
-  groups: GroupWithDetails[],
-  id: string,
-  name: string
-): GroupWithDetails[] {
-  return groups.map((group) => ({
-    ...group,
-    ...(group.id === id ? { name } : {}),
-    subGroups: applyRename(group.subGroups, id, name),
-  }));
-}
+export type CreateGroupVariables = {
+  name: string;
+  type: GroupType;
+  grade?: number | null;
+};
 
-function applyRemove(groups: GroupWithDetails[], id: string): GroupWithDetails[] {
-  return groups
-    .filter((group) => group.id !== id)
-    .map((group) => ({
-      ...group,
-      subGroups: applyRemove(group.subGroups, id),
-    }));
-}
+export type RenameGroupVariables = {
+  id: string;
+  name: string;
+};
 
-function applyStudentsDelta(
-  groups: GroupWithDetails[],
-  id: string,
-  delta: number
-): GroupWithDetails[] {
-  return groups.map((group) => {
-    const nextCount =
-      group.id === id
-        ? Math.max(0, group._count.studentGroups + delta)
-        : group._count.studentGroups;
+export type TransferStudentsVariables = {
+  group: GroupWithDetails;
+  toAssign: string[];
+  toRemove: string[];
+};
 
-    return {
-      ...group,
-      _count: { studentGroups: nextCount },
-      subGroups: applyStudentsDelta(group.subGroups, id, delta),
-    };
-  });
-}
+export type SplitGroupVariables = {
+  parentGroupId: string;
+  subjectId: string;
+  subgroups: { name: string; studentIds: string[] }[];
+};
 
-export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
-  const router = useRouter();
-  const [groups, dispatchOptimistic] = useOptimistic(
-    initialGroups,
-    (state: GroupWithDetails[], action: OptimisticAction): GroupWithDetails[] => {
-      switch (action.type) {
-        case "add":
-          return [action.group, ...state];
-        case "rename":
-          return applyRename(state, action.id, action.name);
-        case "remove":
-          return applyRemove(state, action.id);
-        case "studentsDelta":
-          return applyStudentsDelta(state, action.id, action.delta);
-        default:
-          return state;
-      }
-    }
-  );
+export type RedistributeSubgroupsVariables = Record<string, string[]>;
 
-  const handleCreateGroup = useCallback(
-    async (data: { name: string; type: GroupType; grade?: number | null }) => {
-      const optimisticGroup: GroupWithDetails = {
-        id: `optimistic-${crypto.randomUUID()}`,
-        name: data.name,
-        type: data.type,
-        grade: data.grade ?? null,
-        parentId: null,
-        subjectId: null,
-        subject: null,
-        _count: { studentGroups: 0 },
-        subGroups: [],
-      };
+export type GroupsCrudCommands = {
+  createGroup: MutationCommand<CreateGroupVariables>;
+  renameGroup: MutationCommand<RenameGroupVariables>;
+  deleteGroup: MutationCommand<GroupWithDetails>;
+  transferStudents: MutationCommand<TransferStudentsVariables>;
+  splitGroup: MutationCommand<SplitGroupVariables>;
+  redistributeSubgroups: MutationCommand<RedistributeSubgroupsVariables>;
+};
 
-      startTransition(() => {
-        dispatchOptimistic({ type: "add", group: optimisticGroup });
-      });
-
+export function useGroupsCrud(initialGroups: GroupWithDetails[]): GroupsCrudState {
+  const createGroupMutation = useMutation<unknown, Error, CreateGroupVariables>({
+    mutationFn: async (data) => {
       const response = await createGroupAction(data);
-      if (response.error) {
-        router.refresh();
-        toast.error(response.error);
-        return false;
-      }
-
-      router.refresh();
-      toast.success(`Группа "${data.name}" создана`);
-      return true;
+      return assertActionSuccess(response, "Не удалось создать группу");
     },
-    [dispatchOptimistic, router]
-  );
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: (_result, data) => {
+      toast.success(`Группа "${data.name}" создана`);
+    },
+  });
 
-  const handleRenameGroup = useCallback(
-    async (id: string, name: string) => {
-      const nextName = name.trim();
-      if (!nextName) return;
-
-      startTransition(() => {
-        dispatchOptimistic({ type: "rename", id, name: nextName });
-      });
-
-      const response = await updateGroupAction(id, { name: nextName });
-      if (response.error) {
-        router.refresh();
-        toast.error(response.error);
-        return;
-      }
-
-      router.refresh();
+  const renameGroupMutation = useMutation<unknown, Error, RenameGroupVariables>({
+    mutationFn: async ({ id, name }) => {
+      const response = await updateGroupAction(id, { name });
+      return assertActionSuccess(response, "Не удалось переименовать группу");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: () => {
       toast.success("Группа переименована");
     },
-    [dispatchOptimistic, router]
-  );
+  });
 
-  const handleDeleteGroup = useCallback(
-    async (group: GroupWithDetails) => {
-      startTransition(() => {
-        dispatchOptimistic({ type: "remove", id: group.id });
-      });
-
+  const deleteGroupMutation = useMutation<unknown, Error, GroupWithDetails>({
+    mutationFn: async (group) => {
       const response = await deleteGroupAction(group.id);
-      if (response.error) {
-        router.refresh();
-        toast.error(response.error);
-        return;
-      }
-
-      router.refresh();
+      return assertActionSuccess(response, "Не удалось удалить группу");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: (_result, group) => {
       toast.success(`Группа "${group.name}" удалена`);
     },
-    [dispatchOptimistic, router]
-  );
+  });
 
-  const handleTransferSave = useCallback(
-    async (
-      transferGroup: GroupWithDetails,
-      toAssign: string[],
-      toRemove: string[]
-    ) => {
-      if (toAssign.length === 0 && toRemove.length === 0) {
-        return;
-      }
-
-      startTransition(() => {
-        dispatchOptimistic({
-          type: "studentsDelta",
-          id: transferGroup.id,
-          delta: toAssign.length - toRemove.length,
-        });
+  const transferStudentsMutation = useMutation<
+    unknown,
+    Error,
+    TransferStudentsVariables
+  >({
+    mutationFn: async ({ group, toAssign, toRemove }) => {
+      const response = await updateGroupStudentsAction({
+        groupId: group.id,
+        assignStudentIds: toAssign,
+        removeStudentIds: toRemove,
       });
 
-      if (toAssign.length > 0) {
-        const assignResponse = await assignStudentsToGroupAction(transferGroup.id, toAssign);
-        if (assignResponse.error) {
-          router.refresh();
-          toast.error(assignResponse.error);
-          return;
-        }
-      }
-
-      if (toRemove.length > 0) {
-        const removeResponse = await removeStudentsFromGroupAction(transferGroup.id, toRemove);
-        if (removeResponse.error) {
-          router.refresh();
-          toast.error(removeResponse.error);
-          return;
-        }
-      }
-
-      router.refresh();
+      return assertActionSuccess(response, "Не удалось обновить состав группы");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: () => {
       toast.success("Состав группы обновлен");
     },
-    [dispatchOptimistic, router]
-  );
+  });
+
+  const splitterMutation = useMutation<
+    unknown,
+    Error,
+    SplitGroupVariables
+  >({
+    mutationFn: async (data) => {
+      const response = await createSubgroupsFromSplit(data);
+      return assertActionSuccess(response, "Не удалось создать подгруппы");
+    },
+    onError: (error) => toast.error(error.message),
+    onSuccess: () => toast.success("Подгруппы созданы"),
+  });
+
+  const subgroupRedistributionMutation = useMutation<
+    unknown,
+    Error,
+    RedistributeSubgroupsVariables
+  >({
+    mutationFn: async (assignments) => {
+      const response = await saveSubgroupRedistribution(assignments);
+      return assertActionSuccess(response, "Не удалось обновить подгруппы");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Состав подгрупп обновлен");
+    },
+  });
 
   const loadStudentsForAssignment = useCallback(
     async (groupId: string, groupType: GroupType) => {
@@ -224,7 +176,6 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     },
     []
   );
-
   const loadGroupStudents = useCallback(async (groupId: string) => {
     const response = await getGroupStudents(groupId);
     if (response.error) {
@@ -233,60 +184,32 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]) {
     }
     return response.result;
   }, []);
-
-  const handleSplitterSave = useCallback(
-    async (data: {
-      parentGroupId: string;
-      subjectId: string;
-      subgroups: { name: string; studentIds: string[] }[];
-    }) => {
-      const response = await createSubgroupsFromSplit(data);
+  const loadSubgroupEditorData = useCallback(
+    async (subgroupId: string) => {
+      const response = await getSubgroupEditorData(subgroupId);
       if (response.error) {
         toast.error(response.error);
-        return false;
+        return null;
       }
-
-      router.refresh();
-      toast.success("Подгруппы созданы");
-      return true;
+      return response.result;
     },
-    [router]
+    []
   );
 
-  const loadSubgroupEditorData = useCallback(async (subgroupId: string) => {
-    const response = await getSubgroupEditorData(subgroupId);
-    if (response.error) {
-      toast.error(response.error);
-      return null;
-    }
-    return response.result;
-  }, []);
-
-  const handleSubgroupRedistributionSave = useCallback(
-    async (assignments: Record<string, string[]>) => {
-      const response = await saveSubgroupRedistribution(assignments);
-      if (response.error) {
-        toast.error(response.error);
-        return false;
-      }
-
-      router.refresh();
-      toast.success("Состав подгрупп обновлен");
-      return true;
-    },
-    [router]
-  );
+  const commands: GroupsCrudCommands = {
+    createGroup: withExecute(createGroupMutation),
+    renameGroup: withExecute(renameGroupMutation),
+    deleteGroup: withExecute(deleteGroupMutation),
+    transferStudents: withExecute(transferStudentsMutation),
+    splitGroup: withExecute(splitterMutation),
+    redistributeSubgroups: withExecute(subgroupRedistributionMutation),
+  };
 
   return {
-    groups,
-    handleCreateGroup,
-    handleRenameGroup,
-    handleDeleteGroup,
-    handleTransferSave,
+    groups: initialGroups,
+    commands,
     loadStudentsForAssignment,
     loadGroupStudents,
-    handleSplitterSave,
     loadSubgroupEditorData,
-    handleSubgroupRedistributionSave,
   };
 }

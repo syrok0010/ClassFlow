@@ -31,10 +31,16 @@ export const updateGroupSchema = z.object({
 
 export const idSchema = z.string().min(1, "ID обязателен");
 
-export const assignStudentsSchema = z.object({
-  groupId: idSchema,
-  studentIds: z.array(idSchema).min(1),
-});
+export const updateGroupStudentsSchema = z
+  .object({
+    groupId: idSchema,
+    assignStudentIds: z.array(idSchema),
+    removeStudentIds: z.array(idSchema),
+  })
+  .refine(
+    (value) => value.assignStudentIds.length > 0 || value.removeStudentIds.length > 0,
+    "Передайте изменения состава группы"
+  );
 
 export const splitSchema = z.object({
   parentGroupId: idSchema,
@@ -57,7 +63,7 @@ export type GroupTypeInput = z.infer<typeof groupTypeSchema>;
 export type CreateGroupInput = z.infer<typeof createGroupSchema>;
 export type UpdateGroupInput = z.infer<typeof updateGroupSchema>;
 export type IdInput = z.infer<typeof idSchema>;
-export type AssignStudentsInput = z.infer<typeof assignStudentsSchema>;
+export type UpdateGroupStudentsInput = z.infer<typeof updateGroupStudentsSchema>;
 export type SplitInput = z.infer<typeof splitSchema>;
 export type RedistributeInput = z.infer<typeof redistributeSchema>;
 

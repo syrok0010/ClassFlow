@@ -20,7 +20,8 @@ import {
   groupNameSchema,
   parseGroupGradeInput,
 } from "../_lib/group-schemas";
-import {flushSync} from "react-dom";
+import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
+import { flushSync } from "react-dom";
 
 const INLINE_CREATE_TYPE_OPTIONS = [
   { value: "CLASS", label: "Класс" },
@@ -32,15 +33,11 @@ const INLINE_CREATE_TYPE_ITEMS: Record<string, string> = Object.fromEntries(
 );
 
 interface InlineCreateRowProps {
-  onSave: (data: {
-    name: string;
-    type: GroupType;
-    grade?: number | null;
-  }) => Promise<boolean>;
+  command: GroupsCrudCommands["createGroup"];
   onCancel: () => void;
 }
 
-export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
+export function InlineCreateRow({ command, onCancel }: InlineCreateRowProps) {
   const nameRef = useRef<HTMLInputElement>(null);
 
   const form = useForm({
@@ -50,14 +47,15 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
       grade: "" as string,
     },
     onSubmit: async ({ value }) => {
-      const success = await onSave({
+      const result = await command.execute({
         name: value.name,
         type: value.type,
         grade: parseGroupGradeInput(value.grade),
       });
-      if (success) {
-        flushSync(() => form.reset());
+      if (result === null) {
+        return;
       }
+      flushSync(() => form.reset());
     },
   });
 
@@ -68,7 +66,7 @@ export function InlineCreateRow({ onSave, onCancel }: InlineCreateRowProps) {
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      form.handleSubmit();
+      void form.handleSubmit();
     }
 
     if (event.key === "Escape") {

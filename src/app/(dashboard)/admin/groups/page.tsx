@@ -1,5 +1,5 @@
 import type { GroupType } from "@/generated/prisma/client";
-import { getGroupsTree, getSubjects } from "./_actions/group-actions";
+import { getGroupsTree, getSubjects } from "./_lib/get-groups-page-data";
 import { GroupsTableClient } from "./_components/groups-table-client";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";

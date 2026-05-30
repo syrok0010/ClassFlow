@@ -1,12 +1,15 @@
-import {
-  useState,
-  useMemo,
-  useCallback,
-  useEffect,
-} from "react";
+import { useState, useMemo } from "react";
 import type { StudentForAssignment } from "../_lib/types";
 import type { SubgroupEditorData } from "../_actions/group-actions";
-import { getStudentDisplayName } from "../_lib/utils";
+import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
+import {
+  useStudentBucketDnd,
+  type StudentBucketMap,
+} from "../_hooks/use-student-bucket-dnd";
+import {
+  distributeStudentIdsEvenly,
+  getStudentDisplayName,
+} from "../_lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -16,138 +19,68 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Shuffle, Loader2 } from "lucide-react";
+import { Shuffle } from "lucide-react";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   DragOverlay,
-  type DragStartEvent,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import { StudentBucketsBoard } from "./student-buckets-board";
+import { Spinner } from "@/components/ui/spinner";
 
 interface SubgroupEditorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: SubgroupEditorData | null;
   loading: boolean;
-  onSave: (assignments: Record<string, string[]>) => Promise<void>;
+  command: GroupsCrudCommands["redistributeSubgroups"];
 }
-
-type BucketMap = Record<string, string[]>;
 
 export function SubgroupEditorDialog({
   open,
   onOpenChange,
   data,
   loading,
-  onSave,
+  command,
 }: SubgroupEditorDialogProps) {
-  const [saving, setSaving] = useState(false);
-  const [buckets, setBuckets] = useState<BucketMap>({});
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [initializedFrom, setInitializedFrom] = useState<SubgroupEditorData | null>(null);
+  const [buckets, setBuckets] = useState<StudentBucketMap>(() =>
+    Object.fromEntries(
+      data?.sibling.map((sibling) => [sibling.id, [...sibling.studentIds]]) ??
+        []
+    )
+  );
   const students = useMemo(() => data?.students ?? [], [data]);
   const siblings = useMemo(() => data?.sibling ?? [], [data]);
 
-  useEffect(() => {
-    if (data && data !== initializedFrom) {
-      const initial: BucketMap = {};
-      for (const sib of data.sibling) {
-        initial[sib.id] = [...sib.studentIds];
-      }
-      setBuckets(initial);
-      setInitializedFrom(data);
-    }
-  }, [data, initializedFrom]);
-
   const siblingIds = useMemo(() => siblings.map((s) => s.id), [siblings]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor)
-  );
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const findBucketOfStudent = useCallback(
-    (studentId: string): string | null => {
-      for (const [key, ids] of Object.entries(buckets)) {
-        if (ids.includes(studentId)) return key;
-      }
-      return null;
-    },
-    [buckets]
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-
-    if (!over) return;
-
-    const studentId = active.id as string;
-    const targetBucket =
-      (over.data.current?.bucketId as string) ?? (over.id as string);
-
-    if (!siblingIds.includes(targetBucket)) return;
-
-    const sourceBucket = findBucketOfStudent(studentId);
-
-    if (!sourceBucket || sourceBucket === targetBucket) {
-      return;
-    }
-
-    if ((buckets[sourceBucket]?.length ?? 0) <= 1) {
-      return;
-    }
-
-    setBuckets((prev) => {
-      const next = { ...prev };
-
-      next[sourceBucket] = next[sourceBucket].filter((id) => id !== studentId);
-
-      if (!next[targetBucket]) next[targetBucket] = [];
-      if (!next[targetBucket].includes(studentId)) {
-        next[targetBucket] = [...next[targetBucket], studentId];
-      }
-
-      return next;
+  const { activeId, handleDragEnd, handleDragStart, sensors } =
+    useStudentBucketDnd({
+      bucketIds: siblingIds,
+      buckets,
+      canMove: ({ sourceBucket, targetBucket }) =>
+        Boolean(sourceBucket) &&
+        sourceBucket !== targetBucket &&
+        (buckets[sourceBucket ?? ""]?.length ?? 0) > 1,
+      setBuckets,
     });
-  };
 
   const handleAutoSplit = () => {
-    const shuffled = [...students].sort(() => Math.random() - 0.5);
-    const newBuckets: BucketMap = {};
-    siblingIds.forEach((key) => (newBuckets[key] = []));
-    shuffled.forEach((s, i) => {
-      const bucketKey = siblingIds[i % siblingIds.length];
-      newBuckets[bucketKey].push(s.id);
-    });
-    setBuckets(newBuckets);
+    setBuckets(
+      distributeStudentIdsEvenly(
+        students.map((student) => student.id),
+        siblingIds
+      )
+    );
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onSave(buckets);
-    } finally {
-      setSaving(false);
+    const result = await command.execute(buckets);
+    if (result === null) {
+      return;
     }
-  };
 
-  const handleOpenChange = (v: boolean) => {
-    if (!v) {
-      setBuckets({});
-      setInitializedFrom(null);
-    }
-    onOpenChange(v);
+    onOpenChange(false);
   };
 
   const hasChanges = useMemo(() => {
@@ -185,7 +118,7 @@ export function SubgroupEditorDialog({
     : null;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -200,7 +133,7 @@ export function SubgroupEditorDialog({
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            <Spinner />
           </div>
         ) : (
           <DndContext
@@ -232,15 +165,15 @@ export function SubgroupEditorDialog({
               <DialogFooter>
                 <Button
                   variant="outline"
-                  onClick={() => handleOpenChange(false)}
+                  onClick={() => onOpenChange(false)}
                 >
                   Отмена
                 </Button>
                 <Button
-                  disabled={!hasChanges || saving}
+                  disabled={!hasChanges || command.isPending}
                   onClick={handleSave}
                 >
-                  {saving && <Loader2 className="size-4 animate-spin" />}
+                  {command.isPending && <Spinner />}
                   Сохранить
                 </Button>
               </DialogFooter>

@@ -6,8 +6,9 @@ import {
   useCallback,
   type FocusEvent,
 } from "react";
-import type { GroupType } from "@/generated/prisma/client";
+import { useForm } from "@tanstack/react-form";
 import type { GroupWithDetails } from "../_lib/types";
+import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
 import {
   useReactTable,
   getCoreRowModel,
@@ -26,7 +27,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Field, FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -64,13 +67,7 @@ interface GroupsTreeTableProps {
   onResetFilters: () => void;
   onStartAddRow: () => void;
   onCancelAddRow: () => void;
-  onCreateGroup: (data: {
-    name: string;
-    type: GroupType;
-    grade?: number | null;
-  }) => Promise<boolean>;
-  onRenameGroup: (id: string, name: string) => Promise<void>;
-  onDeleteGroup: (group: GroupWithDetails) => Promise<void>;
+  commands: GroupsCrudCommands;
   onOpenTransferList: (group: GroupWithDetails) => void;
   onOpenSplitter: (group: GroupWithDetails) => void;
   onOpenSubgroupEditor: (group: GroupWithDetails) => void;
@@ -97,9 +94,7 @@ export function GroupsTreeTable({
   onResetFilters,
   onStartAddRow,
   onCancelAddRow,
-  onCreateGroup,
-  onRenameGroup,
-  onDeleteGroup,
+  commands,
   onOpenTransferList,
   onOpenSplitter,
   onOpenSubgroupEditor,
@@ -118,12 +113,21 @@ export function GroupsTreeTable({
 
   const handleSaveRename = useCallback(
     async (newName: string) => {
-      if (editingId && newName.trim()) {
-        await onRenameGroup(editingId, newName.trim());
+      if (!editingId) {
+        return;
+      }
+
+      const result = await commands.renameGroup.execute({
+        id: editingId,
+        name: newName.trim(),
+      });
+
+      if (result === null) {
+        return;
       }
       setEditingId(null);
     },
-    [editingId, onRenameGroup]
+    [commands.renameGroup, editingId]
   );
 
   const handleCancelRename = useCallback(() => {
@@ -133,12 +137,9 @@ export function GroupsTreeTable({
   const handleConfirmDelete = async () => {
     if (confirmDeleteGroup) {
       setIsDeleting(true);
-      try {
-        await onDeleteGroup(confirmDeleteGroup);
-      } finally {
-        setIsDeleting(false);
-        setConfirmDeleteGroup(null);
-      }
+      await commands.deleteGroup.execute(confirmDeleteGroup);
+      setIsDeleting(false);
+      setConfirmDeleteGroup(null);
     }
   };
 
@@ -318,6 +319,7 @@ export function GroupsTreeTable({
     ]
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: groups,
     columns,
@@ -353,7 +355,7 @@ export function GroupsTreeTable({
           <TableBody>
             {isAddingRow && (
               <InlineCreateRow
-                onSave={onCreateGroup}
+                command={commands.createGroup}
                 onCancel={onCancelAddRow}
               />
             )}
@@ -452,60 +454,99 @@ function InlineRenameInput({
   onCancel,
 }: {
   defaultValue: string;
-  onSave: (newName: string) => void;
+  onSave: (newName: string) => Promise<void> | void;
   onCancel: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const mountedRef = useRef(false);
-  const [value, setValue] = useState(defaultValue);
+  const form = useForm({
+    defaultValues: {
+      name: defaultValue,
+    },
+    validators: {
+      onSubmit: ({ value }) => {
+        groupNameSchema.parse(value.name);
+      },
+    },
+    onSubmit: async ({ value }) => {
+      const nextName = groupNameSchema.parse(value.name);
+      if (nextName === defaultValue.trim()) {
+        onCancel();
+        return;
+      }
+
+      await onSave(nextName);
+    },
+  });
 
   useEffect(() => {
     requestAnimationFrame(() => {
-      mountedRef.current = true;
       inputRef.current?.focus();
       inputRef.current?.select();
     });
   }, []);
 
-  const handleSave = () => {
-    const parsed = groupNameSchema.safeParse(value);
-
-    if (!parsed.success || parsed.data === defaultValue.trim()) {
-      onCancel();
-      return;
-    }
-
-    onSave(parsed.data);
-  };
-
   const handleBlur = (e: FocusEvent<HTMLInputElement>) => {
-    if (!mountedRef.current) return;
     if (containerRef.current?.contains(e.relatedTarget as Node)) return;
-    handleSave();
+    void form.handleSubmit();
   };
 
   return (
-    <div ref={containerRef} className="flex items-center gap-1">
-      <Input
-        ref={inputRef}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") handleSave();
-          if (e.key === "Escape") onCancel();
-        }}
-        onBlur={handleBlur}
-        className="h-7 min-w-[8rem] max-w-xs"
-      />
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={handleSave}
-        title="Сохранить"
-      >
-        <Check className="size-3.5" />
-      </Button>
+    <div ref={containerRef} className="flex flex-col gap-1">
+      <form.Field name="name" validators={{ onBlur: groupNameSchema }}>
+        {(field) => (
+          <Field data-invalid={field.state.meta.errors.length > 0}>
+            <div className="flex items-center gap-1">
+              <Input
+                ref={inputRef}
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void form.handleSubmit();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    onCancel();
+                  }
+                }}
+                onBlur={(event) => {
+                  field.handleBlur();
+                  handleBlur(event);
+                }}
+                aria-invalid={field.state.meta.errors.length > 0}
+                className="h-7 min-w-32 max-w-xs"
+              />
+              <form.Subscribe
+                selector={(state) => [state.canSubmit, state.isSubmitting] as const}
+              >
+                {([canSubmit, isSubmitting]) => (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => void form.handleSubmit()}
+                    disabled={!canSubmit || isSubmitting}
+                    title="Сохранить"
+                  >
+                    {isSubmitting ? (
+                      <Spinner className="size-3.5" />
+                    ) : (
+                      <Check className="size-3.5" />
+                    )}
+                  </Button>
+                )}
+              </form.Subscribe>
+            </div>
+            {field.state.meta.isTouched ? (
+              <FieldError
+                errors={field.state.meta.errors}
+                className="text-xs"
+              />
+            ) : null}
+          </Field>
+        )}
+      </form.Field>
     </div>
   );
 }

@@ -17,18 +17,44 @@ interface GroupsTableClientProps {
   subjects: SubjectOption[];
 }
 
+function getTransferDialogKey(
+  group: GroupWithDetails | null,
+  students: {
+    assigned: StudentForAssignment[];
+    available: StudentForAssignment[];
+  } | null
+) {
+  if (!group) {
+    return "transfer-empty";
+  }
+
+  if (!students) {
+    return `transfer-${group.id}-loading`;
+  }
+
+  const assignedIds = students.assigned.map((student) => student.id).join("|");
+  const availableIds = students.available.map((student) => student.id).join("|");
+
+  return `transfer-${group.id}-${assignedIds}-${availableIds}`;
+}
+
+function getSubgroupEditorDialogKey(data: SubgroupEditorData | null) {
+  if (!data) {
+    return "subgroup-editor-empty";
+  }
+
+  return data.sibling
+    .map((sibling) => `${sibling.id}:${sibling.studentIds.join("|")}`)
+    .join(";");
+}
+
 export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClientProps) {
   const {
     groups,
-    handleCreateGroup,
-    handleRenameGroup,
-    handleDeleteGroup,
-    handleTransferSave,
+    commands,
     loadStudentsForAssignment,
     loadGroupStudents,
-    handleSplitterSave,
     loadSubgroupEditorData,
-    handleSubgroupRedistributionSave,
   } = useGroupsCrud(initialGroups);
 
   const [searchQuery, setSearchQuery] = useQueryState("search", {
@@ -59,6 +85,31 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
   const [subgroupEditorData, setSubgroupEditorData] = useState<SubgroupEditorData | null>(null);
   const [subgroupEditorLoading, setSubgroupEditorLoading] = useState(false);
 
+  const handleTransferDialogOpenChange = useCallback((open: boolean) => {
+    setTransferDialogOpen(open);
+    if (!open) {
+      setTransferGroup(null);
+      setTransferStudents(null);
+      setTransferLoading(false);
+    }
+  }, []);
+
+  const handleSplitterOpenChange = useCallback((open: boolean) => {
+    setSplitterOpen(open);
+    if (!open) {
+      setSplitterGroup(null);
+      setSplitterStudents([]);
+    }
+  }, []);
+
+  const handleSubgroupEditorOpenChange = useCallback((open: boolean) => {
+    setSubgroupEditorOpen(open);
+    if (!open) {
+      setSubgroupEditorData(null);
+      setSubgroupEditorLoading(false);
+    }
+  }, []);
+
   const handleOpenTransferList = useCallback(
     async (group: GroupWithDetails) => {
       setTransferLoading(true);
@@ -73,15 +124,6 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
     [loadStudentsForAssignment]
   );
 
-  const onTransferSave = useCallback(
-    async (toAssign: string[], toRemove: string[]) => {
-      if (!transferGroup || !transferStudents) return;
-      await handleTransferSave(transferGroup, toAssign, toRemove);
-      setTransferDialogOpen(false);
-    },
-    [transferGroup, transferStudents, handleTransferSave]
-  );
-
   const handleOpenSplitter = useCallback(
     async (group: GroupWithDetails) => {
       setSplitterGroup(group);
@@ -92,20 +134,6 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
       }
     },
     [loadGroupStudents]
-  );
-
-  const onSplitterSave = useCallback(
-    async (data: {
-      parentGroupId: string;
-      subjectId: string;
-      subgroups: { name: string; studentIds: string[] }[];
-    }) => {
-      const ok = await handleSplitterSave(data);
-      if (ok) {
-        setSplitterOpen(false);
-      }
-    },
-    [handleSplitterSave]
   );
 
   const handleOpenSubgroupEditor = useCallback(
@@ -126,16 +154,6 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
       setSubgroupEditorLoading(false);
     },
     [loadSubgroupEditorData]
-  );
-
-  const onSubgroupEditorSave = useCallback(
-    async (assignments: Record<string, string[]>) => {
-      const ok = await handleSubgroupRedistributionSave(assignments);
-      if (ok) {
-        setSubgroupEditorOpen(false);
-      }
-    },
-    [handleSubgroupRedistributionSave]
   );
 
   const resetFilters = useCallback(() => {
@@ -169,9 +187,7 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
         onResetFilters={resetFilters}
         onStartAddRow={() => setIsAddingRow(true)}
         onCancelAddRow={() => setIsAddingRow(false)}
-        onCreateGroup={handleCreateGroup}
-        onRenameGroup={handleRenameGroup}
-        onDeleteGroup={handleDeleteGroup}
+        commands={commands}
         onOpenTransferList={handleOpenTransferList}
         onOpenSplitter={handleOpenSplitter}
         onOpenSubgroupEditor={handleOpenSubgroupEditor}
@@ -179,38 +195,36 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
 
       {(transferDialogOpen || transferGroup || transferLoading) && (
         <StudentAssignmentDialog
+          key={getTransferDialogKey(transferGroup, transferStudents)}
           open={transferDialogOpen}
-          onOpenChange={setTransferDialogOpen}
+          onOpenChange={handleTransferDialogOpenChange}
           group={transferGroup}
           students={transferStudents}
           loading={transferLoading}
-          onSave={onTransferSave}
+          command={commands.transferStudents}
         />
       )}
 
       {(splitterOpen || splitterGroup) && (
         <SplitterDialog
+          key={splitterGroup?.id ?? "splitter-empty"}
           open={splitterOpen}
-          onOpenChange={setSplitterOpen}
+          onOpenChange={handleSplitterOpenChange}
           group={splitterGroup}
           students={splitterStudents}
           subjects={subjects}
-          onSave={onSplitterSave}
+          command={commands.splitGroup}
         />
       )}
 
       {(subgroupEditorOpen || subgroupEditorData || subgroupEditorLoading) && (
         <SubgroupEditorDialog
+          key={getSubgroupEditorDialogKey(subgroupEditorData)}
           open={subgroupEditorOpen}
-          onOpenChange={(open) => {
-            setSubgroupEditorOpen(open);
-            if (!open) {
-              setSubgroupEditorData(null);
-            }
-          }}
+          onOpenChange={handleSubgroupEditorOpenChange}
           data={subgroupEditorData}
           loading={subgroupEditorLoading}
-          onSave={onSubgroupEditorSave}
+          command={commands.redistributeSubgroups}
         />
       )}
     </div>

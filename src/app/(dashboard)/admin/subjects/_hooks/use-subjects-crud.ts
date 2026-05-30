@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 import type { SubjectType } from "@/generated/prisma/client";
 import {
@@ -11,21 +11,10 @@ import {
 } from "../_actions/subject-actions";
 import type {
   SubjectDeleteGuards,
-  SubjectUsage,
   SubjectWithUsage,
 } from "../_lib/types";
 
-const EMPTY_USAGE: SubjectUsage = {
-  roomsCount: 0,
-  requirementsCount: 0,
-  teachersCount: 0,
-  scheduleTemplatesCount: 0,
-  scheduleEntriesCount: 0,
-};
-
 export function useSubjectsCrud(initialSubjects: SubjectWithUsage[]) {
-  const [subjects, setSubjects] = useState(initialSubjects);
-
   const handleCreateSubject = useCallback(
     async (data: { name: string; type: SubjectType }) => {
       const response = await createSubjectAction(data);
@@ -33,16 +22,6 @@ export function useSubjectsCrud(initialSubjects: SubjectWithUsage[]) {
         toast.error(response.error);
         return false;
       }
-
-      setSubjects((prev) => [
-        {
-          id: response.result.id,
-          name: response.result.name,
-          type: response.result.type,
-          usage: EMPTY_USAGE,
-        },
-        ...prev,
-      ]);
 
       toast.success(`Предмет \"${data.name.trim()}\" создан`);
       return true;
@@ -63,12 +42,6 @@ export function useSubjectsCrud(initialSubjects: SubjectWithUsage[]) {
         return;
       }
 
-      setSubjects((prev) =>
-        prev.map((subject) =>
-          subject.id === id ? { ...subject, name: nextName } : subject
-        )
-      );
-
       toast.success("Название предмета обновлено");
     },
     []
@@ -81,8 +54,6 @@ export function useSubjectsCrud(initialSubjects: SubjectWithUsage[]) {
         toast.error(response.error);
         return false;
       }
-
-      setSubjects((prev) => prev.filter((item) => item.id !== subject.id));
 
       toast.success(`Предмет \"${subject.name}\" удален`);
       return true;
@@ -101,7 +72,7 @@ export function useSubjectsCrud(initialSubjects: SubjectWithUsage[]) {
   }, []);
 
   return {
-    subjects,
+    subjects: initialSubjects,
     handleCreateSubject,
     handleRenameSubject,
     handleDeleteSubject,

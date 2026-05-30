@@ -1,10 +1,18 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import type {
   GroupWithDetails,
   StudentForAssignment,
   SubjectOption,
 } from "../_lib/types";
-import { getStudentDisplayName } from "../_lib/utils";
+import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
+import {
+  useStudentBucketDnd,
+  type StudentBucketMap,
+} from "../_hooks/use-student-bucket-dnd";
+import {
+  distributeStudentIdsEvenly,
+  getStudentDisplayName,
+} from "../_lib/utils";
 import { groupNameSchema } from "../_lib/group-schemas";
 import {
   Dialog,
@@ -23,21 +31,16 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Shuffle, ArrowRight, Loader2 } from "lucide-react";
+import { Shuffle, ArrowRight } from "lucide-react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod/v4";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   DragOverlay,
-  type DragStartEvent,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import { StudentBucketsBoard } from "./student-buckets-board";
+import { Spinner } from "@/components/ui/spinner";
 
 interface SplitterDialogProps {
   open: boolean;
@@ -45,16 +48,10 @@ interface SplitterDialogProps {
   group: GroupWithDetails | null;
   students: StudentForAssignment[];
   subjects: SubjectOption[];
-  onSave: (data: {
-    parentGroupId: string;
-    subjectId: string;
-    subgroups: { name: string; studentIds: string[] }[];
-  }) => Promise<void>;
+  command: GroupsCrudCommands["splitGroup"];
 }
 
 type SplitterStep = "settings" | "distribute";
-
-type BucketMap = Record<string, string[]>;
 
 export function SplitterDialog({
   open,
@@ -62,16 +59,12 @@ export function SplitterDialog({
   group,
   students,
   subjects,
-  onSave,
+  command,
 }: SplitterDialogProps) {
   const [step, setStep] = useState<SplitterStep>("settings");
-  const [saving, setSaving] = useState(false);
+  const [buckets, setBuckets] = useState<StudentBucketMap>({});
 
-  const [buckets, setBuckets] = useState<BucketMap>({});
-  const [activeId, setActiveId] = useState<string | null>(null);
-
-
-  const settingsForm = useForm({
+  const form = useForm({
     defaultValues: {
       subjectId: "",
       subgroupCount: 2,
@@ -81,7 +74,7 @@ export function SplitterDialog({
         { length: value.subgroupCount },
         (_, i) => `group-${i + 1}`
       );
-      const initial: BucketMap = {};
+      const initial: StudentBucketMap = {};
       keys.forEach((key) => (initial[key] = []));
       setBuckets(initial);
       setStep("distribute");
@@ -93,8 +86,8 @@ export function SplitterDialog({
     [subjects]
   );
 
-  const subjectId = settingsForm.state.values.subjectId;
-  const subgroupCount = settingsForm.state.values.subgroupCount;
+  const subjectId = form.state.values.subjectId;
+  const subgroupCount = form.state.values.subgroupCount;
   const subjectName = subjects.find((s) => s.id === subjectId)?.name ?? "";
 
   const bucketKeys = useMemo(
@@ -120,73 +113,20 @@ export function SplitterDialog({
     [bucketKeys, buckets]
   );
 
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor)
-  );
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const findBucketOfStudent = useCallback(
-    (studentId: string): string | null => {
-      for (const [key, ids] of Object.entries(buckets)) {
-        if (ids.includes(studentId)) return key;
-      }
-      return null;
-    },
-    [buckets]
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-
-    if (!over) return;
-
-    const studentId = active.id as string;
-    const targetBucket = (over.data.current?.bucketId as string) ?? (over.id as string);
-    const sourceBucket = findBucketOfStudent(studentId);
-
-    if (targetBucket === "unassigned") {
-      if (sourceBucket) {
-        setBuckets((prev) => ({
-          ...prev,
-          [sourceBucket]: prev[sourceBucket].filter((id) => id !== studentId),
-        }));
-      }
-      return;
-    }
-
-    if (!bucketKeys.includes(targetBucket)) return;
-
-    setBuckets((prev) => {
-      const next = { ...prev };
-
-      if (sourceBucket) {
-        next[sourceBucket] = next[sourceBucket].filter((id) => id !== studentId);
-      }
-
-      if (!next[targetBucket]) next[targetBucket] = [];
-      if (!next[targetBucket].includes(studentId)) {
-        next[targetBucket] = [...next[targetBucket], studentId];
-      }
-
-      return next;
+  const { activeId, handleDragEnd, handleDragStart, sensors } =
+    useStudentBucketDnd({
+      bucketIds: ["unassigned", ...bucketKeys],
+      buckets,
+      setBuckets,
     });
-  };
 
   const handleAutoSplit = () => {
-    const shuffled = [...students].sort(() => Math.random() - 0.5);
-    const newBuckets: BucketMap = {};
-    bucketKeys.forEach((key) => (newBuckets[key] = []));
-    shuffled.forEach((s, i) => {
-      const bucketKey = bucketKeys[i % bucketKeys.length];
-      newBuckets[bucketKey].push(s.id);
-    });
-    setBuckets(newBuckets);
+    setBuckets(
+      distributeStudentIdsEvenly(
+        students.map((student) => student.id),
+        bucketKeys
+      )
+    );
   };
 
   const handleBack = () => {
@@ -196,32 +136,21 @@ export function SplitterDialog({
 
   const handleSave = async () => {
     if (!group || !subjectId) return;
-    setSaving(true);
-    try {
-      const subgroupsData = bucketKeys.map((key, i) => ({
-        name: groupNameSchema.parse(`${group.name} ${subjectName} ${i + 1}`),
-        studentIds: buckets[key] ?? [],
-      }));
-      await onSave({
-        parentGroupId: group.id,
-        subjectId,
-        subgroups: subgroupsData,
-      });
-      setStep("settings");
-      setBuckets({});
-      settingsForm.reset();
-    } finally {
-      setSaving(false);
-    }
-  };
 
-  const handleOpenChange = (v: boolean) => {
-    if (!v) {
-      setStep("settings");
-      setBuckets({});
-      settingsForm.reset();
+    const subgroupsData = bucketKeys.map((key, i) => ({
+      name: groupNameSchema.parse(`${group.name} ${subjectName} ${i + 1}`),
+      studentIds: buckets[key] ?? [],
+    }));
+    const result = await command.execute({
+      parentGroupId: group.id,
+      subjectId,
+      subgroups: subgroupsData,
+    });
+    if (result === null) {
+      return;
     }
-    onOpenChange(v);
+
+    onOpenChange(false);
   };
 
   const activeStudent = activeId
@@ -255,7 +184,7 @@ export function SplitterDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -270,7 +199,7 @@ export function SplitterDialog({
 
         {step === "settings" ? (
           <div className="flex flex-col gap-4 py-4">
-            <settingsForm.Field
+            <form.Field
               name="subjectId"
               validators={{
                 onBlur: z.string().min(1, "Выберите предмет"),
@@ -305,9 +234,9 @@ export function SplitterDialog({
                   )}
                 </div>
               )}
-            </settingsForm.Field>
+            </form.Field>
 
-            <settingsForm.Field
+            <form.Field
               name="subgroupCount"
               validators={{
                 onChange: z.number().int().min(2, "Минимум 2").max(10, "Максимум 10"),
@@ -337,26 +266,26 @@ export function SplitterDialog({
                   )}
                 </div>
               )}
-            </settingsForm.Field>
+            </form.Field>
 
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => handleOpenChange(false)}
+                onClick={() => onOpenChange(false)}
               >
                 Отмена
               </Button>
-              <settingsForm.Subscribe selector={(s) => s.canSubmit}>
+              <form.Subscribe selector={(s) => s.canSubmit}>
                 {(canSubmit) => (
                   <Button
                     disabled={!canSubmit}
-                    onClick={() => settingsForm.handleSubmit()}
+                    onClick={() => form.handleSubmit()}
                   >
                     Далее
                     <ArrowRight className="size-4" data-icon="inline-end" />
                   </Button>
                 )}
-              </settingsForm.Subscribe>
+              </form.Subscribe>
             </DialogFooter>
           </div>
         ) : (
@@ -366,7 +295,7 @@ export function SplitterDialog({
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex flex-col gap-4">
+            <div className="flex min-h-[32rem] flex-col gap-4">
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -384,6 +313,7 @@ export function SplitterDialog({
               <StudentBucketsBoard
                 columns={boardColumns}
                 getStudentDisplayName={getStudentDisplayName}
+                className="flex-1"
               />
 
               <DialogFooter>
@@ -391,7 +321,7 @@ export function SplitterDialog({
                   Назад
                 </Button>
                 <Button
-                  disabled={!allAssigned || hasEmptySubgroup || saving}
+                  disabled={!allAssigned || hasEmptySubgroup || command.isPending}
                   onClick={handleSave}
                   title={
                     !allAssigned
@@ -401,7 +331,7 @@ export function SplitterDialog({
                         : undefined
                   }
                 >
-                  {saving && <Loader2 className="size-4 animate-spin" />}
+                  {command.isPending && <Spinner />}
                   Сохранить и создать подгруппы
                 </Button>
               </DialogFooter>
