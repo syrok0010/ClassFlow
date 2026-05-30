@@ -26,20 +26,92 @@ import type {
   StudentForAssignment,
 } from "../_lib/types";
 
+async function validateLinkedClassIds(
+  linkedClassIds: string[] | undefined
+): Promise<Result<string[]>> {
+  const uniqueIds = [...new Set(linkedClassIds ?? [])];
+
+  if (uniqueIds.length === 0) {
+    return err("Выберите хотя бы один класс");
+  }
+
+  const classes = await prisma.group.findMany({
+    where: {
+      id: { in: uniqueIds },
+      type: "CLASS",
+      parentId: null,
+    },
+    select: { id: true },
+  });
+
+  if (classes.length !== uniqueIds.length) {
+    return err("Можно выбрать только существующие классы");
+  }
+
+  return ok(uniqueIds);
+}
+
+async function getEligibleElectiveStudentIds(
+  electiveGroupId: string
+): Promise<Result<string[]>> {
+  const linkedClassRows = await prisma.electiveGroupClassLink.findMany({
+    where: { electiveGroupId },
+    select: { classGroupId: true },
+  });
+  const linkedClassIds = linkedClassRows.map((item) => item.classGroupId);
+
+  if (linkedClassIds.length === 0) {
+    return err("Для кружка не настроены доступные классы");
+  }
+
+  const linkedStudents = await prisma.studentGroups.findMany({
+    where: {
+      groupId: { in: linkedClassIds },
+    },
+    select: { studentId: true },
+  });
+
+  return ok([...new Set(linkedStudents.map((item) => item.studentId))]);
+}
+
 export async function createGroupAction(data: CreateGroupInput) {
   await requireAdminContext();
 
   try {
     const validated = createGroupSchema.parse(data);
+    const linkedClassIds =
+      validated.type === "ELECTIVE_GROUP"
+        ? await validateLinkedClassIds(validated.linkedClassIds)
+        : ok<string[]>([]);
 
-    const group = await prisma.group.create({
-      data: {
-        name: validated.name,
-        type: validated.type,
-        grade: validated.grade ?? null,
-        parentId: validated.parentId ?? null,
-        subjectId: validated.subjectId ?? null,
-      },
+    if (linkedClassIds.error) {
+      return err(linkedClassIds.error);
+    }
+
+    const nextLinkedClassIds = linkedClassIds.result ?? [];
+
+    const group = await prisma.$transaction(async (tx) => {
+      const created = await tx.group.create({
+        data: {
+          name: validated.name,
+          type: validated.type,
+          grade: validated.grade ?? null,
+          parentId: validated.parentId ?? null,
+          subjectId: validated.subjectId ?? null,
+        },
+      });
+
+      if (nextLinkedClassIds.length > 0) {
+        await tx.electiveGroupClassLink.createMany({
+          data: nextLinkedClassIds.map((classGroupId) => ({
+            electiveGroupId: created.id,
+            classGroupId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return created;
     });
 
     revalidatePath("/admin/groups");
@@ -58,10 +130,60 @@ export async function updateGroupAction(
   try {
     idSchema.parse(id);
     const validated = updateGroupSchema.parse(data);
-
-    const group = await prisma.group.update({
+    const existingGroup = await prisma.group.findUnique({
       where: { id },
-      data: validated,
+      select: { id: true, type: true },
+    });
+
+    if (!existingGroup) {
+      return err("Группа не найдена");
+    }
+
+    const nextType = validated.type ?? existingGroup.type;
+    const linkedClassIds =
+      nextType === "ELECTIVE_GROUP" && validated.linkedClassIds
+        ? await validateLinkedClassIds(validated.linkedClassIds)
+        : ok<string[]>([]);
+
+    if (linkedClassIds.error) {
+      return err(linkedClassIds.error);
+    }
+
+    const groupData = {
+      name: validated.name,
+      type: validated.type,
+      grade: validated.grade,
+      subjectId: validated.subjectId,
+    };
+
+    const group = await prisma.$transaction(async (tx) => {
+      const updated = await tx.group.update({
+        where: { id },
+        data: groupData,
+      });
+
+      if (nextType !== "ELECTIVE_GROUP") {
+        await tx.electiveGroupClassLink.deleteMany({
+          where: { electiveGroupId: id },
+        });
+        return updated;
+      }
+
+      if (validated.linkedClassIds) {
+        await tx.electiveGroupClassLink.deleteMany({
+          where: { electiveGroupId: id },
+        });
+
+        await tx.electiveGroupClassLink.createMany({
+          data: (linkedClassIds.result ?? []).map((classGroupId) => ({
+            electiveGroupId: id,
+            classGroupId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return updated;
     });
 
     revalidatePath("/admin/groups");
@@ -143,6 +265,14 @@ export async function deleteGroupAction(id: IdInput) {
       prisma.groupSubjectRequirement.deleteMany({
         where: { groupId: { in: allGroupIds } },
       }),
+      prisma.electiveGroupClassLink.deleteMany({
+        where: {
+          OR: [
+            { electiveGroupId: { in: allGroupIds } },
+            { classGroupId: { in: allGroupIds } },
+          ],
+        },
+      }),
       ...allGroupIds
         .slice()
         .reverse()
@@ -196,9 +326,18 @@ export async function getStudentsForAssignment(
       },
     };
     } else if (groupType === "ELECTIVE_GROUP") {
-    availableWhere = {
-      id: { notIn: [...assignedIds] },
-    };
+      const eligibleStudentIds = await getEligibleElectiveStudentIds(groupId);
+
+      if (eligibleStudentIds.error) {
+        availableWhere = { id: { in: [] } };
+      } else {
+        availableWhere = {
+          id: {
+            in: eligibleStudentIds.result ?? [],
+            notIn: [...assignedIds],
+          },
+        };
+      }
     } else if (groupType === "SUBJECT_SUBGROUP") {
     const subgroup = await prisma.group.findUnique({
       where: { id: groupId },
@@ -290,6 +429,27 @@ export async function updateGroupStudentsAction(
 
   try {
     const validated = updateGroupStudentsSchema.parse(data);
+    const targetGroup = await prisma.group.findUnique({
+      where: { id: validated.groupId },
+      select: { id: true, type: true },
+    });
+
+    if (!targetGroup) {
+      return err("Группа не найдена");
+    }
+
+    if (targetGroup.type === "ELECTIVE_GROUP" && validated.assignStudentIds.length > 0) {
+      const eligibleStudentIds = await getEligibleElectiveStudentIds(validated.groupId);
+      if (eligibleStudentIds.error) {
+        return err(eligibleStudentIds.error);
+      }
+
+      const eligibleIds = new Set(eligibleStudentIds.result ?? []);
+
+      if (validated.assignStudentIds.some((studentId) => !eligibleIds.has(studentId))) {
+        return err("Можно добавлять только учеников из привязанных классов");
+      }
+    }
 
     const subgroups = await prisma.group.findMany({
       where: { parentId: validated.groupId },

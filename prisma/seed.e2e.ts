@@ -451,7 +451,15 @@ async function seedGroupsPageFixtures(teacherId: string) {
     data: {
       name: "Робототехника",
       type: "ELECTIVE_GROUP",
+      subjectId: roboticsSubject.id,
     },
+  });
+
+  await prisma.electiveGroupClassLink.createMany({
+    data: [
+      { electiveGroupId: roboticsGroup.id, classGroupId: class10A.id },
+      { electiveGroupId: roboticsGroup.id, classGroupId: class10B.id },
+    ],
   });
 
   await prisma.studentGroups.createMany({

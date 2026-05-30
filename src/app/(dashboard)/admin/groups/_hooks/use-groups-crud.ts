@@ -8,7 +8,7 @@ import {
   type MutationCommand,
   withExecute,
 } from "@/lib/mutation-utils";
-import type { GroupWithDetails, StudentForAssignment } from "../_lib/types";
+import type { GroupWithDetails, StudentForAssignment, SubjectOption } from "../_lib/types";
 import {
   createGroupAction,
   createSubgroupsFromSplit,
@@ -43,11 +43,22 @@ export type CreateGroupVariables = {
   name: string;
   type: GroupType;
   grade?: number | null;
+  linkedClassIds?: string[];
 };
 
 export type RenameGroupVariables = {
   id: string;
   name: string;
+};
+
+export type UpdateLinkedClassesVariables = {
+  id: string;
+  linkedClassIds: string[];
+};
+
+export type UpdateElectiveSubjectVariables = {
+  id: string;
+  subject: SubjectOption;
 };
 
 export type TransferStudentsVariables = {
@@ -67,6 +78,8 @@ export type RedistributeSubgroupsVariables = Record<string, string[]>;
 export type GroupsCrudCommands = {
   createGroup: MutationCommand<CreateGroupVariables>;
   renameGroup: MutationCommand<RenameGroupVariables>;
+  updateLinkedClasses: MutationCommand<UpdateLinkedClassesVariables>;
+  updateElectiveSubject: MutationCommand<UpdateElectiveSubjectVariables>;
   deleteGroup: MutationCommand<GroupWithDetails>;
   transferStudents: MutationCommand<TransferStudentsVariables>;
   splitGroup: MutationCommand<SplitGroupVariables>;
@@ -97,6 +110,40 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]): GroupsCrudStat
     },
     onSuccess: () => {
       toast.success("Группа переименована");
+    },
+  });
+
+  const updateLinkedClassesMutation = useMutation<
+    unknown,
+    Error,
+    UpdateLinkedClassesVariables
+  >({
+    mutationFn: async ({ id, linkedClassIds }) => {
+      const response = await updateGroupAction(id, { linkedClassIds });
+      return assertActionSuccess(response, "Не удалось обновить список классов");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Список классов обновлен");
+    },
+  });
+
+  const updateElectiveSubjectMutation = useMutation<
+    unknown,
+    Error,
+    UpdateElectiveSubjectVariables
+  >({
+    mutationFn: async ({ id, subject }) => {
+      const response = await updateGroupAction(id, { subjectId: subject.id });
+      return assertActionSuccess(response, "Не удалось привязать доп");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: (_result, { subject }) => {
+      toast.success(`К кружку привязан доп "${subject.name}"`);
     },
   });
 
@@ -199,6 +246,8 @@ export function useGroupsCrud(initialGroups: GroupWithDetails[]): GroupsCrudStat
   const commands: GroupsCrudCommands = {
     createGroup: withExecute(createGroupMutation),
     renameGroup: withExecute(renameGroupMutation),
+    updateLinkedClasses: withExecute(updateLinkedClassesMutation),
+    updateElectiveSubject: withExecute(updateElectiveSubjectMutation),
     deleteGroup: withExecute(deleteGroupMutation),
     transferStudents: withExecute(transferStudentsMutation),
     splitGroup: withExecute(splitterMutation),

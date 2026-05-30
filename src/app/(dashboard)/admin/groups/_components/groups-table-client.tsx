@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQueryState } from "nuqs";
 import { useDebouncedQueryState } from "@/hooks/use-debounced-query-state";
 import type { GroupWithDetails, StudentForAssignment, SubjectOption } from "../_lib/types";
@@ -11,6 +11,7 @@ import { SplitterDialog } from "./splitter-dialog";
 import { SubgroupEditorDialog } from "./subgroup-editor-dialog";
 import { useGroupsCrud } from "../_hooks/use-groups-crud";
 import type { SubgroupEditorData } from "../_actions/group-actions";
+import type { ClassGroupOption } from "./class-groups-multi-select";
 
 interface GroupsTableClientProps {
   initialGroups: GroupWithDetails[];
@@ -68,6 +69,30 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
   });
   const [isAddingRow, setIsAddingRow] = useState(false);
   const hasActiveFilters = Boolean(searchQuery) || filterType !== "all";
+  const classOptions = useMemo<ClassGroupOption[]>(
+    () =>
+      groups
+        .filter((group) => group.type === "CLASS" && group.parentId === null)
+        .sort((left, right) => {
+          const gradeDelta =
+            (left.grade ?? Number.MAX_SAFE_INTEGER) -
+            (right.grade ?? Number.MAX_SAFE_INTEGER);
+          if (gradeDelta !== 0) {
+            return gradeDelta;
+          }
+
+          return left.name.localeCompare(right.name, "ru");
+        })
+        .map((group) => ({
+          id: group.id,
+          label: group.name,
+        })),
+    [groups]
+  );
+  const electiveSubjects = useMemo(
+    () => subjects.filter((subject) => subject.type === "ELECTIVE_OPTIONAL"),
+    [subjects]
+  );
 
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferGroup, setTransferGroup] = useState<GroupWithDetails | null>(null);
@@ -182,6 +207,8 @@ export function GroupsTableClient({ initialGroups, subjects }: GroupsTableClient
 
       <GroupsTreeTable
         groups={groups}
+        classOptions={classOptions}
+        electiveSubjects={electiveSubjects}
         isAddingRow={isAddingRow}
         hasActiveFilters={hasActiveFilters}
         onResetFilters={resetFilters}

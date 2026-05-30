@@ -7,7 +7,7 @@ import {
   type FocusEvent,
 } from "react";
 import { useForm } from "@tanstack/react-form";
-import type { GroupWithDetails } from "../_lib/types";
+import type { GroupWithDetails, SubjectOption } from "../_lib/types";
 import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
 import {
   useReactTable,
@@ -38,6 +38,13 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog,
   AlertDialogContent,
   AlertDialogHeader,
@@ -56,12 +63,20 @@ import {
   UserPlus,
   Check,
   FolderOpen,
+  BookOpen,
+  X,
 } from "lucide-react";
 import { FilterableEmptyState } from "@/components/ui/filterable-empty-state";
 import { cn } from "@/lib/utils";
+import {
+  ClassGroupsMultiSelect,
+  type ClassGroupOption,
+} from "./class-groups-multi-select";
 
 interface GroupsTreeTableProps {
   groups: GroupWithDetails[];
+  classOptions: ClassGroupOption[];
+  electiveSubjects: SubjectOption[];
   isAddingRow: boolean;
   hasActiveFilters: boolean;
   onResetFilters: () => void;
@@ -89,6 +104,8 @@ const TYPE_STYLES: Record<string, string> = {
 
 export function GroupsTreeTable({
   groups,
+  classOptions,
+  electiveSubjects,
   isAddingRow,
   hasActiveFilters,
   onResetFilters,
@@ -100,6 +117,8 @@ export function GroupsTreeTable({
   onOpenSubgroupEditor,
 }: GroupsTreeTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingLinkedClassesId, setEditingLinkedClassesId] = useState<string | null>(null);
+  const [editingElectiveSubjectId, setEditingElectiveSubjectId] = useState<string | null>(null);
   const [confirmDeleteGroup, setConfirmDeleteGroup] =
     useState<GroupWithDetails | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -108,7 +127,21 @@ export function GroupsTreeTable({
   const deleteSubGroupsCount = confirmDeleteGroup?.subGroups.length ?? 0;
 
   const handleStartRename = useCallback((group: GroupWithDetails) => {
+    setEditingLinkedClassesId(null);
+    setEditingElectiveSubjectId(null);
     setEditingId(group.id);
+  }, []);
+
+  const handleStartEditLinkedClasses = useCallback((group: GroupWithDetails) => {
+    setEditingId(null);
+    setEditingElectiveSubjectId(null);
+    setEditingLinkedClassesId(group.id);
+  }, []);
+
+  const handleStartEditElectiveSubject = useCallback((group: GroupWithDetails) => {
+    setEditingId(null);
+    setEditingLinkedClassesId(null);
+    setEditingElectiveSubjectId(group.id);
   }, []);
 
   const handleSaveRename = useCallback(
@@ -134,6 +167,56 @@ export function GroupsTreeTable({
     setEditingId(null);
   }, []);
 
+  const handleSaveLinkedClasses = useCallback(
+    async (linkedClassIds: string[]) => {
+      if (!editingLinkedClassesId) {
+        return;
+      }
+
+      const result = await commands.updateLinkedClasses.execute({
+        id: editingLinkedClassesId,
+        linkedClassIds,
+      });
+
+      if (result !== null) {
+        setEditingLinkedClassesId(null);
+      }
+    },
+    [commands.updateLinkedClasses, editingLinkedClassesId]
+  );
+
+  const handleCancelEditLinkedClasses = useCallback(() => {
+    setEditingLinkedClassesId(null);
+  }, []);
+
+  const handleSaveElectiveSubject = useCallback(
+    async (subjectId: string) => {
+      if (!editingElectiveSubjectId) {
+        return;
+      }
+
+      const subject = electiveSubjects.find((item) => item.id === subjectId);
+      if (!subject) {
+        setEditingElectiveSubjectId(null);
+        return;
+      }
+
+      const result = await commands.updateElectiveSubject.execute({
+        id: editingElectiveSubjectId,
+        subject,
+      });
+
+      if (result !== null) {
+        setEditingElectiveSubjectId(null);
+      }
+    },
+    [commands.updateElectiveSubject, editingElectiveSubjectId, electiveSubjects]
+  );
+
+  const handleCancelEditElectiveSubject = useCallback(() => {
+    setEditingElectiveSubjectId(null);
+  }, []);
+
   const handleConfirmDelete = async () => {
     if (confirmDeleteGroup) {
       setIsDeleting(true);
@@ -146,6 +229,22 @@ export function GroupsTreeTable({
   const handleDoubleClickName = useCallback((group: GroupWithDetails) => {
     handleStartRename(group);
   }, [handleStartRename]);
+
+  const handleDoubleClickLinkedClasses = useCallback((group: GroupWithDetails) => {
+    if (group.type !== "ELECTIVE_GROUP") {
+      return;
+    }
+
+    handleStartEditLinkedClasses(group);
+  }, [handleStartEditLinkedClasses]);
+
+  const handleDoubleClickElectiveSubject = useCallback((group: GroupWithDetails) => {
+    if (group.type !== "ELECTIVE_GROUP") {
+      return;
+    }
+
+    handleStartEditElectiveSubject(group);
+  }, [handleStartEditElectiveSubject]);
 
   const columns = useMemo<ColumnDef<GroupWithDetails>[]>(
     () => [
@@ -226,10 +325,36 @@ export function GroupsTreeTable({
       {
         accessorKey: "grade",
         header: "Параллель",
-        size: 144,
+        size: 280,
         cell: ({ row }) => {
           const group = row.original;
           if (row.depth > 0) return "—";
+
+          if (group.type === "ELECTIVE_GROUP") {
+            if (editingLinkedClassesId === group.id) {
+              return (
+                <InlineLinkedClassesInput
+                  defaultValue={group.linkedClasses.map((item) => item.id)}
+                  options={classOptions}
+                  onSave={handleSaveLinkedClasses}
+                  onCancel={handleCancelEditLinkedClasses}
+                />
+              );
+            }
+
+            return (
+              <span
+                className="cursor-default"
+                onDoubleClick={() => handleDoubleClickLinkedClasses(group)}
+                title="Двойной клик для изменения классов"
+              >
+                {group.linkedClasses.length > 0
+                  ? group.linkedClasses.map((item) => item.name).join(", ")
+                  : "—"}
+              </span>
+            );
+          }
+
           return group.grade ? `${group.grade} класс` : "—";
         },
       },
@@ -286,6 +411,37 @@ export function GroupsTreeTable({
               </Button>
             );
           }
+          if (group.type === "ELECTIVE_GROUP") {
+            if (editingElectiveSubjectId === group.id) {
+              return (
+                <InlineElectiveSubjectInput
+                  defaultValue={group.subjectId}
+                  options={electiveSubjects}
+                  onSave={handleSaveElectiveSubject}
+                  onCancel={handleCancelEditElectiveSubject}
+                />
+              );
+            }
+
+            return group.subject ? (
+              <span
+                className="inline-flex max-w-full cursor-default items-center gap-1 rounded-md border bg-muted px-2 py-0.5 text-xs font-medium"
+                onDoubleClick={() => handleDoubleClickElectiveSubject(group)}
+                title="Двойной клик для изменения допа"
+              >
+                <BookOpen data-icon="inline-start" className="size-4" />
+                {group.subject.name}
+              </span>
+            ) : (
+              <span
+                className="cursor-default text-sm text-muted-foreground"
+                onDoubleClick={() => handleDoubleClickElectiveSubject(group)}
+                title="Двойной клик для привязки допа"
+              >
+                Доп не привязан
+              </span>
+            );
+          }
           return null;
         },
       },
@@ -299,6 +455,8 @@ export function GroupsTreeTable({
             <GroupActionMenu
               group={group}
               onRename={() => handleStartRename(group)}
+              onEditLinkedClasses={() => handleStartEditLinkedClasses(group)}
+              onBindElectiveSubject={() => handleStartEditElectiveSubject(group)}
               onManageStudents={() => onOpenTransferList(group)}
               onEditSubgroups={() => onOpenSubgroupEditor(group)}
               onDelete={() => setConfirmDeleteGroup(group)}
@@ -309,8 +467,20 @@ export function GroupsTreeTable({
     ],
     [
       editingId,
+      editingElectiveSubjectId,
+      editingLinkedClassesId,
+      classOptions,
+      electiveSubjects,
+      handleCancelEditElectiveSubject,
+      handleCancelEditLinkedClasses,
       handleCancelRename,
+      handleDoubleClickElectiveSubject,
+      handleDoubleClickLinkedClasses,
       handleDoubleClickName,
+      handleSaveElectiveSubject,
+      handleSaveLinkedClasses,
+      handleStartEditElectiveSubject,
+      handleStartEditLinkedClasses,
       handleSaveRename,
       handleStartRename,
       onOpenTransferList,
@@ -356,6 +526,7 @@ export function GroupsTreeTable({
             {isAddingRow && (
               <InlineCreateRow
                 command={commands.createGroup}
+                classOptions={classOptions}
                 onCancel={onCancelAddRow}
               />
             )}
@@ -551,15 +722,124 @@ function InlineRenameInput({
   );
 }
 
+function InlineLinkedClassesInput({
+  defaultValue,
+  options,
+  onSave,
+  onCancel,
+}: {
+  defaultValue: string[];
+  options: ClassGroupOption[];
+  onSave: (linkedClassIds: string[]) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(defaultValue);
+  const hasChanges =
+    value.length !== defaultValue.length ||
+    value.some((id) => !defaultValue.includes(id));
+
+  return (
+    <div className="flex min-w-64 items-start gap-1">
+      <ClassGroupsMultiSelect
+        options={options}
+        selectedIds={value}
+        onChange={setValue}
+        placeholder={options.length > 0 ? "Классы для кружка" : "Сначала создайте классы"}
+        invalid={value.length === 0}
+        disabled={options.length === 0}
+      />
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={() => {
+          if (value.length === 0 || !hasChanges) {
+            onCancel();
+            return;
+          }
+
+          onSave(value);
+        }}
+        title="Сохранить"
+        disabled={value.length === 0}
+      >
+        <Check className="size-3.5" />
+      </Button>
+      <Button variant="ghost" size="icon-xs" onClick={onCancel} title="Отмена">
+        <X className="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+function InlineElectiveSubjectInput({
+  defaultValue,
+  options,
+  onSave,
+  onCancel,
+}: {
+  defaultValue: string | null;
+  options: SubjectOption[];
+  onSave: (subjectId: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(defaultValue ?? "");
+  const subjectItems = useMemo(
+    () => Object.fromEntries(options.map((option) => [option.id, option.name])),
+    [options]
+  );
+  const selectedSubject = options.find((option) => option.id === value) ?? null;
+  const hasChanges = value !== (defaultValue ?? "");
+
+  return (
+    <div className="flex min-w-56 items-center gap-1">
+      <Select value={value} onValueChange={(next) => setValue(next ?? "")} items={subjectItems}>
+        <SelectTrigger size="sm" className="h-8 min-w-44">
+          <SelectValue placeholder="Выберите доп" />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={() => {
+          if (!selectedSubject || !hasChanges) {
+            onCancel();
+            return;
+          }
+
+          onSave(selectedSubject.id);
+        }}
+        title="Сохранить"
+        disabled={!selectedSubject}
+      >
+        <Check className="size-3.5" />
+      </Button>
+      <Button variant="ghost" size="icon-xs" onClick={onCancel} title="Отмена">
+        <X className="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 function GroupActionMenu({
   group,
   onRename,
+  onEditLinkedClasses,
+  onBindElectiveSubject,
   onManageStudents,
   onEditSubgroups,
   onDelete,
 }: {
   group: GroupWithDetails;
   onRename: () => void;
+  onEditLinkedClasses: () => void;
+  onBindElectiveSubject: () => void;
   onManageStudents: () => void;
   onEditSubgroups: () => void;
   onDelete: () => void;
@@ -578,6 +858,18 @@ function GroupActionMenu({
           <Pencil className="size-4" />
           Переименовать
         </DropdownMenuItem>
+        {group.type === "ELECTIVE_GROUP" && (
+          <DropdownMenuItem onClick={onEditLinkedClasses}>
+            <BookOpen className="size-4" />
+            Изменить классы
+          </DropdownMenuItem>
+        )}
+        {group.type === "ELECTIVE_GROUP" && (
+          <DropdownMenuItem onClick={onBindElectiveSubject}>
+            <BookOpen className="size-4" />
+            Привязать доп
+          </DropdownMenuItem>
+        )}
         {group.type !== "SUBJECT_SUBGROUP" && (
           <DropdownMenuItem onClick={onManageStudents}>
             <UserPlus className="size-4" />
