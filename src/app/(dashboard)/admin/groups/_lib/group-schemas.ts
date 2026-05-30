@@ -13,8 +13,10 @@ export const groupNameSchema = z
   .min(1, "Название обязательно")
   .max(512, "Максимум 512 символов");
 
-export const groupGradeSchema = z.number().int().min(1).max(11).nullable().optional();
-export const groupLinkedClassIdsSchema = z.array(z.string().min(1)).optional();
+export const groupGradeSchema = z.number().int().min(1).max(11).nullable();
+export const groupLinkedClassIdsSchema = z
+  .array(z.string().min(1))
+  .min(1, "Выберите хотя бы один класс");
 
 export const createGroupSchema = z
   .object({
@@ -23,7 +25,7 @@ export const createGroupSchema = z
     grade: groupGradeSchema,
     parentId: z.string().min(1).nullable().optional(),
     subjectId: z.string().min(1).nullable().optional(),
-    linkedClassIds: groupLinkedClassIdsSchema,
+    linkedClassIds: groupLinkedClassIdsSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (
@@ -43,8 +45,29 @@ export const updateGroupSchema = z.object({
   type: groupTypeSchema.optional(),
   grade: groupGradeSchema,
   subjectId: z.string().min(1).nullable().optional(),
+  linkedClassIds: groupLinkedClassIdsSchema.optional(),
+});
+
+export const renameGroupFormSchema = z.object({
+  name: groupNameSchema,
+});
+
+export const linkedClassesFormSchema = z.object({
   linkedClassIds: groupLinkedClassIdsSchema,
 });
+
+export function createElectiveSubjectIdFormSchema(subjectIds: readonly string[]) {
+  return z.string().min(1, "Выберите доп").refine(
+    (subjectId) => subjectIds.includes(subjectId),
+    "Выберите доп из списка"
+  );
+}
+
+export function createElectiveSubjectFormSchema(subjectIds: readonly string[]) {
+  return z.object({
+    subjectId: createElectiveSubjectIdFormSchema(subjectIds),
+  });
+}
 
 export const idSchema = z.string().min(1, "ID обязателен");
 
@@ -83,28 +106,3 @@ export type IdInput = z.infer<typeof idSchema>;
 export type UpdateGroupStudentsInput = z.infer<typeof updateGroupStudentsSchema>;
 export type SplitInput = z.infer<typeof splitSchema>;
 export type RedistributeInput = z.infer<typeof redistributeSchema>;
-
-export const groupGradeInputSchema = z.string().refine(
-  (value) =>
-    value === "" ||
-    (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 11),
-  "1-11"
-);
-
-export function parseGroupGradeInput(value: string): number | null {
-  if (value === "") {
-    return null;
-  }
-
-  if (!/^\d+$/.test(value)) {
-    return Number.NaN;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-
-  if (Number.isNaN(parsed) || parsed < 1 || parsed > 11) {
-    return Number.NaN;
-  }
-
-  return parsed;
-}

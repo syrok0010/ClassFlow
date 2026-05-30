@@ -7,7 +7,6 @@ import {
   type FocusEvent,
 } from "react";
 import { useForm } from "@tanstack/react-form";
-import { z } from "zod/v4";
 import type { GroupWithDetails, SubjectOption } from "../_lib/types";
 import type { GroupsCrudCommands } from "../_hooks/use-groups-crud";
 import {
@@ -17,7 +16,14 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
-import { groupNameSchema } from "../_lib/group-schemas";
+import {
+  createElectiveSubjectFormSchema,
+  createElectiveSubjectIdFormSchema,
+  groupLinkedClassIdsSchema,
+  groupNameSchema,
+  linkedClassesFormSchema,
+  renameGroupFormSchema,
+} from "../_lib/group-schemas";
 import { InlineCreateRow } from "./inline-create-row";
 import {
   Table,
@@ -41,6 +47,7 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -102,22 +109,6 @@ const TYPE_STYLES: Record<string, string> = {
   SUBJECT_SUBGROUP: "bg-green-50 text-green-700 ring-green-600/20",
   KINDERGARTEN_GROUP: "bg-orange-50 text-orange-700 ring-orange-600/20",
 };
-
-const linkedClassIdsFormSchema = z
-  .array(z.string().min(1))
-  .min(1, "Выберите хотя бы один класс");
-
-const electiveSubjectIdFormSchema = z
-  .string()
-  .min(1, "Выберите доп");
-
-const renameFormSchema = z.object({
-  name: groupNameSchema,
-});
-
-const linkedClassesFormSchema = z.object({
-  linkedClassIds: linkedClassIdsFormSchema,
-});
 
 function haveSameIds(left: string[], right: string[]) {
   return (
@@ -601,7 +592,7 @@ function InlineRenameInput({
       name: defaultValue,
     },
     validators: {
-      onSubmit: renameFormSchema,
+      onSubmit: renameGroupFormSchema,
     },
     onSubmit: async ({ value }) => {
       const nextName = value.name.trim();
@@ -733,8 +724,8 @@ function InlineLinkedClassesInput({
       <form.Field
         name="linkedClassIds"
         validators={{
-          onChange: linkedClassIdsFormSchema,
-          onSubmit: linkedClassIdsFormSchema,
+          onChange: groupLinkedClassIdsSchema,
+          onSubmit: groupLinkedClassIdsSchema,
         }}
       >
         {(field) => (
@@ -815,20 +806,17 @@ function InlineElectiveSubjectInput({
     () => Object.fromEntries(options.map((option) => [option.id, option.name])),
     [options]
   );
-  const subjectIdFormSchema = useMemo(
-    () =>
-      electiveSubjectIdFormSchema.refine(
-        (subjectId) => options.some((option) => option.id === subjectId),
-        "Выберите доп из списка"
-      ),
+  const subjectIds = useMemo(
+    () => options.map((option) => option.id),
     [options]
   );
+  const subjectIdFormSchema = useMemo(
+    () => createElectiveSubjectIdFormSchema(subjectIds),
+    [subjectIds]
+  );
   const electiveSubjectFormSchema = useMemo(
-    () =>
-      z.object({
-        subjectId: subjectIdFormSchema,
-      }),
-    [subjectIdFormSchema]
+    () => createElectiveSubjectFormSchema(subjectIds),
+    [subjectIds]
   );
   const form = useForm({
     defaultValues: {
@@ -881,11 +869,13 @@ function InlineElectiveSubjectInput({
                 <SelectValue placeholder="Выберите доп" />
               </SelectTrigger>
               <SelectContent>
-                {options.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.name}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {options.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
             <FieldError errors={field.state.meta.errors} className="text-xs" />
