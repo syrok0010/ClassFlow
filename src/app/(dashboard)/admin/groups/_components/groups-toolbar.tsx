@@ -1,5 +1,9 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import {
   SegmentedControl,
   type SegmentedControlOption,
@@ -33,22 +37,23 @@ export function GroupsToolbar({
 }: GroupsToolbarProps) {
   return (
     <div className="flex items-center gap-3">
+      <InputGroup className="max-w-sm flex-1">
+        <InputGroupAddon align="inline-start">
+          <Search className="size-4" />
+        </InputGroupAddon>
+        <InputGroupInput
+          placeholder="Поиск по названию..."
+          value={searchQuery}
+          onChange={(e) => onSearchQueryChange(e.target.value)}
+        />
+      </InputGroup>
+
       <SegmentedControl
         value={filterType}
         onChange={onFilterTypeChange}
         options={FILTER_OPTIONS}
         size="sm"
       />
-
-      <div className="relative flex-1 max-w-sm">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <Input
-          placeholder="Поиск по названию..."
-          value={searchQuery}
-          onChange={(e) => onSearchQueryChange(e.target.value)}
-          className="pl-8"
-        />
-      </div>
 
       <div className="ml-auto">
         {!isAddingRow && (
