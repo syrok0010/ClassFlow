@@ -36,7 +36,7 @@ export function TeacherSelectorPanel({
   onClearSelection,
 }: TeacherSelectorPanelProps) {
   return (
-    <Card className="w-full shrink-0 md:sticky md:top-4 md:w-90 md:max-h-[calc(100dvh-2rem)] md:self-start">
+    <Card className="w-full shrink-0 md:sticky md:top-4 md:w-90 md:max-h-[calc(100dvh-9rem)] md:self-start">
       <CardHeader className="border-b">
         <CardTitle>Преподаватели</CardTitle>
         <CardDescription>
