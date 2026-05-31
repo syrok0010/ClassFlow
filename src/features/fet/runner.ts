@@ -24,6 +24,14 @@ async function findActivitiesXml(dir: string): Promise<string | null> {
   return null;
 }
 
+async function readCliErrorLog(outputDir: string): Promise<string> {
+  try {
+    return await readFile(path.join(outputDir, "logs", "errors.txt"), "utf8");
+  } catch {
+    return "";
+  }
+}
+
 function runFetCli(inputFilePath: string, outputDir: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(FET_CLI_PATH, [
@@ -56,14 +64,16 @@ function runFetCli(inputFilePath: string, outputDir: string): Promise<string> {
 
       reject(error);
     });
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
       clearTimeout(timeout);
       if (code === 0) {
         resolve([stdout.trim(), stderr.trim()].filter(Boolean).join("\n"));
         return;
       }
 
-      reject(new Error(`FET завершился с кодом ${code}: ${[stdout.trim(), stderr.trim()].filter(Boolean).join("\n")}`));
+      const errorLog = await readCliErrorLog(outputDir);
+      const details = [stdout.trim(), stderr.trim(), errorLog.trim()].filter(Boolean).join("\n");
+      reject(new Error(`FET завершился с кодом ${code}: ${details}`));
     });
   });
 }

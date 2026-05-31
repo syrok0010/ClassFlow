@@ -1,7 +1,40 @@
-import { getAllScheduleSlots, getCompatibleRoomIds, getOrdinarySubjectWindow } from "./activity-utils";
-import { FET_CORE_WINDOW_WEIGHT } from "./env";
+import {
+  getAllScheduleSlots,
+  getCompatibleRoomIdsForAudience,
+  getExpectedAudienceSize,
+  getOrdinarySubjectWindow,
+} from "./activity-utils";
 import { assignTeachers } from "./teacher-assignment";
-import type { FetActivity, FetImportedActivity, FetInput } from "./types";
+import type { FetActivity, FetImportedActivity, FetInput, FetRequirement } from "./types";
+
+function getRequirementAudienceSize(input: FetInput, requirement: FetRequirement): number {
+  const groupsById = new Map(input.groups.map((group) => [group.id, group]));
+  const group = groupsById.get(requirement.groupId) ?? requirement.group;
+  const parentGroup = group.parentId ? groupsById.get(group.parentId) : null;
+  const deliveryGroupSize = group.studentCount ?? 0;
+  const classSize = parentGroup?.studentCount ?? deliveryGroupSize;
+  const loadMode = requirement.subject.defaultAttendanceLoadMode ?? "DELIVERY_GROUP_SIZE";
+
+  return getExpectedAudienceSize([classSize], deliveryGroupSize, loadMode);
+}
+
+function getDeliveryFields(input: FetInput, requirement: FetRequirement) {
+  if (requirement.group.type === "ELECTIVE_GROUP") {
+    return {
+      deliveryMode: "ELECTIVE_GROUP" as const,
+      deliveryGroupId: requirement.groupId,
+      openClassIds: input.electiveGroupOpenClassIdsByGroupId?.[requirement.groupId] ?? [],
+      coveredClassIds: [],
+    };
+  }
+
+  return {
+    deliveryMode: "DIRECT_GROUP" as const,
+    deliveryGroupId: requirement.groupId,
+    openClassIds: [],
+    coveredClassIds: [],
+  };
+}
 
 export function buildLockedRegimeActivities(
   input: FetInput,
@@ -44,10 +77,15 @@ export function buildFullActivities(
     }
 
     for (let index = 0; index < requirement.lessonsPerWeek; index += 1) {
+      const expectedAudienceSize = getRequirementAudienceSize(input, requirement);
+      const roomIds = getCompatibleRoomIdsForAudience(input, requirement.subjectId, expectedAudienceSize);
+      const deliveryFields = getDeliveryFields(input, requirement);
+
       activities.push({
         id: nextId,
         source: "ORDINARY",
         groupId: requirement.groupId,
+        studentSetIds: [requirement.groupId],
         subjectId: requirement.subjectId,
         teacherId: teacherId ?? null,
         durationInMinutes: requirement.durationInMinutes,
@@ -55,8 +93,11 @@ export function buildFullActivities(
           requirement.durationInMinutes,
           getOrdinarySubjectWindow(requirement.subject.type),
         ),
-        timeConstraintWeight: FET_CORE_WINDOW_WEIGHT,
-        roomIds: getCompatibleRoomIds(input, requirement.subjectId),
+        timeConstraintWeight: 100,
+        roomIds,
+        ...deliveryFields,
+        attendanceLoadModeOverride: null,
+        expectedAudienceSize,
       });
       nextId += 1;
       ordinaryActivityCount += 1;

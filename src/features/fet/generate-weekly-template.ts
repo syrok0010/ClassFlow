@@ -7,7 +7,12 @@ import { buildFullActivities, buildLockedRegimeActivities } from "./build-full-a
 import { buildRegimeActivities } from "./build-regime-activities";
 import { collectFetInput } from "./collect-input";
 import { assertFetEnvironment } from "./env";
-import { assertActivityInsideSlots, importFetActivitiesXml, mapImportedActivitiesToTemplateRows } from "./importer";
+import {
+  assertActivityInsideSlots,
+  assertImportedRowsSatisfyFetBusinessRules,
+  importFetActivitiesXml,
+  mapImportedActivitiesToTemplateRows,
+} from "./importer";
 import { preflightFetInput } from "./preflight";
 import { readFetActivitiesXml, runFetCliPass } from "./runner";
 import type {
@@ -85,23 +90,30 @@ export async function generateWeeklyScheduleTemplate(
   const fullXml = await readXml(fullRun.outputActivitiesXmlPath);
   const importedFull = importFetActivitiesXml(fullXml);
   const importedRows = mapImportedActivitiesToTemplateRows(fullActivities, importedFull);
+  assertImportedRowsSatisfyFetBusinessRules(input, importedRows);
 
   const transactionResult = await db.$transaction(async (tx) => {
     const deleted = await tx.weeklyScheduleTemplate.deleteMany({});
 
-    if (importedRows.length > 0) {
-      await tx.weeklyScheduleTemplate.createMany({
-        data: importedRows.map((row) => ({
+    for (const row of importedRows) {
+      await tx.weeklyScheduleTemplate.create({
+        data: {
           dayOfWeek: row.dayOfWeek,
           startTime: row.startTime,
           endTime: row.endTime,
           subjectId: row.subjectId,
           roomId: row.roomId,
           teacherId: row.teacherId,
-          deliveryMode: "DIRECT_GROUP" as const,
-          deliveryGroupId: row.groupId,
-          attendanceLoadModeOverride: null,
-        })),
+          deliveryMode: row.deliveryMode,
+          deliveryGroupId: row.deliveryGroupId,
+          attendanceLoadModeOverride: row.attendanceLoadModeOverride,
+          openClasses: row.openClassIds.length > 0
+            ? { create: row.openClassIds.map((classGroupId) => ({ classGroupId })) }
+            : undefined,
+          coveredClasses: row.coveredClassIds.length > 0
+            ? { create: row.coveredClassIds.map((classGroupId) => ({ classGroupId })) }
+            : undefined,
+        },
       });
     }
 

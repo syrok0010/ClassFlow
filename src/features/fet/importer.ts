@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
-import { FET_DAYS } from "./env";
+import { FET_CORE_END_MINUTES, FET_DAYS } from "./env";
 import { minutesToFetHour } from "./fet-xml";
-import type { FetActivity, FetDayOfWeek, FetImportedActivity, FetTemplateRow } from "./types";
+import type { FetActivity, FetDayOfWeek, FetImportedActivity, FetInput, FetTemplateRow } from "./types";
 
 const DAY_BY_NAME = new Map(FET_DAYS.map((day) => [day.name, day.dayOfWeek]));
 
@@ -68,6 +68,11 @@ export function mapImportedActivitiesToTemplateRows(
       roomId: importedActivity.roomId,
       teacherId: activity.teacherId,
       subjectId: activity.subjectId,
+      deliveryMode: activity.deliveryMode ?? "DIRECT_GROUP",
+      deliveryGroupId: activity.deliveryGroupId ?? activity.groupId,
+      openClassIds: activity.openClassIds ?? [],
+      coveredClassIds: activity.coveredClassIds ?? [],
+      attendanceLoadModeOverride: activity.attendanceLoadModeOverride ?? null,
     });
   }
 
@@ -95,6 +100,36 @@ export function assertActivityInsideSlots(activity: FetActivity, imported: FetIm
 
   if (!allowed) {
     throw new Error(`FET вернул activity ${activity.id} вне разрешенного окна`);
+  }
+}
+
+export function assertImportedRowsSatisfyFetBusinessRules(
+  input: FetInput,
+  rows: FetTemplateRow[],
+): void {
+  const subjectsById = new Map(input.subjects.map((subject) => [subject.id, subject]));
+
+  for (const row of rows) {
+    const subject = subjectsById.get(row.subjectId);
+
+    if (!subject) {
+      continue;
+    }
+
+    if (subject.type === "ACADEMIC" && row.endTime > FET_CORE_END_MINUTES) {
+      throw new Error(
+        `FET вернул основной предмет после границы основной программы: ${subject.name}, ${row.dayOfWeek}, ${minutesToFetHour(row.startTime)}-${minutesToFetHour(row.endTime)}`,
+      );
+    }
+
+    if (
+      (subject.type === "ELECTIVE_REQUIRED" || subject.type === "ELECTIVE_OPTIONAL") &&
+      row.startTime < FET_CORE_END_MINUTES
+    ) {
+      throw new Error(
+        `FET вернул доп до окончания основной программы: ${subject.name}, ${row.dayOfWeek}, ${minutesToFetHour(row.startTime)}-${minutesToFetHour(row.endTime)}`,
+      );
+    }
   }
 }
 
