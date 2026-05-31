@@ -7,6 +7,7 @@ import { FormField } from "@/components/ui/form-field";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { createRoomSchema } from "../_lib/schemas";
 import { useRoomsData } from "./rooms-data-context";
+import { Spinner } from "@/components/ui/spinner";
 
 type RoomSmartRowProps = {
   buildingId: string;
@@ -86,7 +87,7 @@ export function RoomSmartRow({ buildingId, onDeactivate, onCreated }: RoomSmartR
         <div className="flex gap-2">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-primary/40 text-primary">
             {commands.createRoom.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Spinner />
             ) : (
               <Plus className="h-4 w-4" />
             )}

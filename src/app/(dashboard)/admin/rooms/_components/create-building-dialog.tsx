@@ -34,12 +34,7 @@ export function CreateBuildingDialog({ triggerVariant = "icon" }: CreateBuilding
       onChange: createBuildingSchema,
     },
     onSubmit: async ({ value }) => {
-      const parsed = createBuildingSchema.safeParse(value);
-      if (!parsed.success) {
-        return;
-      }
-
-      const result = await commands.createBuilding.execute(parsed.data);
+      const result = await commands.createBuilding.execute(value);
       if (result) {
         setOpen(false);
         form.reset();

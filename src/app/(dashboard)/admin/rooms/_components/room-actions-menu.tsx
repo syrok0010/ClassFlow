@@ -22,10 +22,6 @@ export function RoomActionsMenu({ room, onEdit }: RoomActionsMenuProps) {
     commands.deleteRoom.isPending &&
     commands.deleteRoom.variables?.id === room.id;
 
-  const handleDelete = async () => {
-    await commands.deleteRoom.execute(room);
-  };
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -51,7 +47,7 @@ export function RoomActionsMenu({ room, onEdit }: RoomActionsMenuProps) {
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
-            void handleDelete();
+            void commands.deleteRoom.execute(room);
           }}
           disabled={isDeleting}
           variant="destructive"

@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { ArrowLeft, Building2, Save } from "lucide-react";
@@ -33,44 +32,22 @@ type RoomDetailViewProps = {
 export function RoomDetailView({ room }: RoomDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { buildings, commands } = useRoomsData();
-  const currentRoom = useMemo(
-    () =>
-      buildings
-        .flatMap((building) =>
-          building.rooms.map((item) => ({
-            ...item,
-            building,
-          }))
-        )
-        .find((item) => item.id === room.id),
-    [buildings, room.id]
-  );
-  const activeRoom = currentRoom ?? room;
+  const { commands } = useRoomsData();
 
   const form = useForm({
     defaultValues: {
-      name: activeRoom.name,
-      seatsCount: activeRoom.seatsCount,
+      id: room.id,
+      name: room.name,
+      seatsCount: room.seatsCount,
     },
     validators: {
-      onChange: updateRoomSchema.omit({ id: true }),
+      onChange: updateRoomSchema,
     },
-    onSubmit: async ({ value }) => {
-      const parsed = updateRoomSchema.safeParse({
-        id: room.id,
-        name: value.name.trim(),
-        seatsCount: value.seatsCount,
-      });
-      if (!parsed.success) {
-        return;
-      }
-
-      await commands.updateRoom.execute(parsed.data);
-    },
+    onSubmit: ({ value }) =>
+      commands.updateRoom.execute(value),
   });
 
-  const selectedSubjectIds = activeRoom.roomSubjects.map((item) => item.subject.id);
+  const selectedSubjectIds = room.roomSubjects.map((item) => item.subject.id);
 
   return (
     <div className="flex flex-col gap-4">
@@ -88,10 +65,10 @@ export function RoomDetailView({ room }: RoomDetailViewProps) {
               <ArrowLeft className="h-4 w-4" />
               Назад к таблице
             </Button>
-            <h1 className="text-2xl font-bold tracking-tight">{activeRoom.name}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{room.name}</h1>
             <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
               <Building2 className="h-4 w-4" />
-              {activeRoom.building?.name ?? "Без привязки к зданию"}
+              {room.building?.name ?? "Без привязки к зданию"}
             </p>
           </div>
         </div>
@@ -139,8 +116,8 @@ export function RoomDetailView({ room }: RoomDetailViewProps) {
 
       <div className="rounded-xl border bg-card p-4 shadow-sm">
         <RoomSubjectsTransfer
-          roomId={activeRoom.id}
-          roomName={activeRoom.name}
+          roomId={room.id}
+          roomName={room.name}
           selectedSubjectIds={selectedSubjectIds}
         />
       </div>
