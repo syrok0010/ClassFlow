@@ -89,12 +89,16 @@ export function mapImportedActivitiesToTemplateRows(
 }
 
 export function assertActivityInsideSlots(activity: FetActivity, imported: FetImportedActivity): void {
+  if ((activity.timeConstraintWeight ?? 100) < 100) return;
+
   const allowed = activity.allowedSlots.some(
     (slot) => slot.dayOfWeek === imported.dayOfWeek && minutesToFetHour(slot.startTime) === minutesToFetHour(imported.startTime),
   );
 
   if (!allowed) {
-    throw new Error(`FET вернул activity ${activity.id} вне разрешенного окна`);
+    throw new Error(
+      `FET вернул activity ${activity.id} вне разрешенного окна: ${imported.dayOfWeek} ${minutesToFetHour(imported.startTime)}`,
+    );
   }
 }
 

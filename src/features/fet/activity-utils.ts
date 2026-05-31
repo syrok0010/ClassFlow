@@ -31,6 +31,28 @@ export function getAllScheduleSlots(
   return slots;
 }
 
+export function getScheduleSlotsByDay(
+  durationInMinutes: number,
+  windowsByDay: Map<FetDayOfWeek, { startTime: number; endTime: number }>,
+): FetTimeSlot[] {
+  const slots: FetTimeSlot[] = [];
+
+  for (const dayOfWeek of [1, 2, 3, 4, 5] as FetDayOfWeek[]) {
+    const window = windowsByDay.get(dayOfWeek);
+    if (!window) continue;
+
+    for (
+      let startTime = window.startTime;
+      startTime + durationInMinutes <= window.endTime;
+      startTime += FET_PERIOD_MINUTES
+    ) {
+      slots.push({ dayOfWeek, startTime });
+    }
+  }
+
+  return slots;
+}
+
 export function getOrdinarySubjectWindow(subjectType: SubjectType): { startTime: number; endTime: number } {
   if (subjectType === "ACADEMIC") {
     return {

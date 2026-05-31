@@ -1,4 +1,5 @@
 import type { GroupType } from "@/generated/prisma/enums";
+import { getUserFullName } from "@/lib/auth-access";
 import { prisma } from "@/lib/prisma";
 import { requireAdminContext } from "@/lib/server-action-auth";
 
@@ -8,8 +9,8 @@ import {
   mapWeeklyTemplateToAdminScheduleEvents,
 } from "./admin-schedule-mapper";
 import type { AdminSchedulePageData } from "./admin-schedule-types";
-import { getUserFullName } from "@/lib/auth-access";
 import { buildLessonDurationByGroupSubject } from "./schedule-duration-map";
+import { getScheduleBreakValidationEnabled } from "./schedule-validation-env";
 
 const VISIBLE_CLASS_TYPES: GroupType[] = ["CLASS"];
 
@@ -68,6 +69,9 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
   if (classRows.length === 0) {
     return {
       events: [],
+      scheduleConflictOptions: {
+        validateBreakDuration: getScheduleBreakValidationEnabled(),
+      },
       ...buildAdminScheduleEditorData(
         {
           classRows,
@@ -151,6 +155,9 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
     events: templates.flatMap((entry) =>
       mapWeeklyTemplateToAdminScheduleEvents(entry, requirementMetaByGroupSubject)
     ),
+    scheduleConflictOptions: {
+      validateBreakDuration: getScheduleBreakValidationEnabled(),
+    },
     ...editorData,
   };
 }

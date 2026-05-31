@@ -11,6 +11,7 @@ export async function collectFetInput(): Promise<FetInput> {
     rooms,
     groups,
     subjects,
+    electiveGroupClassLinks,
   ] = await Promise.all([
     prisma.groupSubjectRequirement.findMany({
       include: {
@@ -21,6 +22,7 @@ export async function collectFetInput(): Promise<FetInput> {
             type: true,
             grade: true,
             parentId: true,
+            subjectId: true,
           },
         },
         subject: {
@@ -73,6 +75,7 @@ export async function collectFetInput(): Promise<FetInput> {
         type: true,
         grade: true,
         parentId: true,
+        subjectId: true,
       },
       orderBy: [{ grade: "asc" }, { name: "asc" }],
     }),
@@ -83,6 +86,13 @@ export async function collectFetInput(): Promise<FetInput> {
         type: true,
       },
       orderBy: [{ name: "asc" }],
+    }),
+    prisma.electiveGroupClassLink.findMany({
+      select: {
+        electiveGroupId: true,
+        classGroupId: true,
+      },
+      orderBy: [{ electiveGroupId: "asc" }, { classGroupId: "asc" }],
     }),
   ]);
 
@@ -106,5 +116,6 @@ export async function collectFetInput(): Promise<FetInput> {
     teacherAvailabilities,
     rooms,
     roomSubjects,
+    electiveGroupClassLinks,
   };
 }

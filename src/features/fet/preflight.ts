@@ -1,5 +1,6 @@
 import { FET_PERIOD_MINUTES } from "./env";
 import { getRegimeConstraintRule } from "./regime-constraints";
+import { getSubgroupBundleKey, shouldSkipWholeClassRequirement } from "./subgroup-rules";
 import type { FetInput, FetRequirement, FetTeacherSubject } from "./types";
 
 function getCompatibleRoomIds(input: FetInput, subjectId: string): string[] {
@@ -69,13 +70,40 @@ export function preflightFetInput(input: FetInput): void {
     }
   }
 
+  const subgroupRequirementsByBundle = new Map<string, FetRequirement[]>();
+
   for (const requirement of input.lessonRequirements) {
     if (requirement.lessonsPerWeek === 0) continue;
+    if (shouldSkipWholeClassRequirement(input, requirement)) continue;
 
     const candidates = getTeacherCandidates(input, requirement);
     if (candidates.length === 0) {
       throw new Error(
         `Для "${requirement.group.name} / ${requirement.subject.name}" не найден подходящий преподаватель`,
+      );
+    }
+
+    const subgroupBundleKey = getSubgroupBundleKey(requirement.group, requirement.subjectId);
+    if (!subgroupBundleKey) continue;
+
+    const current = subgroupRequirementsByBundle.get(subgroupBundleKey) ?? [];
+    current.push(requirement);
+    subgroupRequirementsByBundle.set(subgroupBundleKey, current);
+  }
+
+  for (const requirements of subgroupRequirementsByBundle.values()) {
+    if (requirements.length <= 1) continue;
+
+    const uniqueTeacherIds = new Set(
+      requirements.flatMap((requirement) =>
+        getTeacherCandidates(input, requirement).map((teacherSubject) => teacherSubject.teacherId),
+      ),
+    );
+
+    if (uniqueTeacherIds.size < requirements.length) {
+      const firstRequirement = requirements[0];
+      throw new Error(
+        `Для подгрупп "${firstRequirement.group.name} / ${firstRequirement.subject.name}" нужно минимум ${requirements.length} разных преподавателей, найдено ${uniqueTeacherIds.size}`,
       );
     }
   }

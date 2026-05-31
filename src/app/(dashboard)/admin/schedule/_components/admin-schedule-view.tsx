@@ -68,6 +68,7 @@ export function AdminScheduleView({
   roomOptions,
   teacherOptions,
   lessonDurationByGroupSubject,
+  scheduleConflictOptions,
 }: AdminScheduleViewProps) {
   const router = useRouter();
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
@@ -158,7 +159,10 @@ export function AdminScheduleView({
     return true;
   }, [selectedRoomSet, selectedSubjectSet, selectedTeacherSet]);
 
-  const conflictAnalysis = useMemo(() => analyzeScheduleTemplateConflicts(optimisticEvents), [optimisticEvents]);
+  const conflictAnalysis = useMemo(
+    () => analyzeScheduleTemplateConflicts(optimisticEvents, scheduleConflictOptions),
+    [optimisticEvents, scheduleConflictOptions],
+  );
   const conflictByEvent = conflictAnalysis.conflictsByProjectionId;
 
   const handleEdit = useCallback((event: AdminScheduleEvent) => {

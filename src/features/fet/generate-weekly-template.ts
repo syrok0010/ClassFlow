@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
-import { buildFullActivities, buildLockedRegimeActivities } from "./build-full-activities";
+import { buildCoreActivities } from "./build-core-activities";
+import { buildFullActivities, buildLockedCoreActivities } from "./build-full-activities";
 import { buildRegimeActivities } from "./build-regime-activities";
 import { collectFetInput } from "./collect-input";
 import { assertFetEnvironment } from "./env";
@@ -42,33 +43,33 @@ export async function generateWeeklyScheduleTemplate(
 
   preflightFetInput(input);
 
-  const regimeActivities = buildRegimeActivities(input);
+  const coreActivities = buildCoreActivities(input);
   const warnings: string[] = [];
-  let lockedRegimeActivities: FetActivity[] = [];
+  let lockedCoreActivities: FetActivity[] = [];
 
-  if (regimeActivities.length > 0) {
-    const regimeRun = await runner({
-      kind: "regime",
+  if (coreActivities.length > 0) {
+    const coreRun = await runner({
+      kind: "core",
       artifactId,
-      activities: regimeActivities,
+      activities: coreActivities,
       input,
     });
-    warnings.push(...regimeRun.warnings);
+    warnings.push(...coreRun.warnings);
 
-    const regimeXml = await readXml(regimeRun.outputActivitiesXmlPath);
-    const importedRegime = importFetActivitiesXml(regimeXml);
-    const regimeActivityById = new Map(regimeActivities.map((activity) => [activity.id, activity]));
-    for (const importedActivity of importedRegime) {
-      const activity = regimeActivityById.get(importedActivity.activityId);
+    const coreXml = await readXml(coreRun.outputActivitiesXmlPath);
+    const importedCore = importFetActivitiesXml(coreXml);
+    const coreActivityById = new Map(coreActivities.map((activity) => [activity.id, activity]));
+    for (const importedActivity of importedCore) {
+      const activity = coreActivityById.get(importedActivity.activityId);
       if (activity) {
         assertActivityInsideSlots(activity, importedActivity);
       }
     }
 
-    lockedRegimeActivities = buildLockedRegimeActivities(input, regimeActivities, importedRegime);
+    lockedCoreActivities = buildLockedCoreActivities(coreActivities, importedCore);
   }
 
-  const { activities: fullActivities, ordinaryActivityCount } = buildFullActivities(input, lockedRegimeActivities);
+  const { activities: fullActivities, ordinaryActivityCount } = buildFullActivities(input, lockedCoreActivities);
 
   if (fullActivities.length === 0) {
     throw new Error("Нет занятий для генерации: заполните учебный план в GroupSubjectRequirement");
@@ -111,7 +112,7 @@ export async function generateWeeklyScheduleTemplate(
   return {
     deletedTemplateCount: transactionResult.count,
     insertedTemplateCount: importedRows.length,
-    regimeActivityCount: regimeActivities.length,
+    regimeActivityCount: buildRegimeActivities(input).length,
     ordinaryActivityCount,
     warnings,
     artifactId,

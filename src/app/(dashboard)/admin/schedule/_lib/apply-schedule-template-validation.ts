@@ -70,6 +70,9 @@ export function validateApplyScheduleTemplateState(input: {
   rooms: ValidationRoomRecord[];
   teachers: ValidationTeacherRecord[];
   requirements: ValidationRequirementRecord[];
+  scheduleConflictOptions?: {
+    validateBreakDuration?: boolean;
+  };
 }): ApplyScheduleTemplateValidationResult {
   const scheduledTemplates = input.templates.filter(
     (template) =>
@@ -156,6 +159,7 @@ export function validateApplyScheduleTemplateState(input: {
     input.templates.flatMap((template) =>
       mapWeeklyTemplateToAdminScheduleEvents(template, requirementMetaByGroupSubject)
     ),
+    input.scheduleConflictOptions,
   );
   const hardConflictMessages = dedupeMessages(
     conflictAnalysis.hardConflicts.map((conflict) => conflict.message),

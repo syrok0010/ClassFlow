@@ -7,7 +7,7 @@ export type FetTimeSlot = {
   startTime: number;
 };
 
-export type FetActivitySource = "REGIME" | "ORDINARY" | "LOCKED_REGIME";
+export type FetActivitySource = "CORE" | "REGIME" | "ORDINARY" | "LOCKED_CORE" | "LOCKED_REGIME";
 
 export type FetActivity = {
   id: number;
@@ -16,11 +16,13 @@ export type FetActivity = {
   subjectId: string;
   teacherId: string | null;
   durationInMinutes: number;
+  breakAfterMinutes: number;
   allowedSlots: FetTimeSlot[];
   timeConstraintWeight?: number;
   roomIds: string[];
   fixedSlot?: FetTimeSlot;
   fixedRoomId?: string | null;
+  notOverlappingActivityIds?: number[];
 };
 
 export type FetImportedActivity = {
@@ -46,6 +48,7 @@ export type FetGroup = {
   type: GroupType;
   grade: number | null;
   parentId: string | null;
+  subjectId?: string | null;
 };
 
 export type FetSubject = {
@@ -89,6 +92,11 @@ export type FetRoomSubject = {
   subjectId: string;
 };
 
+export type FetElectiveGroupClassLink = {
+  electiveGroupId: string;
+  classGroupId: string;
+};
+
 export type FetInput = {
   requirements: FetRequirement[];
   regimeRequirements: FetRequirement[];
@@ -99,6 +107,7 @@ export type FetInput = {
   teacherAvailabilities: FetTeacherAvailability[];
   rooms: FetRoom[];
   roomSubjects: FetRoomSubject[];
+  electiveGroupClassLinks: FetElectiveGroupClassLink[];
 };
 
 export type GenerateWeeklyScheduleTemplateInput = {
@@ -114,7 +123,7 @@ export type GenerateWeeklyScheduleTemplateResult = {
   artifactId: string;
 };
 
-export type FetRunKind = "regime" | "full";
+export type FetRunKind = "core" | "full";
 
 export type FetRunRequest = {
   kind: FetRunKind;

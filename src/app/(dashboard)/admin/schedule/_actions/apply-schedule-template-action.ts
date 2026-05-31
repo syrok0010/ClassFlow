@@ -18,6 +18,7 @@ import {
   validateApplyScheduleTemplateState,
   type ApplyScheduleTemplateValidationResult,
 } from "../_lib/apply-schedule-template-validation";
+import { getScheduleBreakValidationEnabled } from "../_lib/schedule-validation-env";
 
 const ADMIN_SCHEDULE_PATH = "/admin/schedule";
 const DATE_FORMAT = "yyyy-MM-dd";
@@ -343,5 +344,8 @@ async function loadApplyScheduleTemplateValidation() {
     rooms,
     teachers,
     requirements,
+    scheduleConflictOptions: {
+      validateBreakDuration: getScheduleBreakValidationEnabled(),
+    },
   });
 }
