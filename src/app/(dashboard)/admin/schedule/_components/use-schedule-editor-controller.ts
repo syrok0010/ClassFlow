@@ -51,6 +51,7 @@ const STEP_RESET_VALUES: Record<ScheduleEditorStepId, Partial<ScheduleStepperFor
 type UseScheduleEditorControllerProps = {
   initialValues: ScheduleStepperFormValue;
   formContext: ScheduleEditorFormContext;
+  lockDaySelection?: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: ScheduleEditorDraft) => Promise<string | null>;
 };
@@ -58,6 +59,7 @@ type UseScheduleEditorControllerProps = {
 export function useScheduleEditorController({
   initialValues,
   formContext,
+  lockDaySelection = false,
   onOpenChange,
   onSave,
 }: UseScheduleEditorControllerProps) {
@@ -122,7 +124,9 @@ export function useScheduleEditorController({
       patch: Partial<ScheduleStepperFormValue>,
     ) {
       const changedStepId = getChangedStepId(patch);
-      const resetPatch = changedStepId ? getResetPatchAfterStep(changedStepId) : {};
+      const resetPatch = changedStepId
+        ? getResetPatchAfterStep(changedStepId, { lockDaySelection })
+        : {};
 
       setSubmitError(null);
       setAttemptedStepIds((previous) => {
@@ -194,12 +198,19 @@ function getChangedStepId(patch: Partial<ScheduleStepperFormValue>) {
   )?.id ?? null;
 }
 
-function getResetPatchAfterStep(stepId: ScheduleEditorStepId) {
+function getResetPatchAfterStep(
+  stepId: ScheduleEditorStepId,
+  { lockDaySelection }: { lockDaySelection: boolean },
+) {
   const stepIndex = SCHEDULE_EDITOR_STEPS.findIndex((step) => step.id === stepId);
 
   return SCHEDULE_EDITOR_STEPS
     .slice(stepIndex + 1)
     .reduce<Partial<ScheduleStepperFormValue>>((result, step) => {
+      if (lockDaySelection && step.id === "time") {
+        return result;
+      }
+
       return {
         ...result,
         ...STEP_RESET_VALUES[step.id],

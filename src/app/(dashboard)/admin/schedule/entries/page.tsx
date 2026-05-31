@@ -5,6 +5,7 @@ import {
   parseScheduleDate,
   parseScheduleView,
 } from "@/features/schedule";
+import { getAdminScheduleEditorData } from "../_lib/get-admin-schedule-page-data";
 
 import { AdminScheduleEntriesView } from "./_components/admin-schedule-entries-view";
 import {
@@ -56,23 +57,35 @@ export default async function AdminScheduleEntriesPage(props: {
     redirect(`/admin/schedule/entries?${normalizedParams.toString()}`);
   }
 
-  const pageData = await getAdminScheduleEntriesPageData({
-    anchorDate,
-    viewMode,
-    scope,
-    targetId,
-  });
+  const [pageData, editorData] = await Promise.all([
+    getAdminScheduleEntriesPageData({
+      anchorDate,
+      viewMode,
+      scope,
+      targetId,
+    }),
+    getAdminScheduleEditorData(),
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight">Фактическое расписание</h1>
         <p className="text-sm text-muted-foreground">
-          Просматривайте расписание по группе, преподавателю или кабинету.
+          Просматривайте расписание по группе, преподавателю или кабинету и исправляйте отдельные записи.
         </p>
       </div>
 
-      <AdminScheduleEntriesView {...pageData} />
+      <AdminScheduleEntriesView
+        {...pageData}
+        classRows={editorData.classRows}
+        subjectOptions={editorData.subjectOptions}
+        directGroupOptions={editorData.directGroupOptions}
+        electiveGroupOptions={editorData.electiveGroupOptions}
+        roomOptions={editorData.roomOptions}
+        teacherOptions={editorData.teacherOptions}
+        lessonDurationByGroupSubject={editorData.lessonDurationByGroupSubject}
+      />
     </div>
   );
 }

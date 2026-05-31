@@ -1,8 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
 import { CalendarDays } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { parseAsString, parseAsStringLiteral, useQueryStates } from "nuqs";
+import { toast } from "sonner";
 
 import {
   Combobox,
@@ -15,12 +20,31 @@ import {
 } from "@/components/ui/combobox";
 import { DEFAULT_SCHEDULE_VIEW, ReadonlyScheduleBrowser } from "@/features/schedule";
 
+import {
+  type ScheduleEditorDraft,
+  ScheduleEventEditorDialog,
+} from "../../_components/schedule-event-editor-dialog";
 import { AdminScheduleEventCard } from "../../_components/admin-schedule-event-card";
+import type { AdminSchedulePageData, AdminScheduleEvent } from "../../_lib/admin-schedule-types";
+import { buildDraftFromEvent } from "../../_lib/admin-schedule-template-commands";
+import { updateAdminScheduleEntryAction } from "../_actions/schedule-entry-actions";
+import { ScheduleEntryDeleteDialog } from "./schedule-entry-delete-dialog";
 import type {
   AdminScheduleEntriesPageData,
   AdminScheduleEntriesScope,
   ScheduleTargetOption
 } from "../_lib/types";
+
+type AdminScheduleEntriesViewProps = AdminScheduleEntriesPageData & Pick<
+  AdminSchedulePageData,
+  | "classRows"
+  | "subjectOptions"
+  | "directGroupOptions"
+  | "electiveGroupOptions"
+  | "roomOptions"
+  | "teacherOptions"
+  | "lessonDurationByGroupSubject"
+>;
 
 export function AdminScheduleEntriesView({
   anchorDate,
@@ -31,7 +55,15 @@ export function AdminScheduleEntriesView({
   selectedTarget,
   targetId,
   viewMode,
-}: AdminScheduleEntriesPageData) {
+  classRows,
+  subjectOptions,
+  directGroupOptions,
+  electiveGroupOptions,
+  roomOptions,
+  teacherOptions,
+  lessonDurationByGroupSubject,
+}: AdminScheduleEntriesViewProps) {
+  const router = useRouter();
   const [{ scope: currentScope, targetId: currentTargetId }, setTargetQuery] =
       useQueryStates(
           {
@@ -43,8 +75,34 @@ export function AdminScheduleEntriesView({
           },
       );
   const [targetInputValue, setTargetInputValue] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<AdminScheduleEvent | null>(null);
+  const [editingDraft, setEditingDraft] = useState<ScheduleEditorDraft | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminScheduleEvent | null>(null);
+  const updateMutation = useMutation({
+    mutationFn: async ({ entryId, draft }: { entryId: string; draft: ScheduleEditorDraft }) => {
+      const response = await updateAdminScheduleEntryAction({
+        entryId,
+        ...draft,
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Запись фактического расписания обновлена");
+      router.refresh();
+    },
+  });
 
   const optimisticScope = parseScope(currentScope);
+  const classOptions = useMemo(
+    () => classRows.map((row) => ({ id: row.id, label: row.name })),
+    [classRows],
+  );
   const targetOptions = useMemo(
     () => buildTargetOptions(options),
     [options],
@@ -75,6 +133,16 @@ export function AdminScheduleEntriesView({
     visibleSelectedTarget && effectiveTargetInputValue === visibleSelectedTarget.label
       ? visibleSelectedTarget
       : null;
+  const fixedDayLabel = editingEvent
+    ? format(editingEvent.start, "EEEE, d MMMM", { locale: ru })
+    : null;
+  const handleEdit = useCallback((event: AdminScheduleEvent) => {
+    setEditingEvent(event);
+    setEditingDraft(buildDraftFromEvent(event));
+  }, []);
+  const handleDelete = useCallback((event: AdminScheduleEvent) => {
+    setDeleteTarget(event);
+  }, []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -146,7 +214,65 @@ export function AdminScheduleEntriesView({
             ? "Проверьте другой период или примените недельный шаблон к фактическому расписанию."
             : "После выбора здесь появится расписание.",
         }}
-        renderEvent={(event) => <AdminScheduleEventCard event={event} />}
+        renderEvent={(event) => (
+          <AdminScheduleEventCard
+            event={event}
+            showActions
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        )}
+      />
+
+      <ScheduleEventEditorDialog
+        open={Boolean(editingEvent && editingDraft)}
+        title="Редактирование записи"
+        description="Измените поля карточки. Изменения будут применены только к выбранной дате."
+        draft={editingDraft}
+        subjectOptions={subjectOptions}
+        classOptions={classOptions}
+        classRows={classRows}
+        directGroupOptions={directGroupOptions}
+        electiveGroupOptions={electiveGroupOptions}
+        roomOptions={roomOptions}
+        teacherOptions={teacherOptions}
+        lessonDurationByGroupSubject={lessonDurationByGroupSubject}
+        lockDaySelection
+        fixedDayLabel={fixedDayLabel}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingEvent(null);
+            setEditingDraft(null);
+          }
+        }}
+        onSave={async (draft) => {
+          if (!editingEvent) {
+            return "Запись для редактирования не выбрана";
+          }
+
+          try {
+            await updateMutation.mutateAsync({
+              entryId: editingEvent.id,
+              draft,
+            });
+          } catch (error) {
+            return error instanceof Error
+              ? error.message
+              : "Не удалось обновить запись фактического расписания";
+          }
+
+          return null;
+        }}
+      />
+
+      <ScheduleEntryDeleteDialog
+        event={deleteTarget}
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+          }
+        }}
       />
     </div>
   );

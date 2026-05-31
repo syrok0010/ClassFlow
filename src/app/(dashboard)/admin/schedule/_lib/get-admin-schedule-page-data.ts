@@ -13,10 +13,150 @@ import { buildLessonDurationByGroupSubject } from "./schedule-duration-map";
 
 const VISIBLE_CLASS_TYPES: GroupType[] = ["CLASS"];
 
+export type AdminScheduleEditorData = Pick<
+  AdminSchedulePageData,
+  | "classRows"
+  | "subjectOptions"
+  | "directGroupOptions"
+  | "electiveGroupOptions"
+  | "roomOptions"
+  | "teacherOptions"
+  | "lessonDurationByGroupSubject"
+>;
+
+type ScheduleDurationTemplateRecord = Parameters<typeof buildLessonDurationByGroupSubject>[1][number];
+
+export async function getAdminScheduleEditorData(): Promise<AdminScheduleEditorData> {
+  await requireAdminContext();
+
+  const classRows = await loadVisibleClassRows();
+
+  if (classRows.length === 0) {
+    return buildAdminScheduleEditorData(
+      {
+        classRows,
+        subjects: [],
+        groups: [],
+        rooms: [],
+        teachers: [],
+        requirements: [],
+      },
+      [],
+    );
+  }
+
+  const classIds = classRows.map((row) => row.id);
+  const [sourceData, durationTemplates] = await Promise.all([
+    loadAdminScheduleEditorSourceData(classIds),
+    loadScheduleDurationTemplates(classIds),
+  ]);
+
+  return buildAdminScheduleEditorData(
+    {
+      classRows,
+      ...sourceData,
+    },
+    durationTemplates,
+  );
+}
+
 export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData> {
   await requireAdminContext();
 
-  const classRows = await prisma.group.findMany({
+  const classRows = await loadVisibleClassRows();
+
+  if (classRows.length === 0) {
+    return {
+      events: [],
+      ...buildAdminScheduleEditorData(
+        {
+          classRows,
+          subjects: [],
+          groups: [],
+          rooms: [],
+          teachers: [],
+          requirements: [],
+        },
+        [],
+      ),
+    };
+  }
+
+  const classIds = classRows.map((row) => row.id);
+  const [templates, sourceData] = await Promise.all([
+    prisma.weeklyScheduleTemplate.findMany({
+      where: {
+        OR: [
+          {
+            deliveryGroupId: {
+              in: classIds,
+            },
+          },
+          {
+            deliveryGroup: {
+              parentId: {
+                in: classIds,
+              },
+              type: "SUBJECT_SUBGROUP",
+            },
+          },
+          {
+            openClasses: {
+              some: {
+                classGroupId: {
+                  in: classIds,
+                },
+              },
+            },
+          },
+          {
+            coveredClasses: {
+              some: {
+                classGroupId: {
+                  in: classIds,
+                },
+              },
+            },
+          },
+        ],
+      },
+      include: adminScheduleTemplateInclude,
+      orderBy: [
+        { dayOfWeek: "asc" },
+        { startTime: "asc" },
+        { endTime: "asc" },
+        { id: "asc" },
+      ],
+    }),
+    loadAdminScheduleEditorSourceData(classIds),
+  ]);
+  const editorData = buildAdminScheduleEditorData(
+    {
+      classRows,
+      ...sourceData,
+    },
+    templates,
+  );
+  const requirementMetaByGroupSubject: Record<string, RequirementMeta> = Object.fromEntries(
+    sourceData.requirements.map((requirement) => [
+      `${requirement.groupId}:${requirement.subjectId}`,
+      {
+        lessonsPerWeek: requirement.lessonsPerWeek,
+        breakDuration: requirement.breakDuration,
+      },
+    ]),
+  );
+
+  return {
+    events: templates.flatMap((entry) =>
+      mapWeeklyTemplateToAdminScheduleEvents(entry, requirementMetaByGroupSubject)
+    ),
+    ...editorData,
+  };
+}
+
+function loadVisibleClassRows() {
+  return prisma.group.findMany({
     where: {
       type: {
         in: VISIBLE_CLASS_TYPES,
@@ -34,23 +174,10 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
     },
     orderBy: [{ grade: "asc" }, { name: "asc" }],
   });
+}
 
-  if (classRows.length === 0) {
-    return {
-      events: [],
-      classRows: [],
-      subjectOptions: [],
-      directGroupOptions: [],
-      electiveGroupOptions: [],
-      roomOptions: [],
-      teacherOptions: [],
-      lessonDurationByGroupSubject: {},
-    };
-  }
-
-  const classIds = classRows.map((row) => row.id);
-
-  const templates = await prisma.weeklyScheduleTemplate.findMany({
+function loadScheduleDurationTemplates(classIds: string[]) {
+  return prisma.weeklyScheduleTemplate.findMany({
     where: {
       OR: [
         {
@@ -86,15 +213,27 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
         },
       ],
     },
-    include: adminScheduleTemplateInclude,
-    orderBy: [
-      { dayOfWeek: "asc" },
-      { startTime: "asc" },
-      { endTime: "asc" },
-      { id: "asc" },
-    ],
+    select: {
+      subjectId: true,
+      deliveryGroupId: true,
+      startTime: true,
+      endTime: true,
+      deliveryGroup: {
+        select: {
+          type: true,
+          parentId: true,
+        },
+      },
+      coveredClasses: {
+        select: {
+          classGroupId: true,
+        },
+      },
+    },
   });
+}
 
+async function loadAdminScheduleEditorSourceData(classIds: string[]) {
   const [subjects, groups, rooms, teachers, requirements] = await Promise.all([
     prisma.subject.findMany({
       select: { id: true, name: true, type: true, defaultAttendanceLoadMode: true },
@@ -181,16 +320,29 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
     }),
   ]);
 
-  const lessonDurationByGroupSubject = buildLessonDurationByGroupSubject(requirements, templates);
-  const requirementMetaByGroupSubject: Record<string, RequirementMeta> = Object.fromEntries(
-    requirements.map((requirement) => [
-      `${requirement.groupId}:${requirement.subjectId}`,
-      {
-        lessonsPerWeek: requirement.lessonsPerWeek,
-        breakDuration: requirement.breakDuration,
-      },
-    ]),
-  );
+  return {
+    subjects,
+    groups,
+    rooms,
+    teachers,
+    requirements,
+  };
+}
+
+function buildAdminScheduleEditorData(
+  {
+    classRows,
+    subjects,
+    groups,
+    rooms,
+    teachers,
+    requirements,
+  }: Awaited<ReturnType<typeof loadAdminScheduleEditorSourceData>> & {
+    classRows: Awaited<ReturnType<typeof loadVisibleClassRows>>;
+  },
+  durationTemplates: ScheduleDurationTemplateRecord[],
+): AdminScheduleEditorData {
+  const lessonDurationByGroupSubject = buildLessonDurationByGroupSubject(requirements, durationTemplates);
   const subjectIdsByGroup = new Map<string, string[]>();
   for (const requirement of requirements) {
     const current = subjectIdsByGroup.get(requirement.groupId) ?? [];
@@ -198,14 +350,8 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
     subjectIdsByGroup.set(requirement.groupId, current);
   }
 
-  for (const template of templates) {
-    const subjectGroupIds = template.deliveryMode === "SHARED_CLASSES"
-      ? template.coveredClasses.map((coveredClass) => coveredClass.classGroupId)
-      : template.deliveryGroupId
-        ? [template.deliveryGroupId]
-        : [];
-
-    for (const groupId of subjectGroupIds) {
+  for (const template of durationTemplates) {
+    for (const groupId of getTemplateSubjectGroupIds(template)) {
       const current = subjectIdsByGroup.get(groupId) ?? [];
       current.push(template.subjectId);
       subjectIdsByGroup.set(groupId, current);
@@ -216,9 +362,6 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
   );
 
   return {
-    events: templates.flatMap((entry) =>
-      mapWeeklyTemplateToAdminScheduleEvents(entry, requirementMetaByGroupSubject)
-    ),
     classRows: classRows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -265,4 +408,12 @@ export async function getAdminSchedulePageData(): Promise<AdminSchedulePageData>
     })),
     lessonDurationByGroupSubject,
   };
+}
+
+function getTemplateSubjectGroupIds(template: ScheduleDurationTemplateRecord) {
+  if (template.coveredClasses.length > 0) {
+    return template.coveredClasses.map((coveredClass) => coveredClass.classGroupId);
+  }
+
+  return template.deliveryGroupId ? [template.deliveryGroupId] : [];
 }

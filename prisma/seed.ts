@@ -1140,6 +1140,40 @@ async function main() {
     });
   }
 
+  const manualOverrideDate = new Date(monday);
+  manualOverrideDate.setDate(monday.getDate() + 1);
+
+  await prisma.scheduleEntry.create({
+    data: {
+      date: manualOverrideDate,
+      startTime: dateAtMinutes(manualOverrideDate, toMinutes("16:15")),
+      endTime: dateAtMinutes(manualOverrideDate, toMinutes("17:00")),
+      subjectId: subjectByName["Шахматы и шашки"],
+      teacherId: teacherByKey.C3_CHESS,
+      roomId: roomByKey.MEDIA,
+      deliveryMode: "ELECTIVE_GROUP",
+      deliveryGroupId: electiveChess.id,
+      attendanceLoadMode: "AFTERSCHOOL_COEFFICIENT",
+    },
+  });
+
+  const manualDirectDate = new Date(monday);
+  manualDirectDate.setDate(monday.getDate() + 2);
+
+  await prisma.scheduleEntry.create({
+    data: {
+      date: manualDirectDate,
+      startTime: dateAtMinutes(manualDirectDate, toMinutes("16:15")),
+      endTime: dateAtMinutes(manualDirectDate, toMinutes("17:00")),
+      subjectId: subjectByName["Коммуникация"],
+      teacherId: teacherByKey.C6_COMM,
+      roomId: roomByKey.COMM,
+      deliveryMode: "DIRECT_GROUP",
+      deliveryGroupId: class6.id,
+      attendanceLoadMode: "DELIVERY_GROUP_SIZE",
+    },
+  });
+
   console.log("Creating teacher availability data...");
 
   const teacher1Id = teacherByKey["C3_MATH"];

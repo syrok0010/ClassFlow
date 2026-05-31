@@ -23,18 +23,40 @@ export function TimeStep({
   durationMinutes,
   onPatch,
   error,
+  lockDaySelection = false,
+  fixedDayLabel = null,
 }: {
   FormField: ScheduleEditorFieldRenderer;
   values: ScheduleStepperFormValue;
   durationMinutes: number | null;
   onPatch: ScheduleEditorPatchHandler;
   error: string | null;
+  lockDaySelection?: boolean;
+  fixedDayLabel?: string | null;
 }) {
   return (
     <>
       <FormField name="dayOfWeek">
         {(field) => {
           const errors = getFieldErrorMessages(field as never);
+
+          if (lockDaySelection) {
+            return (
+              <Field data-invalid={errors.length > 0}>
+                <FieldLabel>Дата занятия</FieldLabel>
+                <Input
+                  value={
+                    fixedDayLabel
+                    ?? DAY_OPTIONS.find((option) => Number(option.value) === field.state.value)?.label
+                    ?? "Дата не указана"
+                  }
+                  disabled
+                  aria-invalid={errors.length > 0 || undefined}
+                />
+                {errors.length > 0 ? <FieldError>{errors[0]}</FieldError> : null}
+              </Field>
+            );
+          }
 
           return (
             <Field data-invalid={errors.length > 0}>
