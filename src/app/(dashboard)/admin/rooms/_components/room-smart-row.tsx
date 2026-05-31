@@ -1,7 +1,7 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { useForm } from "@tanstack/react-form";
 import { flushSync } from "react-dom";
-import { Plus, Link2, X, Loader2 } from "lucide-react";
+import { Plus, Link2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { TableCell, TableRow } from "@/components/ui/table";

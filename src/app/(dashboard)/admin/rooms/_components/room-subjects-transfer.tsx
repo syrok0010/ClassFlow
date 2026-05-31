@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { SubjectLite } from "../_lib/types";
 import { useRoomsData } from "./rooms-data-context";
+import { useRoomSubjects } from "../_hooks/use-room-subjects";
 
 type RoomSubjectsTransferProps = {
   roomId: string;
@@ -89,19 +90,17 @@ function SubjectPill({
 export function RoomSubjectsTransfer({
   roomId,
   roomName,
-  selectedSubjectIds,
+  selectedSubjectIds: initialSelectedSubjectIds,
 }: RoomSubjectsTransferProps) {
-  const { commands, subjects } = useRoomsData();
-  const isSaving = commands.updateRoomSubjects.isPending;
+  const { subjects } = useRoomsData();
   const [search, setSearch] = useState("");
-  const [optimisticSelectedSubjectIds, setOptimisticSelectedSubjectIds] = useState(selectedSubjectIds);
   const [debouncedSearch] = useDebouncedValue(search, { wait: 350 });
+  const { isSaving, selectedSubjectIds, updateSelectedSubjectIds } = useRoomSubjects(
+    roomId,
+    initialSelectedSubjectIds
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-
-  useEffect(() => {
-    setOptimisticSelectedSubjectIds(selectedSubjectIds);
-  }, [selectedSubjectIds]);
 
   const filteredSubjects = useMemo(() => {
     const needle = debouncedSearch.trim().toLowerCase();
@@ -110,37 +109,23 @@ export function RoomSubjectsTransfer({
   }, [debouncedSearch, subjects]);
 
   const available = filteredSubjects.filter(
-    (subject) => !optimisticSelectedSubjectIds.includes(subject.id)
+    (subject) => !selectedSubjectIds.includes(subject.id)
   );
   const allowed = filteredSubjects.filter(
-    (subject) => optimisticSelectedSubjectIds.includes(subject.id)
+    (subject) => selectedSubjectIds.includes(subject.id)
   );
-
-  const updateSelectedSubjects = async (nextSubjectIds: string[]) => {
-    const previousSubjectIds = optimisticSelectedSubjectIds;
-    setOptimisticSelectedSubjectIds(nextSubjectIds);
-
-    const result = await commands.updateRoomSubjects.execute({
-      roomId,
-      subjectIds: nextSubjectIds,
-    });
-
-    if (!result) {
-      setOptimisticSelectedSubjectIds(previousSubjectIds);
-    }
-  };
 
   const toggleSubject = (subjectId: string) => {
     if (isSaving) {
       return;
     }
 
-    const exists = optimisticSelectedSubjectIds.includes(subjectId);
+    const exists = selectedSubjectIds.includes(subjectId);
     const next = exists
-      ? optimisticSelectedSubjectIds.filter((id) => id !== subjectId)
-      : [...optimisticSelectedSubjectIds, subjectId];
+      ? selectedSubjectIds.filter((id) => id !== subjectId)
+      : [...selectedSubjectIds, subjectId];
 
-    void updateSelectedSubjects(next);
+    void updateSelectedSubjectIds(next);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -152,15 +137,13 @@ export function RoomSubjectsTransfer({
     const activeId = String(event.active.id);
     if (!over) return;
 
-    if (over === "allowed" && !optimisticSelectedSubjectIds.includes(activeId)) {
-      void updateSelectedSubjects([...optimisticSelectedSubjectIds, activeId]);
+    if (over === "allowed" && !selectedSubjectIds.includes(activeId)) {
+      void updateSelectedSubjectIds([...selectedSubjectIds, activeId]);
       return;
     }
 
-    if (over === "available" && optimisticSelectedSubjectIds.includes(activeId)) {
-      void updateSelectedSubjects(
-        optimisticSelectedSubjectIds.filter((id) => id !== activeId)
-      );
+    if (over === "available" && selectedSubjectIds.includes(activeId)) {
+      void updateSelectedSubjectIds(selectedSubjectIds.filter((id) => id !== activeId));
     }
   };
 
