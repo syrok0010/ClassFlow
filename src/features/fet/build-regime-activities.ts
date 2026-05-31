@@ -1,4 +1,5 @@
 import { getCompatibleRoomIds, getWindowSlots } from "./activity-utils";
+import { getFetBreakAfterMinutes } from "./env";
 import { getRegimeConstraintRule } from "./regime-constraints";
 import type { FetActivity, FetInput } from "./types";
 
@@ -24,6 +25,7 @@ export function buildRegimeActivities(input: FetInput, firstActivityId = 1): Fet
         subjectId: requirement.subjectId,
         teacherId: null,
         durationInMinutes: requirement.durationInMinutes,
+        breakAfterMinutes: getFetBreakAfterMinutes(requirement.breakDuration),
         allowedSlots: getWindowSlots([window], requirement.durationInMinutes),
         roomIds,
       });

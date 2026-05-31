@@ -19,6 +19,18 @@ export const FET_DAYS = [
   { dayOfWeek: 5 as const, name: "Friday" },
 ];
 
+export function getFetAllowZeroBreakAroundRest(): boolean {
+  return process.env.FET_ALLOW_ZERO_BREAK_AROUND_REST !== "false";
+}
+
+export function getFetBreakDurationConstraintsEnabled(): boolean {
+  return process.env.FET_ENABLE_BREAK_DURATION_CONSTRAINTS !== "false";
+}
+
+export function getFetBreakAfterMinutes(breakDuration: number): number {
+  return getFetBreakDurationConstraintsEnabled() ? breakDuration : 0;
+}
+
 export function assertFetEnvironment(): void {
   if (!Number.isInteger(FET_PERIOD_MINUTES) || FET_PERIOD_MINUTES <= 0) {
     throw new Error("FET_PERIOD_MINUTES должен быть положительным целым числом");

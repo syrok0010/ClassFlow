@@ -381,6 +381,70 @@ test("the same template projected into multiple class rows does not conflict wit
   assert.equal(analysis.conflicts.length, 0);
 });
 
+test("short break after lesson is a hard conflict", () => {
+  const analysis = analyzeScheduleTemplateConflicts([
+    makeDirectClassProjection({
+      id: "event-1",
+      templateId: "template-1",
+      classInfo: CLASS_3A,
+      startMinutes: 480,
+      endMinutes: 525,
+      minimumBreakAfterMinutes: 15,
+      teacherId: "teacher-1",
+      roomId: "room-101",
+    }),
+    makeDirectClassProjection({
+      id: "event-2",
+      templateId: "template-2",
+      classInfo: CLASS_3A,
+      startMinutes: 530,
+      endMinutes: 575,
+      teacherId: "teacher-2",
+      teacherName: "Петров",
+      roomId: "room-102",
+      roomName: "102",
+    }),
+  ]);
+
+  assert.ok(hasConflictCode(analysis.hardConflicts, "INSUFFICIENT_BREAK_AFTER_LESSON"));
+});
+
+test("break validation can be disabled", () => {
+  const projections = [
+    makeDirectClassProjection({
+      id: "event-1",
+      templateId: "template-1",
+      classInfo: CLASS_3A,
+      startMinutes: 480,
+      endMinutes: 525,
+      minimumBreakAfterMinutes: 15,
+      teacherId: "teacher-1",
+      roomId: "room-101",
+    }),
+    makeDirectClassProjection({
+      id: "event-2",
+      templateId: "template-2",
+      classInfo: CLASS_3A,
+      startMinutes: 525,
+      endMinutes: 570,
+      teacherId: "teacher-2",
+      teacherName: "Петров",
+      roomId: "room-102",
+      roomName: "102",
+    }),
+  ];
+
+  const strictAnalysis = analyzeScheduleTemplateConflicts(projections, {
+    validateBreakDuration: true,
+  });
+  const disabledAnalysis = analyzeScheduleTemplateConflicts(projections, {
+    validateBreakDuration: false,
+  });
+
+  assert.ok(hasConflictCode(strictAnalysis.hardConflicts, "INSUFFICIENT_BREAK_AFTER_LESSON"));
+  assert.equal(hasConflictCode(disabledAnalysis.hardConflicts, "INSUFFICIENT_BREAK_AFTER_LESSON"), false);
+});
+
 test("multiple teachers for the same audience and subject warn on all related lessons", () => {
   const analysis = analyzeScheduleTemplateConflicts([
     makeDirectClassProjection({
@@ -606,5 +670,6 @@ function makeProjection(overrides: Partial<ScheduleConflictProjectionInput>): Sc
     parentClassName: overrides.parentClassName ?? CLASS_3A.name,
     parentClassGrade: overrides.parentClassGrade ?? CLASS_3A.grade,
     parentClassStudentCount: overrides.parentClassStudentCount ?? CLASS_3A.studentCount,
+    minimumBreakAfterMinutes: overrides.minimumBreakAfterMinutes,
   };
 }

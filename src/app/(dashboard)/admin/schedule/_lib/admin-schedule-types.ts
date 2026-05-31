@@ -69,4 +69,7 @@ export interface AdminSchedulePageData {
   roomOptions: AdminScheduleRoomOption[];
   teacherOptions: AdminScheduleTeacherOption[];
   lessonDurationByGroupSubject: Record<string, number>;
+  scheduleConflictOptions: {
+    validateBreakDuration: boolean;
+  };
 }

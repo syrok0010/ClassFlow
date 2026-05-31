@@ -90,6 +90,10 @@ export interface ScheduleConflictAnalysisResult {
   conflictsByProjectionId: Map<string, ScheduleConflict[]>;
 }
 
+export interface ScheduleConflictAnalysisOptions {
+  validateBreakDuration?: boolean;
+}
+
 type ScheduleConflictItem = Omit<ScheduleConflictProjectionInput, "id" | "projectionClassId"> & {
   projectionIds: string[];
   projectionClassIds: string[];
@@ -97,6 +101,7 @@ type ScheduleConflictItem = Omit<ScheduleConflictProjectionInput, "id" | "projec
 
 export function analyzeScheduleTemplateConflicts(
   projections: readonly ScheduleConflictProjectionInput[],
+  options: ScheduleConflictAnalysisOptions = {},
 ): ScheduleConflictAnalysisResult {
   const items = collapseScheduleConflictProjections(projections);
   const conflicts: ScheduleConflict[] = [];
@@ -115,7 +120,9 @@ export function analyzeScheduleTemplateConflicts(
     }
   }
 
-  conflicts.push(...analyzeBreakDurationConflicts(projections));
+  if (options.validateBreakDuration !== false) {
+    conflicts.push(...analyzeBreakDurationConflicts(projections));
+  }
   conflicts.push(...analyzeSubjectTeacherConsistencyWarnings(items));
 
   return buildScheduleConflictAnalysis(conflicts);
@@ -123,8 +130,9 @@ export function analyzeScheduleTemplateConflicts(
 
 export function validateScheduleTemplateRollout(
   projections: readonly ScheduleConflictProjectionInput[],
+  options: ScheduleConflictAnalysisOptions = {},
 ) {
-  const analysis = analyzeScheduleTemplateConflicts(projections);
+  const analysis = analyzeScheduleTemplateConflicts(projections, options);
 
   return {
     ...analysis,
