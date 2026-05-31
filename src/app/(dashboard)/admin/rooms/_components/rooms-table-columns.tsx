@@ -8,7 +8,6 @@ import { RoomActionsMenu } from "./room-actions-menu";
 
 type RoomsTableMeta = {
   onEdit: (roomId: string) => void;
-  onDelete: (roomId: string) => void;
 };
 
 export const roomsColumns: ColumnDef<RoomListItem>[] = [
@@ -83,7 +82,6 @@ export const roomsColumns: ColumnDef<RoomListItem>[] = [
         <RoomActionsMenu
           room={row.original}
           onEdit={() => meta.onEdit(row.original.id)}
-          onDelete={() => meta.onDelete(row.original.id)}
         />
       );
     },

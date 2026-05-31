@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
 import { Ellipsis, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,30 +9,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { RoomListItem } from "../_lib/types";
-import { deleteRoomAction } from "../_actions/room-actions";
+import { useRoomsData } from "./rooms-data-context";
 
 type RoomActionsMenuProps = {
   room: RoomListItem;
   onEdit: () => void;
-  onDelete: () => void;
 };
 
-export function RoomActionsMenu({ room, onEdit, onDelete }: RoomActionsMenuProps) {
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    const result = await deleteRoomAction(room.id);
-    setIsDeleting(false);
-
-    if (result.error) {
-      toast.error(result.error);
-      return;
-    }
-
-    toast.success(`Кабинет '${room.name}' удален`);
-    onDelete();
-  };
+export function RoomActionsMenu({ room, onEdit }: RoomActionsMenuProps) {
+  const { commands } = useRoomsData();
+  const isDeleting =
+    commands.deleteRoom.isPending &&
+    commands.deleteRoom.variables?.id === room.id;
 
   return (
     <DropdownMenu>
@@ -61,7 +47,7 @@ export function RoomActionsMenu({ room, onEdit, onDelete }: RoomActionsMenuProps
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
-            void handleDelete();
+            void commands.deleteRoom.execute(room);
           }}
           disabled={isDeleting}
           variant="destructive"

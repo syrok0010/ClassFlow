@@ -3,11 +3,9 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { ArrowLeft, Building2, Save } from "lucide-react";
-import { toast } from "sonner";
 import type { Prisma } from "@/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
-import { updateRoomAction } from "../../_actions/room-actions";
 import { RoomSubjectsTransfer } from "../../_components/room-subjects-transfer";
 import { useRoomsData } from "../../_components/rooms-data-context";
 import { updateRoomSchema } from "../../_lib/schemas";
@@ -34,31 +32,19 @@ type RoomDetailViewProps = {
 export function RoomDetailView({ room }: RoomDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { subjects } = useRoomsData();
+  const { commands } = useRoomsData();
 
   const form = useForm({
     defaultValues: {
+      id: room.id,
       name: room.name,
       seatsCount: room.seatsCount,
     },
     validators: {
-      onChange: updateRoomSchema.omit({ id: true }),
+      onChange: updateRoomSchema,
     },
-    onSubmit: async ({ value }) => {
-      const result = await updateRoomAction({
-        id: room.id,
-        name: value.name.trim(),
-        seatsCount: value.seatsCount,
-      });
-
-      if (result.error) {
-        toast.error(result.error);
-        return;
-      }
-
-      toast.success("Кабинет обновлен");
-      router.refresh();
-    },
+    onSubmit: ({ value }) =>
+      commands.updateRoom.execute(value),
   });
 
   const selectedSubjectIds = room.roomSubjects.map((item) => item.subject.id);
@@ -132,9 +118,7 @@ export function RoomDetailView({ room }: RoomDetailViewProps) {
         <RoomSubjectsTransfer
           roomId={room.id}
           roomName={room.name}
-          allSubjects={subjects}
           selectedSubjectIds={selectedSubjectIds}
-          queryKey={["rooms", "detail", room.id]}
         />
       </div>
     </div>

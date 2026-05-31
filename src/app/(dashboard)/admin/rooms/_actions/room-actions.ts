@@ -18,7 +18,7 @@ import {
 } from "../_lib/schemas";
 import { roomsPageInclude, type BuildingWithRooms, type SubjectLite } from "../_lib/types";
 
-const ROOMS_PATH = "/admin/rooms";
+const ROOMS_LAYOUT_PATH = "/admin/rooms";
 
 function normalizeBuildingAddress(value?: string) {
   const trimmed = value?.trim();
@@ -110,7 +110,7 @@ export async function createBuildingAction(input: CreateBuildingInput) {
       },
     });
 
-    revalidatePath(ROOMS_PATH);
+    revalidatePath(ROOMS_LAYOUT_PATH, "layout");
     return ok(building);
   } catch (error) {
     return err(getErrorMessage(error, "Ошибка при создании здания"));
@@ -131,7 +131,7 @@ export async function updateBuildingAction(input: UpdateBuildingInput) {
       },
     });
 
-    revalidatePath(ROOMS_PATH);
+    revalidatePath(ROOMS_LAYOUT_PATH, "layout");
     return ok(building);
   } catch (error) {
     return err(getErrorMessage(error, "Ошибка при обновлении здания"));
@@ -150,7 +150,7 @@ export async function deleteBuildingAction(id: string) {
     }
 
     await prisma.building.delete({ where: { id: parsed.id } });
-    revalidatePath(ROOMS_PATH);
+    revalidatePath(ROOMS_LAYOUT_PATH, "layout");
     return ok(true);
   } catch (error) {
     return err(getErrorMessage(error, "Ошибка при удалении здания"));
@@ -171,7 +171,7 @@ export async function createRoomAction(input: CreateRoomInput) {
       },
     });
 
-    revalidatePath(ROOMS_PATH);
+    revalidatePath(ROOMS_LAYOUT_PATH, "layout");
     return ok(room);
   } catch (error) {
     return err(getErrorMessage(error, "Ошибка при создании кабинета"));
@@ -195,7 +195,7 @@ export async function updateRoomAction(input: UpdateRoomInput) {
       },
     });
 
-    revalidatePath(ROOMS_PATH);
+    revalidatePath(ROOMS_LAYOUT_PATH, "layout");
     return ok(room);
   } catch (error) {
     return err(getErrorMessage(error, "Ошибка при обновлении кабинета"));
@@ -217,7 +217,7 @@ export async function deleteRoomAction(id: string) {
     }
 
     await prisma.room.delete({ where: { id: parsed.id } });
-    revalidatePath(ROOMS_PATH);
+    revalidatePath(ROOMS_LAYOUT_PATH, "layout");
     return ok(true);
   } catch (error) {
     return err(getErrorMessage(error, "Ошибка при удалении кабинета"));
@@ -243,7 +243,7 @@ export async function updateRoomSubjectsAction(roomId: string, subjectIds: strin
       }
     });
 
-    revalidatePath(ROOMS_PATH);
+    revalidatePath(ROOMS_LAYOUT_PATH, "layout");
     return ok(true);
   } catch (error) {
     return err(getErrorMessage(error, "Некорректные данные предметов"));

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -14,21 +14,18 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Inbox, Minus, Plus, Search } from "lucide-react";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { updateRoomSubjectsAction } from "../_actions/room-actions";
 import type { SubjectLite } from "../_lib/types";
+import { useRoomsData } from "./rooms-data-context";
+import { useRoomSubjects } from "../_hooks/use-room-subjects";
 
 type RoomSubjectsTransferProps = {
   roomId: string;
   roomName: string;
-  allSubjects: SubjectLite[];
   selectedSubjectIds: string[];
-  queryKey: readonly string[];
 };
 
 function SubjectBucket({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
@@ -54,13 +51,16 @@ function SubjectPill({
   subject,
   inAllowed,
   onToggle,
+  disabled,
 }: {
   subject: SubjectLite;
   inAllowed: boolean;
   onToggle: () => void;
+  disabled: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: subject.id,
+    disabled,
   });
 
   return (
@@ -75,7 +75,12 @@ function SubjectPill({
       {...attributes}
     >
       <span className="truncate">{subject.name}</span>
-      <Button size="icon-xs" variant={inAllowed ? "destructive" : "outline"} onClick={onToggle}>
+      <Button
+        size="icon-xs"
+        variant={inAllowed ? "destructive" : "outline"}
+        onClick={onToggle}
+        disabled={disabled}
+      >
         {inAllowed ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
       </Button>
     </div>
@@ -85,79 +90,60 @@ function SubjectPill({
 export function RoomSubjectsTransfer({
   roomId,
   roomName,
-  allSubjects,
-  selectedSubjectIds,
-  queryKey,
+  selectedSubjectIds: initialSelectedSubjectIds,
 }: RoomSubjectsTransferProps) {
-  const queryClient = useQueryClient();
+  const { subjects } = useRoomsData();
   const [search, setSearch] = useState("");
   const [debouncedSearch] = useDebouncedValue(search, { wait: 350 });
-  const [localSelected, setLocalSelected] = useState<string[]>(selectedSubjectIds);
-
-  useEffect(() => {
-    setLocalSelected(selectedSubjectIds);
-  }, [selectedSubjectIds]);
+  const { isSaving, selectedSubjectIds, updateSelectedSubjectIds } = useRoomSubjects(
+    roomId,
+    initialSelectedSubjectIds
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const filteredSubjects = useMemo(() => {
     const needle = debouncedSearch.trim().toLowerCase();
-    if (!needle) return allSubjects;
-    return allSubjects.filter((subject) => subject.name.toLowerCase().includes(needle));
-  }, [allSubjects, debouncedSearch]);
+    if (!needle) return subjects;
+    return subjects.filter((subject) => subject.name.toLowerCase().includes(needle));
+  }, [debouncedSearch, subjects]);
 
-  const mutation = useMutation({
-    mutationFn: async (nextSubjectIds: string[]) => {
-      const result = await updateRoomSubjectsAction(roomId, nextSubjectIds);
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      return nextSubjectIds;
-    },
-    onMutate: async (nextSubjectIds) => {
-      setLocalSelected(nextSubjectIds);
-      await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData(queryKey);
-      return { previous };
-    },
-    onError: (error, _variables, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous);
-      }
-      setLocalSelected(selectedSubjectIds);
-      toast.error(error.message || "Не удалось обновить предметы кабинета");
-    },
-    onSuccess: () => {
-      toast.success("Предметы кабинета обновлены");
-    },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey });
-    },
-  });
-
-  const available = filteredSubjects.filter((subject) => !localSelected.includes(subject.id));
-  const allowed = filteredSubjects.filter((subject) => localSelected.includes(subject.id));
+  const available = filteredSubjects.filter(
+    (subject) => !selectedSubjectIds.includes(subject.id)
+  );
+  const allowed = filteredSubjects.filter(
+    (subject) => selectedSubjectIds.includes(subject.id)
+  );
 
   const toggleSubject = (subjectId: string) => {
-    const exists = localSelected.includes(subjectId);
+    if (isSaving) {
+      return;
+    }
+
+    const exists = selectedSubjectIds.includes(subjectId);
     const next = exists
-      ? localSelected.filter((id) => id !== subjectId)
-      : [...localSelected, subjectId];
-    mutation.mutate(next);
+      ? selectedSubjectIds.filter((id) => id !== subjectId)
+      : [...selectedSubjectIds, subjectId];
+
+    void updateSelectedSubjectIds(next);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (isSaving) {
+      return;
+    }
+
     const over = event.over?.id;
     const activeId = String(event.active.id);
     if (!over) return;
 
-    if (over === "allowed" && !localSelected.includes(activeId)) {
-      mutation.mutate([...localSelected, activeId]);
+    if (over === "allowed" && !selectedSubjectIds.includes(activeId)) {
+      void updateSelectedSubjectIds([...selectedSubjectIds, activeId]);
       return;
     }
 
-    if (over === "available" && localSelected.includes(activeId)) {
-      mutation.mutate(localSelected.filter((id) => id !== activeId));
+    if (over === "available" && selectedSubjectIds.includes(activeId)) {
+      void updateSelectedSubjectIds(selectedSubjectIds.filter((id) => id !== activeId));
     }
   };
 
@@ -166,6 +152,9 @@ export function RoomSubjectsTransfer({
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold">Разрешенные предметы для {roomName}</h3>
+          {isSaving ? (
+            <span className="text-xs text-muted-foreground">Сохраняем изменения...</span>
+          ) : null}
         </div>
         <div className="relative w-full max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -183,6 +172,7 @@ export function RoomSubjectsTransfer({
                   subject={subject}
                   inAllowed={false}
                   onToggle={() => toggleSubject(subject.id)}
+                  disabled={isSaving}
                 />
               ))
             ) : (
@@ -210,6 +200,7 @@ export function RoomSubjectsTransfer({
                   subject={subject}
                   inAllowed={true}
                   onToggle={() => toggleSubject(subject.id)}
+                  disabled={isSaving}
                 />
               ))
             ) : (
