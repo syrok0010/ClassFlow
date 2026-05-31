@@ -15,14 +15,20 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { requirementCellFormSchema } from "../_lib/schemas";
+import {
+  QUICK_INPUT_DEFAULT_BREAK,
+  QUICK_INPUT_DEFAULT_DURATION,
+} from "../_lib/constants";
 import type { 
   RequirementCellFormInput, 
   RequirementEntry,
-  NavigationDirection 
+  NavigationDirection,
+  QuickInputDurations,
 } from "../_lib/types";
 
 type RequirementCellEditorProps = {
   quickInputMode: boolean;
+  quickInputDurations: QuickInputDurations;
   initial: RequirementEntry | null;
   initialLessons?: number;
   onSave: (payload: RequirementCellFormInput & { advance: NavigationDirection }) => void;
@@ -31,6 +37,7 @@ type RequirementCellEditorProps = {
 
 export function RequirementCellEditor({
   quickInputMode,
+  quickInputDurations,
   initial,
   initialLessons,
   onSave,
@@ -46,8 +53,12 @@ export function RequirementCellEditor({
   const form = useForm({
     defaultValues: {
       lessonsPerWeek: initial?.lessonsPerWeek ?? 0,
-      durationInMinutes: initial?.durationInMinutes ?? 45,
-      breakDuration: initial?.breakDuration ?? 10,
+      durationInMinutes: quickInputMode
+        ? quickInputDurations.durationInMinutes
+        : initial?.durationInMinutes ?? QUICK_INPUT_DEFAULT_DURATION,
+      breakDuration: quickInputMode
+        ? quickInputDurations.breakDuration
+        : initial?.breakDuration ?? QUICK_INPUT_DEFAULT_BREAK,
     },
     onSubmit: ({ value }) => {
       onSave({ ...value, advance: advanceRef.current });

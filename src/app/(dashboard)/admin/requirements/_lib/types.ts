@@ -43,3 +43,8 @@ export type RequirementMutationInput = z.infer<typeof requirementMutationSchema>
 export type RequirementCellFormInput = z.infer<typeof requirementCellFormSchema>;
 
 export type NavigationDirection = "up" | "down" | "left" | "right" | "stay";
+
+export type QuickInputDurations = {
+  durationInMinutes: number;
+  breakDuration: number;
+};

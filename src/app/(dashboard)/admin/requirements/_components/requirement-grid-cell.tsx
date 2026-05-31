@@ -9,9 +9,9 @@ import {
   RequirementEntry, 
   RequirementGroupNode, 
   RequirementSubject,
-  NavigationDirection
+  NavigationDirection,
+  QuickInputDurations,
 } from "../_lib/types";
-import { QUICK_INPUT_DEFAULT_BREAK, QUICK_INPUT_DEFAULT_DURATION } from "../_lib/constants";
 import { RequirementCellEditor } from "./requirement-cell-editor";
 
 const SUBJECT_TYPE_CELL_TINT: Record<RequirementSubject["type"], string> = {
@@ -28,6 +28,7 @@ type RequirementGridCellProps = {
   isActive: boolean;
   editing: { initialLessons?: number; instanceId: string } | null;
   quickInputMode: boolean;
+  quickInputDurations: QuickInputDurations;
   disabled?: boolean;
   onActivate: () => void;
   onStartEditing: (lessons?: number) => void;
@@ -42,6 +43,7 @@ export function RequirementGridCell({
   isActive,
   editing,
   quickInputMode,
+  quickInputDurations,
   disabled = false,
   onActivate,
   onStartEditing,
@@ -105,8 +107,8 @@ export function RequirementGridCell({
             if (quickInputMode) {
               void onSave({
                 lessonsPerWeek: Number(event.key),
-                durationInMinutes: entry?.durationInMinutes ?? QUICK_INPUT_DEFAULT_DURATION,
-                breakDuration: entry?.breakDuration ?? QUICK_INPUT_DEFAULT_BREAK,
+                durationInMinutes: quickInputDurations.durationInMinutes,
+                breakDuration: quickInputDurations.breakDuration,
                 advance: "stay",
               });
             } else {
@@ -146,6 +148,7 @@ export function RequirementGridCell({
         <RequirementCellEditor
           key={editing.instanceId}
           quickInputMode={quickInputMode}
+          quickInputDurations={quickInputDurations}
           initial={entry}
           initialLessons={editing.initialLessons}
           onCancel={onActivate}

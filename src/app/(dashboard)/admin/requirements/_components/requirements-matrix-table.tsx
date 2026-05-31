@@ -23,8 +23,6 @@ import {
 import {
   getCollapsedGroupColumnId,
   getSubjectColumnId,
-  QUICK_INPUT_DEFAULT_BREAK,
-  QUICK_INPUT_DEFAULT_DURATION,
   SUBJECT_COLUMN_GROUPS,
 } from "../_lib/constants";
 import {
@@ -39,6 +37,7 @@ import type {
   SubjectColumnGroupKey,
   RequirementMutationInput,
   NavigationDirection,
+  QuickInputDurations,
 } from "../_lib/types";
 import { RequirementGridCell } from "./requirement-grid-cell";
 
@@ -57,6 +56,7 @@ type RequirementsMatrixTableProps = {
   subjects: RequirementSubject[];
   requirements: RequirementEntry[];
   quickInputMode: boolean;
+  quickInputDurations: QuickInputDurations;
   collapsedColumnGroups: Set<SubjectColumnGroupKey>;
   onToggleColumnGroup: (key: SubjectColumnGroupKey) => void;
   onSaveCell: (payload: RequirementMutationInput & { advance: NavigationDirection }) => Promise<void>;
@@ -96,6 +96,7 @@ export function RequirementsMatrixTable({
   subjects,
   requirements,
   quickInputMode,
+  quickInputDurations,
   collapsedColumnGroups,
   onToggleColumnGroup,
   onSaveCell,
@@ -410,6 +411,7 @@ export function RequirementsMatrixTable({
                       instanceId: editingCell.instanceId
                     } : null}
                     quickInputMode={quickInputMode}
+                    quickInputDurations={quickInputDurations}
                     disabled={isLockedForElective}
                     onActivate={() => {
                       if (isLockedForElective) return;
@@ -465,7 +467,7 @@ export function RequirementsMatrixTable({
       <div className="border-t bg-muted/20 px-3 py-2">
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           <span className="size-1.5 rounded-full bg-primary" aria-hidden />
-          Быстрый ввод: {quickInputMode ? `${QUICK_INPUT_DEFAULT_DURATION}м + ${QUICK_INPUT_DEFAULT_BREAK}м` : "кастомные параметры"}
+          Быстрый ввод: {quickInputMode ? `${quickInputDurations.durationInMinutes}м + ${quickInputDurations.breakDuration}м` : "выключен"}
         </span>
       </div>
     </div>

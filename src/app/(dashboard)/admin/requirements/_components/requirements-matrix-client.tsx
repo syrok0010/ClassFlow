@@ -5,6 +5,10 @@ import { useMutation } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { toast } from "sonner";
 import { upsertRequirementAction } from "../_actions/requirement-actions";
+import {
+  QUICK_INPUT_DEFAULT_BREAK,
+  QUICK_INPUT_DEFAULT_DURATION,
+} from "../_lib/constants";
 import { RequirementsMatrixTable } from "./requirements-matrix-table";
 import { RequirementsToolbar } from "./requirements-toolbar";
 import type {
@@ -12,6 +16,7 @@ import type {
   RequirementsMatrixData,
   SubjectColumnGroupKey,
   RequirementMutationInput,
+  QuickInputDurations,
 } from "../_lib/types";
 
 type MatrixRegion = "core" | "elective";
@@ -41,6 +46,11 @@ export function RequirementsMatrixClient({
   const [requirements, setRequirements] = useState<RequirementEntry[]>(
     initialData.requirements
   );
+  const [quickInputDurations, setQuickInputDurations] =
+    useState<QuickInputDurations>({
+      durationInMinutes: QUICK_INPUT_DEFAULT_DURATION,
+      breakDuration: QUICK_INPUT_DEFAULT_BREAK,
+    });
 
   const coreRows = useMemo(
     () => initialData.groups.filter((group) => group.type === "CLASS"),
@@ -155,6 +165,8 @@ export function RequirementsMatrixClient({
         onQuickInputModeChange={(value) => {
           void setQuickInputModeQuery(value ? null : "0");
         }}
+        quickInputDurations={quickInputDurations}
+        onQuickInputDurationsChange={setQuickInputDurations}
       />
 
       {activeRegion === "core" ? (
@@ -164,6 +176,7 @@ export function RequirementsMatrixClient({
           subjects={coreSubjects}
           requirements={requirements}
           quickInputMode={quickInputMode}
+          quickInputDurations={quickInputDurations}
           collapsedColumnGroups={collapsedCoreColumnGroups}
           onToggleColumnGroup={(groupKey) => toggleColumnGroup("core", groupKey)}
           onSaveCell={async (payload) => {
@@ -177,6 +190,7 @@ export function RequirementsMatrixClient({
           subjects={electiveSubjects}
           requirements={requirements}
           quickInputMode={quickInputMode}
+          quickInputDurations={quickInputDurations}
           collapsedColumnGroups={collapsedElectiveColumnGroups}
           onToggleColumnGroup={(groupKey) =>
             toggleColumnGroup("elective", groupKey)
