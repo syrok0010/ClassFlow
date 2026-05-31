@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { format, isValid, parseISO, set, startOfDay } from "date-fns";
+import { set, startOfDay } from "date-fns";
 import { z } from "zod";
 
 import type { GroupType } from "@/generated/prisma/enums";
@@ -20,18 +20,16 @@ import {
   mapScheduleEntryToConflictProjections,
   scheduleEntryInclude,
   type ScheduleEntryRecord,
-} from "../_lib/get-admin-schedule-entries-page-data";
+} from "../_lib/schedule-entry-mapper";
 
 const ADMIN_SCHEDULE_ENTRIES_PATH = "/admin/schedule/entries";
 
 const adminScheduleEntryMutationSchema = z.object({
   entryId: z.string().min(1, "Не передан ID записи"),
-  date: z.string().min(1, "Не передана дата записи"),
 }).and(createAdminScheduleTemplateMutationSchema());
 
 type AdminScheduleEntryMutationInput = AdminScheduleTemplateMutationInput & {
   entryId: string;
-  date: string;
 };
 
 type ValidationGroupRecord = {
@@ -67,16 +65,6 @@ function mapTimeToDate(baseDate: Date, minutesFromMidnight: number) {
   });
 }
 
-function parseEntryDate(value: string) {
-  const parsed = startOfDay(parseISO(value));
-
-  if (!isValid(parsed) || format(parsed, "yyyy-MM-dd") !== value) {
-    return null;
-  }
-
-  return parsed;
-}
-
 function buildRequirementMetaByGroupSubject(requirements: Array<{
   groupId: string;
   subjectId: string;
@@ -99,11 +87,6 @@ export async function updateAdminScheduleEntryAction(input: AdminScheduleEntryMu
 
   try {
     const parsed = adminScheduleEntryMutationSchema.parse(input);
-    const entryDate = parseEntryDate(parsed.date);
-
-    if (!entryDate) {
-      return { error: "Дата записи передана некорректно" };
-    }
 
     const [
       existingEntry,
@@ -113,13 +96,13 @@ export async function updateAdminScheduleEntryAction(input: AdminScheduleEntryMu
       teachers,
       requirements,
       templates,
-      siblingEntries,
     ] = await Promise.all([
       prisma.scheduleEntry.findUnique({
         where: { id: parsed.entryId },
         select: {
           id: true,
           templateId: true,
+          date: true,
           subjectId: true,
           attendanceLoadMode: true,
         },
@@ -237,20 +220,22 @@ export async function updateAdminScheduleEntryAction(input: AdminScheduleEntryMu
           },
         },
       }),
-      prisma.scheduleEntry.findMany({
-        where: {
-          date: entryDate,
-          id: {
-            not: parsed.entryId,
-          },
-        },
-        include: scheduleEntryInclude,
-      }),
     ]);
 
     if (!existingEntry) {
       return { error: "Запись фактического расписания не найдена" };
     }
+
+    const entryDate = startOfDay(existingEntry.date);
+    const siblingEntries = await prisma.scheduleEntry.findMany({
+      where: {
+        date: entryDate,
+        id: {
+          not: parsed.entryId,
+        },
+      },
+      include: scheduleEntryInclude,
+    });
 
     const groupById = new Map(groups.map((group) => [group.id, group]));
     const deliveryGroup = parsed.deliveryGroupId ? groupById.get(parsed.deliveryGroupId) ?? null : null;
@@ -394,7 +379,6 @@ export async function updateAdminScheduleEntryAction(input: AdminScheduleEntryMu
         id: parsed.entryId,
       },
       data: {
-        date: entryDate,
         startTime: candidateRecord.startTime,
         endTime: candidateRecord.endTime,
         subjectId: subject.id,

@@ -5,7 +5,7 @@ import {
   parseScheduleDate,
   parseScheduleView,
 } from "@/features/schedule";
-import { getAdminSchedulePageData } from "../_lib/get-admin-schedule-page-data";
+import { getAdminScheduleEditorData } from "../_lib/get-admin-schedule-page-data";
 
 import { AdminScheduleEntriesView } from "./_components/admin-schedule-entries-view";
 import {
@@ -64,7 +64,7 @@ export default async function AdminScheduleEntriesPage(props: {
       scope,
       targetId,
     }),
-    getAdminSchedulePageData(),
+    getAdminScheduleEditorData(),
   ]);
 
   return (
